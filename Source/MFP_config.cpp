@@ -48,11 +48,4 @@ void MFP::read_params() {
     // pass off to global data routine
     gd.read_config(is_per, plot_output);
 
-    // === OTHER ===
-
-    // get particle params
-#ifdef AMREX_PARTICLES
-    read_particle_params();
-#endif
-
 }

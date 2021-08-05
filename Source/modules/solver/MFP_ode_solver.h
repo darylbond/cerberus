@@ -55,7 +55,7 @@ std::unique_ptr<SolveODE> SolveODEBuilder(const sol::table& def)
     }
 }
 
-PhysicsFactory<SolveODE>& GetSolveODEFactory();
+ClassFactory<SolveODE>& GetSolveODEFactory();
 
 #endif // MFP_ODE_H
 

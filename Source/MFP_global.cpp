@@ -50,11 +50,6 @@ Vector<RefineBoxType> GlobalData::refine_box_type;
 bool GlobalData::only_refine_in_box = false;
 bool GlobalData::derefine_box = false;
 
-#ifdef AMREX_PARTICLES
-int GlobalData::do_tracer_particles = 0;
-int GlobalData::particle_verbose = 0;
-#endif
-
 //int GlobalData::do_tracer_particles = 0;
 //int GlobalData::particle_verbose = 0;
 //std::string GlobalData::particle_init_file;
@@ -80,6 +75,10 @@ int GlobalData::msg = 0;
 
 Vector<std::unique_ptr<State>> GlobalData::states;
 Vector<std::unique_ptr<ODESystem>> GlobalData::ode_source_terms;
+
+#ifdef AMREX_PARTICLES
+Vector<std::unique_ptr<ParticleMFP>> GlobalData::particles;
+#endif
 
 #ifdef AMREX_USE_EB
 Vector<DataEB> GlobalData::eb_def;
@@ -181,7 +180,7 @@ void GlobalData::read_config(const Vector<int> &is_periodic, const bool plot_out
 
     resize(names.size());
 
-    PhysicsFactory<State> sfact = GetStateFactory();
+    ClassFactory<State> sfact = GetStateFactory();
 
     // get a list of all the tags
     for (const auto& S : sfact.getRegistered()) {
@@ -190,7 +189,6 @@ void GlobalData::read_config(const Vector<int> &is_periodic, const bool plot_out
 
 
     int global_idx = 0;
-    int type_idx;
     for (auto& item : names) {
         std::string name = item.second.as<std::string>();
 
@@ -222,6 +220,39 @@ void GlobalData::read_config(const Vector<int> &is_periodic, const bool plot_out
 
     for (auto &istate : states) {
         istate->init_from_lua();
+    }
+
+    //
+    // Particles
+    //
+
+    // what particles do we have?
+    sol::table particle_names = lua.script("return get_sorted_keys(particles)");
+
+    ClassFactory<ParticleMFP> pfact = GetParticleFactory();
+
+    // get a list of all the tags
+    Vector<std::string> particle_tags;
+    for (const auto& S : pfact.getRegistered()) {
+        particle_tags.push_back(S.first);
+    }
+
+    for (auto& item : particle_names) {
+        std::string name = item.second.as<std::string>();
+
+        sol::table part_def = lua["particles"][name];
+
+        part_def["name"] = name;
+        part_def["global_idx"] = particles.size();
+
+        std::string part_type = part_def["type"].get<std::string>();
+
+        std::unique_ptr<ParticleMFP> ipart = pfact.Build(part_type, part_def);
+
+        if (!ipart)
+            Abort("Failed to read particle definition "+name+", must be one of "+vec2str(particle_tags));
+
+        particles.push_back(std::move(ipart));
     }
 
     //
@@ -367,7 +398,7 @@ void GlobalData::read_config(const Vector<int> &is_periodic, const bool plot_out
         //---------------------------------------------------------------------
         // get the solver
 
-        PhysicsFactory<SolveODE> solvefact = GetSolveODEFactory();
+        ClassFactory<SolveODE> solvefact = GetSolveODEFactory();
 
         std::string solve_name = system_def["solver"].get<std::string>();
 
@@ -390,7 +421,7 @@ void GlobalData::read_config(const Vector<int> &is_periodic, const bool plot_out
             const std::string tag = srcs.first.as<std::string>();
             sol::table source_def = srcs.second;
 
-            PhysicsFactory<SourceTerm> sfact = GetSourceTermFactory();
+            ClassFactory<SourceTerm> sfact = GetSourceTermFactory();
 
             source_def["name"] = tag;
             source_def["solver"] = +local_ode.solver->get_type();
@@ -628,6 +659,14 @@ Vector<int> GlobalData::get_states_index(const Vector<std::string>& names)
 
     return index;
 }
+
+#ifdef AMREX_PARTICLES
+ParticleMFP& GlobalData::get_particles(const int idx)
+{
+    BL_PROFILE("GlobalData::get_particles(idx)");
+    return *particles[idx];
+}
+#endif
 
 
 void GlobalData::write_info(nlohmann::json &js) const

@@ -1,0 +1,12 @@
+
+CEXE_headers += MFP_particle.H
+CEXE_sources += MFP_particle.cpp
+
+CEXE_headers += MFP_tracer.H
+CEXE_sources += MFP_tracer.cpp
+
+CEXE_headers += MFP_chargedparticle.H
+CEXE_sources += MFP_chargedparticle.cpp
+
+INCLUDE_LOCATIONS += $(TOP)/Source/particles
+VPATH_LOCATIONS   += $(TOP)/Source/particles

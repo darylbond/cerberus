@@ -25,8 +25,8 @@ void RiemannSolver::solve(Vector<Real> &L,
     // do nothing
 }
 
-PhysicsFactory<RiemannSolver>& GetRiemannSolverFactory()
+ClassFactory<RiemannSolver>& GetRiemannSolverFactory()
 {
-    static PhysicsFactory<RiemannSolver> F;
+    static ClassFactory<RiemannSolver> F;
     return F;
 }

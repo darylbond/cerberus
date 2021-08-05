@@ -29,12 +29,7 @@
 #include "MFP_fillbc.H"
 #include "MFP_optional_func.H"
 #include "MFP_utility.H"
-
-#ifdef AMREX_USE_EB
-#define EB_OPTIONAL(...) __VA_ARGS__
-#else
-#define EB_OPTIONAL(...)
-#endif
+#include "MFP_defs.H"
 
 #ifdef PYTHON
 #include "matplotlibcpp.h"
@@ -416,6 +411,6 @@ std::unique_ptr<State> StateBuilder(const sol::table& def)
     }
 }
 
-PhysicsFactory<State>& GetStateFactory();
+ClassFactory<State>& GetStateFactory();
 
 #endif // MFP_GENERIC_H

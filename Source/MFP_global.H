@@ -20,6 +20,8 @@
 #include "MFP_mhd.H"
 #include "MFP_field.H"
 
+#include "MFP_particle.H"
+
 #include "MFP_eb_sdf.H"
 
 using namespace amrex;
@@ -116,11 +118,6 @@ public:
     static bool only_refine_in_box;
     static bool derefine_box;
 
-#ifdef AMREX_PARTICLES
-    static int do_tracer_particles;
-    static int particle_verbose;
-#endif
-
     static Real x_ref, n_ref, m_ref, rho_ref, T_ref, u_ref, n0;
     static Real lightspeed, beta, skin_depth, Larmor, Debye;
 
@@ -133,6 +130,11 @@ public:
 
     static Vector<std::unique_ptr<State>> states;
     static Vector<std::unique_ptr<ODESystem>> ode_source_terms;
+
+#ifdef AMREX_PARTICLES
+    static Vector<std::unique_ptr<ParticleMFP>> particles;
+    static ParticleMFP& get_particles(const int idx);
+#endif
 
 #ifdef AMREX_USE_EB
     static Vector<DataEB> eb_def;
@@ -159,6 +161,8 @@ public:
     static State& get_state(const int idx);
     static State& get_state(const std::string &name);
     Vector<int> get_states_index(const Vector<std::string>& names);
+
+
 
     void write_info(nlohmann::json& js) const;
 

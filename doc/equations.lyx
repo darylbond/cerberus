@@ -3569,6 +3569,45 @@ b_{x}b_{z}\left(p^{\parallel}-p^{\perp}\right) & b_{y}b_{z}\left(p^{\parallel}-p
 
 \end_layout
 
+\begin_layout Standard
+velocity for particle push (Vlasov-Maxwell)
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align*}
+\frac{\partial\mathbf{u}_{\alpha}}{\partial t} & =\frac{q_{\alpha}}{m_{\alpha}}\left(\mathbf{E}+\mathbf{u}_{\alpha}\times\mathbf{B}\right)\\
+\left[\frac{u_{0}^{2}}{x_{0}}\right]\frac{\partial\hat{\mathbf{u}}_{\alpha}}{\partial\hat{t}} & =\left[\frac{q_{0}}{m_{0}}\right]\frac{\hat{q}_{\alpha}}{\hat{m}_{\alpha}}\left(\left[cB_{0}\right]\hat{\mathbf{E}}+\left[u_{0}B_{0}\right]\hat{\mathbf{u}}_{\alpha}\times\hat{\mathbf{B}}\right)\\
+\left[\frac{u_{0}^{2}}{x_{0}}\right]\frac{\partial\hat{\mathbf{u}}_{\alpha}}{\partial\hat{t}} & =\left[\frac{q_{0}}{m_{0}}\right]\frac{\hat{q}_{\alpha}}{\hat{m}_{\alpha}}\left(\left[u_{0}B_{0}\right]\hat{c}\hat{\mathbf{E}}+\left[u_{0}B_{0}\right]\hat{\mathbf{u}}_{\alpha}\times\hat{\mathbf{B}}\right)\\
+\left[\frac{u_{0}^{2}}{x_{0}}\right]\frac{\partial\hat{\mathbf{u}}_{\alpha}}{\partial\hat{t}} & =\left[\frac{q_{0}u_{0}B_{0}}{m_{0}}\right]\frac{\hat{q}_{\alpha}}{\hat{m}_{\alpha}}\left(\hat{c}\hat{\mathbf{E}}+\hat{\mathbf{u}}_{\alpha}\times\hat{\mathbf{B}}\right)\\
+\frac{\partial\hat{\mathbf{u}}_{\alpha}}{\partial\hat{t}} & =\left[\frac{q_{0}x_{0}B_{0}}{m_{0}u_{0}}\right]\frac{\hat{q}_{\alpha}}{\hat{m}_{\alpha}}\left(\hat{c}\hat{\mathbf{E}}+\hat{\mathbf{u}}_{\alpha}\times\hat{\mathbf{B}}\right)\\
+\frac{\partial\hat{\mathbf{u}}_{\alpha}}{\partial\hat{t}} & =\frac{\hat{q}_{\alpha}}{\hat{d}_{L,0}\hat{m}_{\alpha}}\left(\hat{c}\hat{\mathbf{E}}+\hat{\mathbf{u}}_{\alpha}\times\hat{\mathbf{B}}\right)
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Boris update
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align*}
+\hat{\mathbf{E}}_{0} & =\frac{\Delta t\hat{q}_{\alpha}\hat{\mathbf{E}}}{2\hat{d}_{L,0}\hat{m}_{\alpha}}\\
+\hat{\mathbf{B}}_{0} & =\frac{\Delta t\hat{q}_{\alpha}\hat{\mathbf{B}}}{2\hat{d}_{L,0}\hat{m}_{\alpha}}\\
+\hat{\mathbf{u}}_{\alpha}^{\left(0\right)} & =\hat{\mathbf{u}}_{\alpha}^{n}+\hat{\mathbf{E}}_{0}\\
+\hat{\mathbf{u}}_{\alpha}^{\left(1\right)} & =\hat{\mathbf{u}}_{\alpha}^{\left(0\right)}+2\frac{\hat{\mathbf{u}}_{\alpha}^{\left(0\right)}+\hat{\mathbf{u}}_{\alpha}^{\left(0\right)}\times\hat{\mathbf{B}}_{0}}{1+\hat{B}_{0}^{2}}\times\hat{\mathbf{B}}_{0}\\
+\hat{\mathbf{u}}_{\alpha}^{n+1} & =\hat{\mathbf{u}}_{\alpha}^{\left(1\right)}+\hat{\mathbf{E}}_{0}
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
 \begin_layout Subsection
 Pressure
 \end_layout

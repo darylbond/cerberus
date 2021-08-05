@@ -100,7 +100,7 @@ void SourceTerm::get_includes(const sol::table& def, state_valid valid, Vector<s
 
 void SourceTerm::set_reconstruction(const sol::table& def)
 {
-    PhysicsFactory<Reconstruction> rfact = GetReconstructionFactory();
+    ClassFactory<Reconstruction> rfact = GetReconstructionFactory();
 
     sol::optional<std::string> rec = def["reconstruction"];
 
@@ -213,8 +213,8 @@ int SourceTerm::num_slopes() const
     return 0;
 }
 
-PhysicsFactory<SourceTerm>& GetSourceTermFactory()
+ClassFactory<SourceTerm>& GetSourceTermFactory()
 {
-    static PhysicsFactory<SourceTerm> F;
+    static ClassFactory<SourceTerm> F;
     return F;
 }

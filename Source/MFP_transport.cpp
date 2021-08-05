@@ -7,6 +7,11 @@
 #include <AMReX_MultiCutFab.H>
 #endif
 
+#ifdef AMREX_PARTICLES
+#include "MFP_tracer.H"
+#include "MFP_chargedparticle.H"
+#endif
+
 using namespace amrex;
 
 #ifdef PYTHON
@@ -67,8 +72,8 @@ void MFP::apply_cell_transport(Real time, Real dt)
 #endif
         FillPatch(*this, local_new[idx], ng, time, idx, 0, ns);
 
-//        plot_FAB_2d(local_new[idx], 0, 0, "cons density", false, false);
-//        plot_FAB_2d(flag, "flag", true);
+        //        plot_FAB_2d(local_new[idx], 0, 0, "cons density", false, false);
+        //        plot_FAB_2d(flag, "flag", true);
 
         if (istate.reflux && level < parent->finestLevel()) {
             MFP& fine_level = getLevel(level + 1);
@@ -139,8 +144,8 @@ void MFP::apply_cell_transport(Real time, Real dt)
             const EBCellFlagFab& flag = getEBData(idx).flags[mfi]; fab_flags[idx] = &flag;
             const FArrayBox& vfrac = getEBData(idx).volfrac[mfi]; fab_vfrac[idx] = &vfrac;
 
-//            plot_FAB_2d(flag, "flag", false);
-//            plot_FAB_2d(vfrac, 0, "vfrac", false, true);
+            //            plot_FAB_2d(flag, "flag", false);
+            //            plot_FAB_2d(vfrac, 0, "vfrac", false, true);
 
             // check if this box is active
             active[idx] = flag.getType(rbox);
@@ -184,15 +189,15 @@ void MFP::apply_cell_transport(Real time, Real dt)
                                    EB_OPTIONAL(,vfrac)
                                    );
 
-//            plot_FAB_2d(prim, 0, "prim 0", false, true);
+            //            plot_FAB_2d(prim, 0, "prim 0", false, true);
 
 
             // fill in any cells that need special boundary values
             istate.update_boundary_cells(pbox,
-                                    geom,
-                                    prim,
-                                    EB_OPTIONAL(vfrac,)
-                                    time);
+                                         geom,
+                                         prim,
+                                         EB_OPTIONAL(vfrac,)
+                                         time);
 
 
 
@@ -232,28 +237,49 @@ void MFP::apply_cell_transport(Real time, Real dt)
             // update particle locations and velocities using the reconstructed
             // face values to interpolate the local velocity for each particle
 #ifdef AMREX_PARTICLES
-            if (gd.do_tracer_particles && istate.particle_index > -1) {
-                AmrTracerParticleContainer* pc = particles[istate.particle_index];
-                if (pc) {
+            if (istate.particle_index > -1) {
 
-                    // grab the starting index for velocity
+                ParticleMFP::ParticleType type = gd.get_particles(istate.particle_index).get_type();
+
+                switch (type) {
+                case ParticleMFP::ParticleType::Tracer : {
+                    TracerParticle& particles = static_cast<TracerParticle&>(gd.get_particles(istate.particle_index));
+
                     const int vel_idx = istate.get_prim_vector_idx()[0];
 
-                    // grab the tile of particles
-                    auto& ptile = pc->ParticlesAt(level, mfi);
-
-                    // update the position and velocity of the tracer particles
-                    // using the reconstructed primitive values on cell faces
-                    push_particles(ptile,
-                                   prim,
-                                   R_lo[idx],
-                                   R_hi[idx],
-                                   vel_idx,
-                                   dt
-                                   EB_OPTIONAL(,flag)
-                                   );
-
+                    particles.push_particles(mfi,
+                                             prim,
+                                             R_lo[idx],
+                                             R_hi[idx],
+                                             vel_idx,
+                                             dt,
+                                             geom,
+                                             level
+                                             EB_OPTIONAL(,flag));
+                    break;
                 }
+                case ParticleMFP::ParticleType::Charged : {
+                    ChargedParticle& particles = static_cast<ChargedParticle&>(gd.get_particles(istate.particle_index));
+
+                    const int E_idx = istate.get_cons_D_idx();
+                    const int B_idx = istate.get_cons_B_idx();
+
+                    particles.push_particles(mfi,
+                                             prim,
+                                             R_lo[idx],
+                                             R_hi[idx],
+                                             E_idx,
+                                             B_idx,
+                                             dt,
+                                             geom,
+                                             level
+                                             EB_OPTIONAL(,flag));
+                    break;
+                }
+                default:
+                    Abort("How did we get here?");
+                }
+
             }
 #endif
 

@@ -27,10 +27,6 @@ bool MFP::archive_checkpoint = true;
 
 bool MFP::first_step = true;
 
-#ifdef AMREX_PARTICLES
-int MFP::particle_verbosity = 0;
-#endif
-
 GlobalData MFP::gd;
 
 MFP::MFP() {}
@@ -145,9 +141,6 @@ void MFP::initData() {
     // initialise particles
 #ifdef AMREX_PARTICLES
 
-    ParmParse pp("particles");
-    pp.query("v", particle_verbosity);
-
     if (level == 0) {
         init_particles();
     }
@@ -259,11 +252,8 @@ void MFP::computeNewDt(int finest_level, int sub_cycle, Vector<int>& n_cycle,
 void MFP::post_regrid(int lbase, int new_finest) {
 
 #ifdef AMREX_PARTICLES
-    for (AmrTracerParticleContainer* TracerPC : particles) {
-        TracerPC->Redistribute();
-        //    if (TracerPC && level == lbase) {
-        //        TracerPC->Redistribute(lbase);
-        //    }
+    for (std::unique_ptr<ParticleMFP>& p : gd.particles) {
+        p->redistribute(0, -1, 0);
     }
 #endif
 
@@ -294,19 +284,13 @@ void MFP::post_timestep(int iteration) {
     }
 
 #ifdef AMREX_PARTICLES
-    if (gd.do_tracer_particles)
-    {
-        const int ncycle = parent->nCycle(level);
-        //
-        // Don't redistribute on the final subiteration except on the coarsest grid.
-        //
-        if (iteration < ncycle || level == 0)
-        {
-            int ngrow = (level == 0) ? 0 : iteration;
+    const int ncycle = parent->nCycle(level);
+    // Don't redistribute on the final subiteration except on the coarsest grid.
+    if (iteration < ncycle || level == 0) {
+        int ngrow = (level == 0) ? 0 : iteration;
 
-            for (AmrTracerParticleContainer* TracerPC : particles) {
-                TracerPC->Redistribute(level, parent->finestLevel(), ngrow);
-            }
+        for (std::unique_ptr<ParticleMFP>& p : gd.particles) {
+            p->redistribute(level, parent->finestLevel(), ngrow);
         }
     }
 #endif
@@ -933,3 +917,83 @@ bool MFP::is_vacuum(const Box& bx, const FArrayBox& fab, const int idx)
         return false;
     }
 }
+
+#ifdef AMREX_PARTICLES
+
+void
+MFP::init_particles ()
+{
+    BL_PROFILE("MFP::init_particles()");
+
+    if (level > 0)
+        return;
+
+    for (std::unique_ptr<ParticleMFP>& p : gd.particles) {
+        p->init(parent);
+    }
+
+}
+
+void MFP::writeParticles(const std::string& dir)
+{
+    BL_PROFILE("MFP::writeParticles");
+    for (std::unique_ptr<ParticleMFP>& p : gd.particles) {
+        p->checkpoint(dir);
+    }
+}
+
+void
+MFP::ParticlePostRestart (const std::string& dir)
+{
+    BL_PROFILE("MFP::ParticlePostRestart");
+    if ((level == 0) && !gd.particles.empty()) {
+
+        // handle if we have archived level data in a restart folder
+        Vector<std::string> to_remove;
+        if (ParallelDescriptor::IOProcessor()) {
+
+            // get the names of the particle folders
+            for (std::unique_ptr<ParticleMFP>& p : gd.particles) {
+                std::string particle_folder = "Particles_"+p->name;
+                std::string FullPath = dir+"/"+particle_folder;
+
+                // check if we actually need to un-tar
+                if (FileExists(FullPath))
+                    continue;
+
+                // check tar exists
+                if (!FileExists(FullPath + ".tar"))
+                    continue;
+
+                // add to list of things to clean up later
+                to_remove.push_back(FullPath);
+
+
+                // perform un-tar
+                std::string cmd = "\\tar -C " + dir + " -xf " + FullPath + ".tar ";
+                const char * command = {cmd.c_str()};
+                int retVal = std::system(command);
+                if (retVal == -1 || WEXITSTATUS(retVal) != 0) {
+                    Abort("Error: Unable to un-tar '"+FullPath+"'");
+                }
+            }
+        }
+
+        ParallelDescriptor::Barrier();
+
+        // retrieve particle data
+        for (std::unique_ptr<ParticleMFP>& p : gd.particles) {
+            p->init(parent, false);
+            p->restart(dir);
+        }
+
+        // clean up after un-tar operation
+        if (ParallelDescriptor::IOProcessor()) {
+            for (const auto& path : to_remove) {
+                FileSystem::RemoveAll(path);
+            }
+        }
+    }
+}
+
+#endif

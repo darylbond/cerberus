@@ -288,6 +288,36 @@ Valid options for the field state are:
 
 states = {}
 
+
+--[[
+Define particles
+
+options:
+
+- type : [tracer]
+- verbosity : integer value for AMReX particle container verbosity
+- particles : array of values that explicitly define initial particles
+
+options for 'tracer':
+- state : name of the hydro state for which the particles should act as a tracer
+
+e.g.
+
+particles = {
+  tracer = {
+    type = 'tracer',
+    particles={
+      {x, y, z},
+       ...
+    },
+    state=[name of state to trace],
+  }
+}
+
+--]]
+
+particles = {}
+
 --[[
 Define the source terms to apply.
 The intent is to define systems of ODEs that are solved separately in order that

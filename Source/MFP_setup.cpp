@@ -176,14 +176,10 @@ void MFP::init_data(const Box& box,
 
 void MFP::variableCleanUp() {
     BL_PROFILE("MFP::variableCleanUp");
+
 #ifdef AMREX_PARTICLES
-    if (gd.do_tracer_particles) {
-        for (AmrTracerParticleContainer* TracerPC : particles) {
-            if (TracerPC) {
-                delete TracerPC;
-                TracerPC = 0;
-            }
-        }
+    for (std::unique_ptr<ParticleMFP>& p : gd.particles) {
+        p->clear();
     }
 #endif
 

@@ -126,6 +126,6 @@ std::unique_ptr<SourceTerm> SourceTermBuilder(const sol::table& def)
     }
 }
 
-PhysicsFactory<SourceTerm>& GetSourceTermFactory();
+ClassFactory<SourceTerm>& GetSourceTermFactory();
 
 #endif // MFP_SOURCE_H

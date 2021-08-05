@@ -6,7 +6,7 @@ amr.v = 0
 
 # ======== TIME ==========
 max_step  = 1000000
-stop_time = 0.3
+stop_time = 1.0
 
 # ======== DOMAIN ==========
 geometry.is_periodic = 0 1 1
@@ -22,7 +22,7 @@ amr.loadbalance_with_workestimates = 1
 amr.loadbalance_level0_int = 10
 
 # ======== GRID ==========
-amr.max_level       = 3   # maximum level number allowed
+amr.max_level       = 1   # maximum level number allowed
 amr.ref_ratio       = 2 2 2 2 2 2 2 # refinement ratio
 amr.regrid_int      = 2 2 2 2 2 2 2 # how often to regrid
 amr.blocking_factor = 8
@@ -249,7 +249,6 @@ states = {
             p     = pressure,
             alpha = tracer,
         },
-        particles='particle_file',
     },
 
     electron = {
@@ -266,7 +265,6 @@ states = {
             p     = pressure,
             alpha = tracer,
         },
-        particles='particle_file',
     },
 
 
@@ -274,13 +272,59 @@ states = {
         type='field',
         reconstruction='O6', 
         flux='RankineHugoniot',
-        project_divergence=1,
+        project_divergence=0,
+        value = {
+            z_B = 1.0,
+        }
     }
 
 }
 
+function make_particles(N)
+    local n = 0
+
+    local start = 0.5/(N+1)
+
+    points = {}
+
+    for y=start,1-start,1/(N+1) do
+        x = interface_x + interface_amplitude*math.cos(2*math.pi*y)
+        table.insert(points, {x,y})        
+    end
+
+    return points
+
+  end
+
+
+
+particles = {
+    ion_tracer = {
+        type = 'tracer',
+        particles=make_particles(100),
+        state='ion',
+    },
+
+    electron_tracer = {
+        type = 'tracer',
+        particles=make_particles(100),
+        state='electron',
+    },
+
+    ions = {
+        charge = 10.0,
+        mass = 1.0,
+        type = 'charged',
+        particles={
+            {0,0.5,0,1,0,0},
+        },
+        state='field',
+    }
+}
+
 sources = {
 
+    --[[
     plasma={
         solver = 'implicit',
         sources = {
@@ -289,6 +333,7 @@ sources = {
             },
         },
     },
+    --]]
 }
 
 "

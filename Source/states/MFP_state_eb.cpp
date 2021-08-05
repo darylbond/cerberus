@@ -20,7 +20,7 @@ void State::set_eb_bc(const sol::table &bc_def)
 void State::set_eb_divergence()
 {
 
-    PhysicsFactory<DivergenceEB> div_fact = GetDivergenceEBBuilder();
+    ClassFactory<DivergenceEB> div_fact = GetDivergenceEBBuilder();
 
     sol::table state_def = GD::lua["states"][name];
     state_def["global_idx"] = global_idx;

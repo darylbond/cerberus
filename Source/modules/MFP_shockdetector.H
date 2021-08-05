@@ -39,7 +39,7 @@ std::unique_ptr<ShockDetector> ShockDetectorBuilder(const sol::table& def)
     }
 }
 
-PhysicsFactory<ShockDetector>& GetShockDetectorFactory();
+ClassFactory<ShockDetector>& GetShockDetectorFactory();
 
 //-----------------------------------------------------------------------------
 

@@ -13,7 +13,6 @@ CEXE_sources += MFPBld.cpp
 CEXE_sources += MFP_io.cpp
 CEXE_sources += MFP_setup.cpp
 CEXE_sources += MFP_init_eb2.cpp
-CEXE_sources += MFP_particle.cpp
 CEXE_sources += MFP_stepsize.cpp
 CEXE_sources += MFP_config.cpp
 CEXE_sources += MFP_rhs.cpp
@@ -28,12 +27,14 @@ CEXE_headers += MFP_global.H
 CEXE_sources += MFP_global.cpp
 
 CEXE_headers += MFP_factory.H
+CEXE_headers += MFP_defs.H
 
 include $(TOP)/Source/extern/Make.package
 include $(TOP)/Source/config/Make.package
 include $(TOP)/Source/diagnostics/Make.package
 include $(TOP)/Source/modules/Make.package
 include $(TOP)/Source/states/Make.package
+include $(TOP)/Source/particles/Make.package
 include $(TOP)/Source/fortran/Make.package
 
 INCLUDE_LOCATIONS += $(TOP)/Source

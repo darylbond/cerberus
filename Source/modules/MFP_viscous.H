@@ -171,6 +171,6 @@ std::unique_ptr<Viscous> ViscousBuilder(const sol::table& def)
 
 
 
-PhysicsFactory<Viscous>& GetViscousFactory();
+ClassFactory<Viscous>& GetViscousFactory();
 
 #endif // MFP_DIFFUSION_H

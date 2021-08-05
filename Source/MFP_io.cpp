@@ -139,7 +139,7 @@ void MFP::getPlotData(MultiFab &plot_data,
                     // this should really go in the startup routine in global_data.cpp
                     // but it would require a not insignificant amount of work, so here it is
                     if (istate.reconstruction->stencil_length < 2) {
-                        PhysicsFactory<Reconstruction> rfact = GetReconstructionFactory();
+                        ClassFactory<Reconstruction> rfact = GetReconstructionFactory();
                         std::string msg = "";
                         msg += "Gradient requested for "+var_name+" but state '";
                         msg += istate.name;
@@ -370,13 +370,10 @@ void MFP::archive_folder(const std::string &dir)
     to_remove.push_back(FullPath);
 
 #ifdef AMREX_PARTICLES
-    if (gd.do_tracer_particles) {
-
-        for (int idx=0; idx<particles.size(); ++idx) {
-            std::string particle_folder = "Particles_"+particle_names[idx];
-            cmds.push_back("\\cd "+dir+";\\tar -cf " + particle_folder + ".tar " + particle_folder);
-            to_remove.push_back(dir+"/"+particle_folder);
-        }
+    for (std::unique_ptr<ParticleMFP>& p : gd.particles) {
+        std::string particle_folder = "Particles_"+p->name;
+        cmds.push_back("\\cd "+dir+";\\tar -cf " + particle_folder + ".tar " + particle_folder);
+        to_remove.push_back(dir+"/"+particle_folder);
     }
 #endif
 
@@ -438,16 +435,21 @@ void MFP::writePlotFilePost(const std::string &dir, std::ostream &os)
         grp["cons_names"] = istate.get_cons_names();
 
 #ifdef AMREX_PARTICLES
-        if (gd.do_tracer_particles) {
-            for (int pidx=0; pidx<particles.size(); ++pidx) {
-                if (particle_idx[pidx] != global_idx)
-                    continue;
-
-                grp["particle_data"] = "Particles_"+particle_names[pidx];
-            }
+        if (istate.particle_index > -1) {
+            const ParticleMFP& p = gd.get_particles(istate.particle_index);
+            grp["particle_name"] = p.name;
         }
 #endif
     }
+
+#ifdef AMREX_PARTICLES
+    mfp["num_particles"] = gd.particles.size();
+    for (std::unique_ptr<ParticleMFP>& p : gd.particles) {
+        auto& grp = mfp["particles_"+num2str(p->global_idx)];
+        grp["name"] = p->name;
+        grp["particle_data"] = "Particles_"+p->name;
+    }
+#endif
 
     mfp["version"] = getVersion();
     mfp["AMReX_version"] = amrex::Version();

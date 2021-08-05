@@ -348,7 +348,7 @@ def parse_checkpoint_header(name, fid, data):
 
     return
 
-def parse_particle_header(name, data, state_name):
+def parse_particle_header(name, data, p_name):
 
     header_path = os.path.join(name, "Header")
 
@@ -415,19 +415,14 @@ def parse_particle_header(name, data, state_name):
 
                 pdata_name = os.path.join(name, "Level_%i"%ilevel, "DATA_%05i"%ibox)
 
-                level_data = data["levels"][ilevel]["data"]
-
-                if state_name in level_data:
-                    level_data = level_data[state_name]
-                else:
-                    level_data = level_data["all"]
+                level_data = data["levels"][ilevel]["data"]["all"]
                 
                 box = level_data["boxes"][igrid]
 
                 if "particles" not in box:
                     box["particles"] = []
 
-                box["particles"].append({"state":state_name, "location":pdata_name, "number":npart, "offset":f_offset})
+                box["particles"].append({"name":p_name, "location":pdata_name, "number":npart, "offset":f_offset, "n_real":dat["n_real"], "n_int":dat["n_int"]})
 
     return
 
@@ -451,11 +446,11 @@ def parse_header(name):
     fid.close()
     # check for any particle data
 
-    num_state = data["num_state"]
-    for istate in range(num_state):
-        state = data["state_%i"%istate]
-        if "particle_data" in state:
-            parse_particle_header(os.path.join(name, state["particle_data"]), data, state["name"])
+    num_particles = data["num_particles"]
+    for ipart in range(num_particles):
+        part = data["particles_%i"%ipart]
+        if "particle_data" in part:
+            parse_particle_header(os.path.join(name, part["particle_data"]), data, part["name"])
         
 
     return data
@@ -948,13 +943,13 @@ class ReadBoxLib:
         else:
             return x, dat
 
-    def load_particles(self, info, state_name):
+    def load_particles(self, info, part_name):
 
         level_idx = info["level_idx"]
         box_idx = info["box_idx"]
         state_idx = info["state_idx"]
 
-        if state_name != state_idx and state_idx != "all":
+        if part_name != state_idx and state_idx != "all":
             return None
 
         box = self.data["levels"][level_idx]["data"][state_idx]["boxes"][box_idx]
@@ -963,12 +958,6 @@ class ReadBoxLib:
             return None
 
         part_data = box["particles"]
-
-        n_real = self.data["particles"]["n_real"]
-        n_int  = self.data["particles"]["n_int"]
-
-        n_int_bytes = np.dtype("int32").itemsize
-        n_real_bytes = np.dtype("float64").itemsize
 
         int_data = []
         real_data = []
@@ -981,9 +970,9 @@ class ReadBoxLib:
                 npart = grab["number"]
                 off = grab["offset"]
                 path = grab["location"]
-                state = grab["state"]
+                p_name = grab["name"]
 
-                if state_name != state:
+                if part_name != p_name:
                     continue
 
                 try:
@@ -996,6 +985,12 @@ class ReadBoxLib:
                     tar = tarfile.open(tar_name+".tar")
                     data_path = path_join(path_pieces[-3::])
                     f = tar.extractfile(data_path)
+
+                n_real = grab["n_real"]
+                n_int  = grab["n_int"]
+
+                n_int_bytes = np.dtype("int32").itemsize
+                n_real_bytes = np.dtype("float64").itemsize
 
                 # get the actual data
                 f.seek(off)
@@ -1018,7 +1013,7 @@ class ReadBoxLib:
         else:
             return None
 
-    def get_particles(self, state_name):
+    def get_particles(self, part_name):
 
         if not self.retrieval_sites:
             self.retrieve()
@@ -1029,7 +1024,7 @@ class ReadBoxLib:
         real_data = []
 
         for site in self.retrieval_sites:
-            dat = self.load_particles(site, state_name)
+            dat = self.load_particles(site, part_name)
 
             if dat is None:
                 continue
@@ -1040,7 +1035,7 @@ class ReadBoxLib:
             real_data.append(dat[1])
 
         if not got_data:
-            raise RuntimeWarning("it appears that particles don't exist for '%s'"%(state_name))
+            raise RuntimeWarning("it appears that particles don't exist for '%s'"%(part_name))
         else:
 
             int_data = np.concatenate(int_data)

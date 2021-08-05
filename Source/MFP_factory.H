@@ -9,7 +9,7 @@
 #include "sol.hpp"
 
 template<class T>
-class PhysicsFactory
+class ClassFactory
 {
 public:
   typedef std::function<std::unique_ptr<T>(const sol::table&)> Builder;

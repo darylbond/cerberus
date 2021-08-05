@@ -22,13 +22,6 @@
 #include "MFP_viscous.H"
 #include "MFP_diagnostics.H"
 
-#ifdef AMREX_PARTICLES
-#include "AMReX_AmrParticles.H"
-using ParTileType = ParticleTile<AMREX_SPACEDIM, 0, 0, 0>;
-using ParIterType = ParIter<AMREX_SPACEDIM, 0, 0, 0>;
-using ParticleType = Particle<AMREX_SPACEDIM, 0>;
-#endif
-
 using namespace amrex;
 
 class MFP : public amrex::AmrLevel {
@@ -150,32 +143,9 @@ protected:
     bool is_vacuum(const Box& bx, const FArrayBox& fab, const int idx);
 
 #ifdef AMREX_PARTICLES
-    static int particle_verbosity;
-    static Vector<std::string> particle_names;
-    static Vector<int> particle_idx;
-    static Vector<amrex::AmrTracerParticleContainer*> particles;
-
-    static void read_particle_params ();
     void init_particles();
     void writeParticles(const std::string& dir);
     void ParticlePostRestart (const std::string &dir);
-    void advance_particles (int iteration, amrex::Real time, amrex::Real dt);
-    void AdvectWithUcc (AmrTracerParticleContainer* pc,
-                        const MultiFab& Ucc,
-                        int lev,
-                        Real dt
-                        EB_OPTIONAL(,const FabArray<EBCellFlagFab>& flags)
-                        );
-
-    void push_particles (ParTileType& ptile,
-                         const FArrayBox& prim,
-                         Array<FArrayBox, AMREX_SPACEDIM> &rlo,
-                         Array<FArrayBox, AMREX_SPACEDIM> &rhi,
-                         const int vel_idx,
-                         const Real dt
-                         EB_OPTIONAL(,const EBCellFlagFab& flag)
-                         );
-
 #endif
 
 #ifdef AMREX_USE_EB

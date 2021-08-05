@@ -9,9 +9,9 @@ ShockDetector::~ShockDetector(){}
 
 Real ShockDetector::solve(Vector<Real> &L,Vector<Real> &R) const {return 0.0;}
 
-PhysicsFactory<ShockDetector>& GetShockDetectorFactory()
+ClassFactory<ShockDetector>& GetShockDetectorFactory()
 {
-    static PhysicsFactory<ShockDetector> F;
+    static ClassFactory<ShockDetector> F;
     return F;
 }
 

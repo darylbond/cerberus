@@ -165,7 +165,7 @@ void State::set_udf()
 
 void State::set_reconstruction()
 {
-    PhysicsFactory<Reconstruction> rfact = GetReconstructionFactory();
+    ClassFactory<Reconstruction> rfact = GetReconstructionFactory();
 
     sol::table state_def = GD::lua["states"][name];
     state_def["global_idx"] = global_idx;
@@ -193,7 +193,7 @@ void State::set_flux()
 
     sol::state& lua = GD::lua;
 
-    PhysicsFactory<RiemannSolver> rfact = GetRiemannSolverFactory();
+    ClassFactory<RiemannSolver> rfact = GetRiemannSolverFactory();
 
     sol::table state_def = GD::lua["states"][name];
     state_def["global_idx"] = global_idx;
@@ -228,7 +228,7 @@ void State::set_viscosity()
     // viscous terms coefficients
     //
 
-    PhysicsFactory<Viscous> vfact = GetViscousFactory();
+    ClassFactory<Viscous> vfact = GetViscousFactory();
 
     sol::table state_def = GD::lua["states"][name];
     state_def["global_idx"] = global_idx;
@@ -245,7 +245,7 @@ void State::set_viscosity()
 void State::set_shock_detector()
 {
 
-    PhysicsFactory<ShockDetector> sdfact = GetShockDetectorFactory();
+    ClassFactory<ShockDetector> sdfact = GetShockDetectorFactory();
 
     sol::table sd_def = GD::lua["states"][name]["shock_detector"].get_or(sol::table());
 
@@ -1793,7 +1793,7 @@ std::string State::str() const
 }
 
 
-PhysicsFactory<State>& GetStateFactory() {
-    static PhysicsFactory<State> F;
+ClassFactory<State>& GetStateFactory() {
+    static ClassFactory<State> F;
     return F;
 }

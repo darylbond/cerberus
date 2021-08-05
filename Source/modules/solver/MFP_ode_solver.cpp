@@ -54,8 +54,8 @@ bool SolveODE::valid_solution()
 int SolveODE::solve(Real x, Real y, Real z, Real t0, Real t1, int depth=0){return 0;}
 void SolveODE::clear(){}
 
-PhysicsFactory<SolveODE>& GetSolveODEFactory()
+ClassFactory<SolveODE>& GetSolveODEFactory()
 {
-    static PhysicsFactory<SolveODE> F;
+    static ClassFactory<SolveODE> F;
     return F;
 }

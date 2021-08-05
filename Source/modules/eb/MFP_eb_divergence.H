@@ -77,7 +77,7 @@ std::unique_ptr<DivergenceEB> DivergenceEBBuilder(const sol::table& def)
     }
 }
 
-PhysicsFactory<DivergenceEB>& GetDivergenceEBBuilder();
+ClassFactory<DivergenceEB>& GetDivergenceEBBuilder();
 
 //=============================================================================
 

@@ -65,9 +65,9 @@ bool DivergenceEB::is_inside(const int i,const int j, const int k, const Dim3 &l
             k >= lo.z && k <= hi.z;
 }
 
-PhysicsFactory<DivergenceEB>& GetDivergenceEBBuilder()
+ClassFactory<DivergenceEB>& GetDivergenceEBBuilder()
 {
-    static PhysicsFactory<DivergenceEB> F;
+    static ClassFactory<DivergenceEB> F;
     return F;
 }
 

@@ -25,8 +25,8 @@ void Viscous::update_linked_states()
     istate.set_num_grow(2);
 }
 
-PhysicsFactory<Viscous>& GetViscousFactory() {
-    static PhysicsFactory<Viscous> F;
+ClassFactory<Viscous>& GetViscousFactory() {
+    static ClassFactory<Viscous> F;
     return F;
 }
 

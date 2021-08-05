@@ -19,7 +19,6 @@ from multiprocessing import Pool
 # plt_file = str(sys.argv[1])
 plt_file = "TRMI"
 
-component = "electron"
 window = [[-0.4, 0.0], [0.75,1.0]]
 
 # get a list of all the files in this directory
@@ -31,7 +30,7 @@ def get_tracer_data(f):
     ds = ReadBoxLib(f)
     print(f," @ ",ds.time)
     
-    idata, rdata = ds.get_particles(component)
+    idata, rdata = ds.get_particles("ions")
     idx = idata[:,0]
     cpu = idata[:,1]
     x = rdata[:,0]
@@ -72,22 +71,22 @@ I = np.array(I)
 
 # mask anything that goes periodic
 
-pdx = np.diff(X, axis=0)
-pdy = np.diff(Y, axis=0)
+# pdx = np.diff(X, axis=0)
+# pdy = np.diff(Y, axis=0)
 
-step = np.zeros(X.shape)
-step[0:-1,:] = np.sqrt(pdx**2 + pdy**2)
-step[-1,:] = step[-2,:]
-dom_size = min((x.max() - x.min()), (y.max() - y.min()))
-mask = step > dom_size/2.0
+# step = np.zeros(X.shape)
+# step[0:-1,:] = np.sqrt(pdx**2 + pdy**2)
+# step[-1,:] = step[-2,:]
+# dom_size = min((x.max() - x.min()), (y.max() - y.min()))
+# mask = step > dom_size/2.0
 
-X = np.ma.masked_where(mask, X)
-Y = np.ma.masked_where(mask, Y)
+# X = np.ma.masked_where(mask, X)
+# Y = np.ma.masked_where(mask, Y)
     
     
 ds = ReadBoxLib(files[-1], max_level=-1, limits=window)
 
-x, z = ds.get("rho-%s"%component)
+x, z = ds.get("z_B-field")
 
 x, y = x
 
@@ -106,7 +105,7 @@ im = NonUniformImage(ax, interpolation='bilinear', extent=(window[0][0], window[
                      cmap="viridis")
 im.set_data(x, y, z.T)
 ax.images.append(im)
-plt.colorbar(im, label=r"$\rho_\mathrm{%s}$"%component, orientation="horizontal")
+plt.colorbar(im, label=r"$B_z$", orientation="horizontal")
 
 # plot particle traces
 plt.plot(X,Y,'w',lw=0.5, alpha=0.25)

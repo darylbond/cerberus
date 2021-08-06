@@ -295,12 +295,14 @@ void MFP::apply_cell_sources(const Real time,
         return;
     }
 
+    const int num_mfabs = gd.num_solve_state + gd.num_source_particles;
+
     const Real* dx = geom.CellSize();
 
     MultiFab& cost = get_new_data(gd.Cost_Idx);
 
-    // get the hydro and fields filled data set
-    Vector<MultiFab> filled_state(gd.num_solve_state);
+    // get the hydro, fields, and particles filled data set
+    Vector<MultiFab> filled_state(num_mfabs);
 
     MultiFab* for_iteration;
     for (int idx = 0; idx < gd.num_solve_state; ++idx) {
@@ -315,12 +317,32 @@ void MFP::apply_cell_sources(const Real time,
         for_iteration = &filled_state[idx];
     }
 
-    Vector<FArrayBox*> filled_ptr(gd.num_solve_state,nullptr);
+#ifdef AMREX_PARTICLES
+    int idx = gd.num_solve_state;
+    for (std::unique_ptr<ParticleMFP>& p : gd.particles) {
+        if (p->num_source() == 0) continue;
+
+        MultiFab& src = filled_state[idx]; ++idx;
+        src.define(grids, dmap, p->num_source(), 0, MFInfo(), Factory());
+
+        for (MFIter mfi(src); mfi.isValid(); ++mfi){
+            Real wt = ParallelDescriptor::second();
+
+            p->calculate_source(mfi, src[mfi], geom, level);
+
+            Box box = mfi.validbox();
+            wt = (ParallelDescriptor::second() - wt) / box.d_numPts();
+            cost[mfi].plus(wt, box);
+        }
+    }
+#endif
+
+    Vector<FArrayBox*> filled_ptr(num_mfabs,nullptr);
     Vector<FArrayBox*> updated_ptr(gd.num_solve_state,nullptr);
 
 #ifdef AMREX_USE_EB
-    Vector<const EBCellFlagFab*> fab_flags(gd.num_solve_state);
-    Vector<const FArrayBox*> fab_vfrac(gd.num_solve_state);
+    Vector<const EBCellFlagFab*> fab_flags(num_mfabs);
+    Vector<const FArrayBox*> fab_vfrac(num_mfabs);
 #endif
 
 #ifdef _OPENMP
@@ -331,7 +353,7 @@ void MFP::apply_cell_sources(const Real time,
              mfi.isValid(); ++mfi) {
 
 #ifdef AMREX_USE_EB
-            for (int idx=0; idx<gd.num_solve_state; ++idx) {
+            for (int idx=0; idx<num_mfabs; ++idx) {
                 const EBCellFlagFab& flag = getEBData(idx).flags[mfi];
                 fab_flags[idx] = &flag;
 
@@ -350,6 +372,16 @@ void MFP::apply_cell_sources(const Real time,
                 filled_ptr[si] = &filled_state[si][mfi];
                 updated_ptr[si] = &get_new_data(si)[mfi];
             }
+
+#ifdef AMREX_PARTICLES
+            int si = gd.num_solve_state;
+            for (std::unique_ptr<ParticleMFP>& p : gd.particles) {
+                if (p->num_source() > 0) {
+                    filled_ptr[si] = &filled_state[si][mfi];
+                    ++si;
+                }
+            }
+#endif
 
             // pass the data off to the function that calculate the source terms
             calc_cell_source(bx,

@@ -42,35 +42,44 @@ void SourceTerm::get_includes(const sol::table& def, state_valid valid, Vector<s
         Abort("No input states defined for source '"+name+"'");
 
     // make sure our includes are available
+    bool success = false;
     std::pair<bool, int> find;
     for (const auto& state_name : includes) {
+        // try states
         find = findInVector(GD::state_names, state_name);
-        if (!find.first) {
-            Abort("Source '"+name+"' failed as state '"+state_name+"' is not available. Available states are:"+vec2str(GD::state_names));
-        }
+        if (find.first) continue;
+        // try particles
+        find = findInVector(GD::particle_names, state_name);
+        if (find.first) continue;
+
+        Abort("Source '"+name+"' failed as state '"+state_name+"' is not available. Available states are:"+vec2str(GD::state_names)+" Available particles are "+vec2str(GD::particle_names));
     }
 
     // iterate over all states and grab the index of those that are listed and applicable
     // or, if the list is empty, all those that are applicable
 
-    // if the list of states is empty then assume we will apply to all
-
-
+    std::map<std::string, int>::iterator it;
     for (const auto& name : includes) {
-        if ( GD::state_index.find(name) == GD::state_index.end() ) {
-            Abort("Attempting to reference a state that doesn't exist");
+
+        it = GD::state_index.find(name);
+        if (it == GD::state_index.end()) {
+            it = GD::particle_index.find(name);
+            if (it == GD::particle_index.end()) {
+                Abort("Attempting to reference a state or particles that don't exist");
+            }
         }
 
-        const int idx = GD::state_index[name];
+
+        const int idx = it->second;
 
         // check if this state matches the source term
         if (valid) {
             if (!(*valid)(idx)) {
-                Abort("Input '"+name+"' is not a valid state for source '"+name+"'");
+                Abort("Input '"+name+"' is not a valid state or particle for source '"+name+"'");
             }
         }
 
-        index.push_back(GD::state_index[name]);
+        index.push_back(idx);
 
 
     }
@@ -81,8 +90,10 @@ void SourceTerm::get_includes(const sol::table& def, state_valid valid, Vector<s
 
     // update the states so they know what they are attached to
     for (const int& i1 : index) {
+        if (i1 >= GD::num_solve_state) continue; // ignore particles for now
         State& state1 = GD::get_state(i1);
         for (const int& i2 : index) {
+            if (i2 >= GD::num_solve_state) continue; // ignore particles for now
             if (i1 == i2) continue;
             State& state2 = GD::get_state(i2);
 

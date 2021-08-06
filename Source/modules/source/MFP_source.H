@@ -36,6 +36,7 @@ enum class SourceType : int {
     Elastic,
     Acceleration,
     Current,
+    ParticleCurrent,
     NUM
 };
 

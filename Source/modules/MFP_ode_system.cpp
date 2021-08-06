@@ -19,8 +19,8 @@ using GD = GlobalData;
 
 ODESystem::ODESystem()
 {
-    global2solver_index.resize(GD::num_solve_state, -1);
-    local2global_index.resize(GD::num_solve_state, -1);
+    global2solver_index.resize(GD::num_solve_state + GD::particles.size(), -1);
+    local2global_index.resize(GD::num_solve_state + GD::num_source_particles, -1);
 }
 
 
@@ -40,11 +40,20 @@ void ODESystem::add_source(std::unique_ptr<SourceTerm> src)
     const int src_size = src->offsets.size();
     for (int src_idx = 0; src_idx < src_size; ++src_idx) {
         global_idx = src->offsets[src_idx].global;
-        State &istate = *GD::states[global_idx];
+
+        int n_comp;
+        if (GD::idx_is_state(global_idx)) {
+            State &istate = GD::get_state(global_idx);
+            n_comp = istate.n_cons();
+        } else {
+            ParticleMFP &ipart = GD::get_particles(global_idx);
+            n_comp = ipart.num_source();
+        }
+
         if (global2solver_index[global_idx] == -1) { // hasn't been added yet
             global2solver_index[global_idx] = n_components;
             local2global_index[n_states] = global_idx;
-            n_components += istate.n_cons();
+            n_components += n_comp;
             n_states += 1;
         }
 
@@ -218,10 +227,13 @@ std::string ODESystem::print()
     msg += "    states: (type : name)\n";
     for (const int &global_idx : local2global_index) {
         if (global_idx < 0) break;
-        State &istate = GD::get_state(global_idx);
-        int tp = istate.get_type();
-
-        msg += "      " + istate.get_tag() + " : " + istate.name + "\n";
+        if (GD::idx_is_state(global_idx)) {
+            State &istate = GD::get_state(global_idx);
+            msg += "      " + istate.get_tag() + " : " + istate.name + "\n";
+        } else {
+            ParticleMFP &ipart = GD::get_particles(global_idx);
+            msg += "      " + ipart.get_tag() + " : " + ipart.name + "\n";
+        }
     }
 
     return msg;

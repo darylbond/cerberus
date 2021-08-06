@@ -6,6 +6,7 @@
 
 #include "json.hpp"
 #include "MFP_factory.H"
+#include "MFP_eb_bc.H"
 
 using namespace amrex;
 
@@ -28,10 +29,22 @@ public:
     virtual void checkpoint(const std::string& dir) = 0;
     virtual void restart(const std::string& dir) = 0;
     virtual void redistribute(int level, int finest_level, int ngrow) = 0;
+    virtual int num_source() {return 0;}
+    virtual void calculate_source(MFIter& mfi, FArrayBox& S, Geometry &geom, int level) const {return;}
     virtual void clear() = 0;
 
     std::string name;
     int global_idx;
+    Vector<std::pair<int,int>> associated_sources; // (system idx, src idx)
+
+#ifdef AMREX_USE_EB
+        bool eb_all_regular;
+        int eb_index;
+        const EB2::IndexSpace* eb2_index;
+        Vector<std::unique_ptr<BoundaryEB>> eb_bcs;
+
+        virtual void set_eb_bc(const sol::table &bc_def);
+#endif
 };
 
 template <typename D>

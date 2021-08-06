@@ -78,7 +78,11 @@ Vector<std::unique_ptr<ODESystem>> GlobalData::ode_source_terms;
 
 #ifdef AMREX_PARTICLES
 Vector<std::unique_ptr<ParticleMFP>> GlobalData::particles;
+Vector<std::string> GlobalData::particle_names;
+std::map<std::string, int> GlobalData::particle_index;
+Vector<std::string> GlobalData::particle_tags;
 #endif
+int GlobalData::num_source_particles = 0;
 
 #ifdef AMREX_USE_EB
 Vector<DataEB> GlobalData::eb_def;
@@ -227,23 +231,22 @@ void GlobalData::read_config(const Vector<int> &is_periodic, const bool plot_out
     //
 
     // what particles do we have?
-    sol::table particle_names = lua.script("return get_sorted_keys(particles)");
+    sol::table part_names = lua.script("return get_sorted_keys(particles)");
 
     ClassFactory<ParticleMFP> pfact = GetParticleFactory();
 
     // get a list of all the tags
-    Vector<std::string> particle_tags;
     for (const auto& S : pfact.getRegistered()) {
         particle_tags.push_back(S.first);
     }
 
-    for (auto& item : particle_names) {
+    for (auto& item : part_names) {
         std::string name = item.second.as<std::string>();
 
         sol::table part_def = lua["particles"][name];
 
         part_def["name"] = name;
-        part_def["global_idx"] = particles.size();
+        part_def["global_idx"] = global_idx;
 
         std::string part_type = part_def["type"].get<std::string>();
 
@@ -252,7 +255,12 @@ void GlobalData::read_config(const Vector<int> &is_periodic, const bool plot_out
         if (!ipart)
             Abort("Failed to read particle definition "+name+", must be one of "+vec2str(particle_tags));
 
+        particle_names.push_back(name);
+        particle_index[name] = global_idx;
+
         particles.push_back(std::move(ipart));
+
+        global_idx++;
     }
 
     //
@@ -366,11 +374,16 @@ void GlobalData::read_config(const Vector<int> &is_periodic, const bool plot_out
             const sol::object &bc_def = bc.second;
             std::string state_name = state.as<std::string>();
             if (state_name != "func") {
-                State &istate = get_state(state_name);
-                eb_dat.states.push_back({istate.global_idx,istate.eb_bcs.size()});
 
-                // define bc
-                istate.set_eb_bc(bc_def);
+                if (name_is_state(state_name)) {
+                    State &istate = get_state(state_name);
+                    eb_dat.states.push_back({istate.global_idx,istate.eb_bcs.size()});
+                    istate.set_eb_bc(bc_def);
+                } else {
+                    ParticleMFP &ipart = get_particles(state_name);
+                    eb_dat.states.push_back({ipart.global_idx,ipart.eb_bcs.size()});
+                    ipart.set_eb_bc(bc_def);
+                }
             }
             ++j;
         }
@@ -438,8 +451,13 @@ void GlobalData::read_config(const Vector<int> &is_periodic, const bool plot_out
 
             // let the state know what sources it is a part of
             for (const auto& oi : src->offsets) {
-                State& istate = get_state(oi.global);
-                istate.associated_sources.push_back({ode_source_terms.size()-1, local_ode.sources.size()});
+                if (idx_is_state(oi.global)) {
+                    State& istate = get_state(oi.global);
+                    istate.associated_sources.push_back({ode_source_terms.size()-1, local_ode.sources.size()});
+                } else {
+                    ParticleMFP& ipart = get_particles(oi.global);
+                    ipart.associated_sources.push_back({ode_source_terms.size()-1, local_ode.sources.size()});
+                }
             }
 
             local_ode.add_source(std::move(src));
@@ -664,10 +682,33 @@ Vector<int> GlobalData::get_states_index(const Vector<std::string>& names)
 ParticleMFP& GlobalData::get_particles(const int idx)
 {
     BL_PROFILE("GlobalData::get_particles(idx)");
-    return *particles[idx];
+    return *particles[idx-num_solve_state];
+}
+
+ParticleMFP& GlobalData::get_particles(const std::string& name)
+{
+    BL_PROFILE("GlobalData::get_particles(name)");
+    if ( particle_index.find(name) == particle_index.end() ) {
+        Abort("Attempting to reference particles that don't exist");
+    }
+
+    return *particles[particle_index[name]];
 }
 #endif
 
+bool GlobalData::idx_is_state(const int idx)
+{
+    if (idx < num_solve_state) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool GlobalData::name_is_state(const std::string& name)
+{
+    return state_index.find(name) != state_index.end();
+}
 
 void GlobalData::write_info(nlohmann::json &js) const
 {

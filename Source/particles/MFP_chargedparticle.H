@@ -18,6 +18,8 @@ public:
     virtual void checkpoint(const std::string& dir) override;
     virtual void restart(const std::string& dir) override;
     virtual void redistribute(int level, int finest_level, int ngrow) override;
+    virtual int num_source() override {return 3;}
+    virtual void calculate_source(MFIter& mfi, FArrayBox& S, Geometry &geom, int level) const override;
     virtual void clear() override;
 
     void push_particles(MFIter& mfi,
@@ -33,6 +35,11 @@ public:
 
     virtual ParticleType get_type() const override {return ParticleMFP::ParticleType::Charged;}
     virtual const std::string& get_tag() const override {return tag;}
+
+#ifdef AMREX_USE_EB
+    virtual void set_eb_bc(const sol::table &bc_def) override;
+#endif
+
     virtual void write_info(nlohmann::json& js) const override;
 
     enum class ParticleIdxR : int {

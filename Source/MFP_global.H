@@ -134,7 +134,14 @@ public:
 #ifdef AMREX_PARTICLES
     static Vector<std::unique_ptr<ParticleMFP>> particles;
     static ParticleMFP& get_particles(const int idx);
+    static ParticleMFP& get_particles(const std::string& name);
+    static Vector<std::string> particle_names;
+    static std::map<std::string, int> particle_index;
+    static Vector<std::string> particle_tags;
 #endif
+    static int num_source_particles;
+    static bool idx_is_state(const int idx);
+    static bool name_is_state(const std::string& name);
 
 #ifdef AMREX_USE_EB
     static Vector<DataEB> eb_def;

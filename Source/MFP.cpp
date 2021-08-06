@@ -498,9 +498,10 @@ void MFP::buildMetrics() {
     Vector<EBData>& eb_data = getEBData();
 
     // get the information for each embedded boundary
-    eb_data.resize(gd.num_solve_state);
+    eb_data.resize(gd.num_solve_state + gd.particles.size());
     const Vector<int> ngrow = {m_eb_basic_grow_cells,m_eb_volume_grow_cells,m_eb_full_grow_cells};
-    for (int idx=0; idx<gd.num_solve_state; ++idx) {
+    for (int idx=0; idx<gd.num_solve_state + gd.particles.size(); ++idx) {
+
         State &istate = gd.get_state(idx);
 
         eb_data[idx].ebfactory = makeEBFabFactory (istate.eb2_index,

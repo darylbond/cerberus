@@ -53,6 +53,8 @@ ChargedParticle::ChargedParticle(const sol::table& def)
 
     charge = def["charge"];
     mass = def["mass"];
+
+    GD::num_source_particles += 1;
 }
 
 // this should only be called at level 0
@@ -65,32 +67,57 @@ void ChargedParticle::init(AmrCore* amr_core, bool make_particles)
     if (make_particles) {
         // now make the particles
 
-        CParTileType pc;
-        for (int pi=0; pi < initial_positions.size(); ++pi) {
+        constexpr int level = 0;
 
-            RealArray& pos = initial_positions[pi];
-            Array<Real,3>& vel = initial_velocities[pi];
+        const Geometry& geom = particles->Geom(level);
+        const auto dxi = geom.InvCellSizeArray();
+        const auto plo = geom.ProbLoArray();
 
-            CParticleType p;
-            p.id()   = CParticleType::NextID();
-            p.cpu()  = ParallelDescriptor::MyProc();
-            AMREX_D_TERM(
-                        p.pos(0) = pos[0];,
-                    p.pos(1) = pos[1];,
-            p.pos(2) = pos[2];
-            )
+        IntVect pos_idx;
 
-            p.rdata(+ParticleIdxR::VX) = vel[0];
-            p.rdata(+ParticleIdxR::VY) = vel[1];
-            p.rdata(+ParticleIdxR::VZ) = vel[2];
+        Vector<int> done(initial_positions.size(), 0);
 
-            p.rdata(+ParticleIdxR::Charge) = charge;
-            p.rdata(+ParticleIdxR::Mass) = mass;
+        // iterate over all of the boxes on this level and make particles if they fit into one
+        for(MFIter mfi = particles->MakeMFIter(level); mfi.isValid(); ++mfi) {
+            Box box = mfi.validbox();
 
-            pc.push_back(p);
+            // get the tile of particles for the local box
+            CParTileType& pc = particles->DefineAndReturnParticleTile(level, mfi.index(), mfi.LocalTileIndex());
+
+            for (int pi=0; pi < initial_positions.size(); ++pi) {
+                if (done[pi]) continue;
+
+                RealArray& pos = initial_positions[pi];
+
+                // convert position to index
+                for (int dim=0; dim<AMREX_SPACEDIM; ++dim) {
+                    pos_idx[dim] = std::floor((pos[dim] - plo[dim])*dxi[dim]);
+                }
+
+                if (box.contains(pos_idx)) {
+                    Array<Real,3>& vel = initial_velocities[pi];
+                    CParticleType p;
+                    p.id()   = CParticleType::NextID();
+                    p.cpu()  = ParallelDescriptor::MyProc();
+                    AMREX_D_TERM(
+                                p.pos(0) = pos[0];,
+                            p.pos(1) = pos[1];,
+                    p.pos(2) = pos[2];
+                    )
+
+                    p.rdata(+ParticleIdxR::VX) = vel[0];
+                    p.rdata(+ParticleIdxR::VY) = vel[1];
+                    p.rdata(+ParticleIdxR::VZ) = vel[2];
+
+                    p.rdata(+ParticleIdxR::Charge) = charge;
+                    p.rdata(+ParticleIdxR::Mass) = mass;
+
+                    pc.push_back(p);
+
+                    done[pi] = 1;
+                }
+            }
         }
-
-        particles->AddParticlesAtLevel (pc, 0); // add at level 0
 
         particles->Redistribute();
     }
@@ -248,6 +275,59 @@ void ChargedParticle::push_particles(MFIter& mfi,
 
     return;
 }
+
+void ChargedParticle::calculate_source(MFIter& mfi, FArrayBox& S, Geometry& geom, int level) const
+{
+
+    const Real* dom_lo = geom.ProbLo();
+    const Real* dxi = geom.InvCellSize();
+
+    // zero out first
+    S.setVal(0.0);
+
+    const Real factor = GD::Larmor/(GD::lightspeed*GD::Debye*GD::Debye);
+
+    Array4<Real> const& S4 = S.array();
+
+    CParTileType& pc = particles->DefineAndReturnParticleTile(level, mfi.index(), mfi.LocalTileIndex());
+    CParticleType *  AMREX_RESTRICT particle = &(pc.GetArrayOfStructs()[0]);
+    const int np = pc.numParticles();
+
+    for (int i=0; i<np; ++i) {
+
+        const Real q = particle[i].rdata(+ParticleIdxR::Charge);
+
+        Array<Real,3> vel;
+        vel[0] = particle[i].rdata(+ParticleIdxR::VX);
+        vel[1] = particle[i].rdata(+ParticleIdxR::VY);
+        vel[2] = particle[i].rdata(+ParticleIdxR::VZ);
+
+        // get the local coordinates of the particle
+        Array<int,3> coord = {0,0,0};
+        AMREX_D_TERM(
+        coord[0]=floor((particle[i].pos(0) - dom_lo[0])*dxi[0]);,
+        coord[1]=floor((particle[i].pos(1) - dom_lo[1])*dxi[1]);,
+        coord[2]=floor((particle[i].pos(2) - dom_lo[2])*dxi[2]);
+        )
+
+        // calculate the current
+        for (int vi=0; vi<3; ++vi) {
+            S4(coord[0], coord[1], coord[2], vi) -= factor*q*vel[vi];
+        }
+    }
+
+    return;
+}
+
+#ifdef AMREX_USE_EB
+void ChargedParticle::set_eb_bc(const sol::table &bc_def)
+{
+
+    std::string bc_type = bc_def.get<std::string>("type");
+
+
+}
+#endif
 
 void ChargedParticle::write_info(nlohmann::json& js) const
 {

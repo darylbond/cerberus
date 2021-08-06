@@ -62,32 +62,58 @@ void TracerParticle::init(AmrCore* amr_core, bool make_particles)
     if (make_particles) {
         // now make the particles
 
-        TParTileType pc;
-        for (RealArray& dat : initial_positions) {
+        constexpr int level = 0;
 
-            TParticleType p;
-            p.id()   = TParticleType::NextID();
-            p.cpu()  = ParallelDescriptor::MyProc();
-            AMREX_D_TERM(
-                        p.pos(0) = dat[0];,
-                    p.pos(1) = dat[1];,
-            p.pos(2) = dat[2];
-            )
+        const Geometry& geom = particles->Geom(level);
+        const auto dxi = geom.InvCellSizeArray();
+        const auto plo = geom.ProbLoArray();
 
-            AMREX_D_TERM(
-                        p.rdata(+ParticleIdxR::VX) = 0.0;,
-                    p.rdata(+ParticleIdxR::VY) = 0.0;,
-            p.rdata(+ParticleIdxR::VZ) = 0.0;
-            )
+        IntVect pos_idx;
 
-            pc.push_back(p);
+        Vector<int> done(initial_positions.size(), 0);
+
+        // iterate over all of the boxes on this level and make particles if they fit into one
+        for(MFIter mfi = particles->MakeMFIter(level); mfi.isValid(); ++mfi) {
+            Box box = mfi.validbox();
+
+            // get the tile of particles for the local box
+            TParTileType& pc = particles->DefineAndReturnParticleTile(level, mfi.index(), mfi.LocalTileIndex());
+
+            for (int pi=0; pi < initial_positions.size(); ++pi) {
+                if (done[pi]) continue;
+
+                RealArray& pos = initial_positions[pi];
+
+                // convert position to index
+                for (int dim=0; dim<AMREX_SPACEDIM; ++dim) {
+                    pos_idx[dim] = std::floor((pos[dim] - plo[dim])*dxi[dim]);
+                }
+
+                if (box.contains(pos_idx)) {
+                    TParticleType p;
+                    p.id()   = TParticleType::NextID();
+                    p.cpu()  = ParallelDescriptor::MyProc();
+                    AMREX_D_TERM(
+                                p.pos(0) = pos[0];,
+                            p.pos(1) = pos[1];,
+                    p.pos(2) = pos[2];
+                    )
+
+                    AMREX_D_TERM(
+                                p.rdata(+ParticleIdxR::VX) = 0.0;,
+                            p.rdata(+ParticleIdxR::VY) = 0.0;,
+                    p.rdata(+ParticleIdxR::VZ) = 0.0;
+                    )
+
+                    pc.push_back(p);
+
+                    done[pi] = 1;
+                }
+            }
         }
-
-        particles->AddParticlesAtLevel (pc, 0); // add at level 0
 
         particles->Redistribute();
     }
-
 }
 
 void TracerParticle::checkpoint(const std::string& dir)

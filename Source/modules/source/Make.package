@@ -32,6 +32,9 @@ CEXE_sources += MFP_elastic.cpp
 CEXE_headers += MFP_current.H
 CEXE_sources += MFP_current.cpp
 
+CEXE_headers += MFP_particle_current.H
+CEXE_sources += MFP_particle_current.cpp
+
 CEXE_headers += MFP_braginskii.H
 CEXE_sources += MFP_braginskii.cpp
 

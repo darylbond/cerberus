@@ -34,7 +34,7 @@ std::unique_ptr<Reconstruction> ReconstructionBuilder(const sol::table& def)
     }
 }
 
-PhysicsFactory<Reconstruction>& GetReconstructionFactory();
+ClassFactory<Reconstruction>& GetReconstructionFactory();
 
 //================================================================================
 

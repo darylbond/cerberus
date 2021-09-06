@@ -8,7 +8,6 @@
 #include <functional>
 #include <map>
 
-#include "MFP_global.H"
 #include "MFP_state.H"
 #include "MFP_ode_system.h"
 #include "MFP_reconstruction.H"
@@ -79,7 +78,9 @@ class SourceTerm
                                          const Vector<FArrayBox*>& src,
                                          FArrayBox& cd,
                                          FArrayBox& J
-                                         EB_OPTIONAL(,const Vector<const EBCellFlagFab*>& flag)
+#ifdef AMREX_USE_EB
+                                         ,const Vector<const EBCellFlagFab*>& flag
+#endif
                                          ) const {return;}
 
         bool get_hydro_prim(Vector<Real> &y, Vector<Real> &hydro_prim, const int offset=0);
@@ -92,7 +93,9 @@ class SourceTerm
         virtual void calc_slopes(const Box& box,
                                  Vector<FArrayBox*>& src_dat,
                                  Vector<FArrayBox>& slopes,
-                                 EB_OPTIONAL(Vector<const EBCellFlagFab*> &flags,)
+#ifdef AMREX_USE_EB
+                                 Vector<const EBCellFlagFab*> &flags,
+#endif
                                  const Real *dx) const {return;}
 
         virtual void retrieve_slopes(
@@ -126,6 +129,6 @@ std::unique_ptr<SourceTerm> SourceTermBuilder(const sol::table& def)
     }
 }
 
-PhysicsFactory<SourceTerm>& GetSourceTermFactory();
+ClassFactory<SourceTerm>& GetSourceTermFactory();
 
 #endif // MFP_SOURCE_H

@@ -77,7 +77,7 @@ std::unique_ptr<DivergenceEB> DivergenceEBBuilder(const sol::table& def)
     }
 }
 
-PhysicsFactory<DivergenceEB>& GetDivergenceEBBuilder();
+ClassFactory<DivergenceEB>& GetDivergenceEBBuilder();
 
 //=============================================================================
 
@@ -91,8 +91,7 @@ public:
     enum class RedistributionEB : int {
             Uniform=0,
             VolumeFraction,
-            Density,
-            Energy
+            Custom
         };
 
     virtual void calc_eb_divergence(const Box& box,
@@ -121,6 +120,7 @@ public:
     static Vector<std::string> options;
 
     RedistributionEB redistribution_strategy;
+    int redistribution_idx;
     Real reredistribution_threshold;
 };
 

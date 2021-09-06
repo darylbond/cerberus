@@ -1,7 +1,4 @@
 #include "MFP_collisions.H"
-#include "MFP_global.H"
-
-using GD = GlobalData;
 
 std::string Collisions::tag = "collisions";
 bool Collisions::registered = GetSourceTermFactory().Register(Collisions::tag, SourceTermBuilder<Collisions>);

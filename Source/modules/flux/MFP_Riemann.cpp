@@ -4,9 +4,6 @@
 #include <iostream>
 
 #include "MFP_utility.H"
-#include "MFP_global.H"
-
-using GD = GlobalData;
 
 RiemannSolver::RiemannSolver()
 {
@@ -25,8 +22,8 @@ void RiemannSolver::solve(Vector<Real> &L,
     // do nothing
 }
 
-PhysicsFactory<RiemannSolver>& GetRiemannSolverFactory()
+ClassFactory<RiemannSolver>& GetRiemannSolverFactory()
 {
-    static PhysicsFactory<RiemannSolver> F;
+    static ClassFactory<RiemannSolver> F;
     return F;
 }

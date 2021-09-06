@@ -1,7 +1,4 @@
 #include "MFP_plasma5.H"
-#include "MFP_global.H"
-
-using GD = GlobalData;
 
 std::string Plasma5::tag = "plasma5";
 bool Plasma5::registered = GetSourceTermFactory().Register(Plasma5::tag, SourceTermBuilder<Plasma5>);

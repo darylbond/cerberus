@@ -9,8 +9,6 @@
 
 using namespace amrex;
 
-class State;
-
 //================================================================================
 
 class RiemannSolver
@@ -20,7 +18,6 @@ public:
     virtual ~RiemannSolver();
 
     int idx;
-    State* istate;
 
     virtual void solve(Vector<Real> &L,
                                Vector<Real> &R,
@@ -44,6 +41,6 @@ std::unique_ptr<RiemannSolver> RiemannSolverBuilder(const sol::table& def)
     }
 }
 
-PhysicsFactory<RiemannSolver>& GetRiemannSolverFactory();
+ClassFactory<RiemannSolver> &GetRiemannSolverFactory();
 
 #endif // MFP_FLUX_H

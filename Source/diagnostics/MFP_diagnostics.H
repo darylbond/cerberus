@@ -9,7 +9,6 @@
 #include <AMReX_FArrayBox.H>
 #include <AMReX_MultiFab.H>
 #include <AMReX_iMultiFab.H>
-#include "MFP_polyspline.H"
 
 #include "matplotlibcpp.h"
 
@@ -289,7 +288,6 @@ void plot_FAB_eb(const Box &box,
                  std::string title="",
                  bool block=false);
 
-void plot_poly_spline(const PolySpline poly, const std::string title, bool block=false);
 #endif
 
 void plot_FABs_2d(const std::map<std::string,FArrayBox>& src,

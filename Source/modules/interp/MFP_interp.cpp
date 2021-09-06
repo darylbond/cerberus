@@ -1,5 +1,4 @@
 #include "MFP_interp.H"
-#include "MFP_global.H"
 #include "MFP_source.H"
 
 #include <fstream>

@@ -1,8 +1,5 @@
 #include "MFP_hydro_2p.H"
-#include "MFP_global.H"
 #include "MFP_state.H"
-
-using GD = GlobalData;
 
 std::string HydroTwoPressure::tag = "two_pressure";
 bool HydroTwoPressure::registered = GetSourceTermFactory().Register(HydroTwoPressure::tag, SourceTermBuilder<HydroTwoPressure>);

@@ -10,17 +10,15 @@
 #include <sundials/sundials_math.h>          /* contains the macros ABS, SUNSQR, and EXP */
 #endif
 
+#include "MFP.H"
 #include "MFP_source.H"
-
-#include "MFP_global.H"
 #include "MFP_ode_solver.h"
 
-using GD = GlobalData;
 
 ODESystem::ODESystem()
 {
-    global2solver_index.resize(GD::num_solve_state, -1);
-    local2global_index.resize(GD::num_solve_state, -1);
+    global2solver_index.resize(MFP::states.size(), -1);
+    local2global_index.resize(MFP::states.size(), -1);
 }
 
 
@@ -40,7 +38,7 @@ void ODESystem::add_source(std::unique_ptr<SourceTerm> src)
     const int src_size = src->offsets.size();
     for (int src_idx = 0; src_idx < src_size; ++src_idx) {
         global_idx = src->offsets[src_idx].global;
-        State &istate = *GD::states[global_idx];
+        State &istate = MFP::get_state(global_idx);
         if (global2solver_index[global_idx] == -1) { // hasn't been added yet
             global2solver_index[global_idx] = n_components;
             local2global_index[n_states] = global_idx;

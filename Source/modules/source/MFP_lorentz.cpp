@@ -1,7 +1,4 @@
 #include "MFP_lorentz.H"
-#include "MFP_global.H"
-
-using GD = GlobalData;
 
 std::string Lorentz::tag = "Lorentz";
 bool Lorentz::registered = GetSourceTermFactory().Register(Lorentz::tag, SourceTermBuilder<Lorentz>);

@@ -1,9 +1,5 @@
 #include "MFP_damp_div.H"
 
-#include "MFP_global.H"
-
-using GD = GlobalData;
-
 std::string DampDivergenceCorrection::tag = "damp_divergence";
 bool DampDivergenceCorrection::registered = GetSourceTermFactory().Register(DampDivergenceCorrection::tag, SourceTermBuilder<DampDivergenceCorrection>);
 

@@ -1,13 +1,12 @@
 #include "MFP_source.H"
 
-#include "MFP_global.H"
+#include "MFP.H"
 #include "MFP_ode_solver.h"
 #include "MFP_ode_system.h"
 #include "MFP_lua.H"
 #include "MFP_state.H"
 #include "Core"
 
-using GD = GlobalData;
 using dual = autodiff::dual;
 
 //---------------------------------------------------------------------------------------------
@@ -44,9 +43,9 @@ void SourceTerm::get_includes(const sol::table& def, state_valid valid, Vector<s
     // make sure our includes are available
     std::pair<bool, int> find;
     for (const auto& state_name : includes) {
-        find = findInVector(GD::state_names, state_name);
+        find = findInVector(MFP::state_names, state_name);
         if (!find.first) {
-            Abort("Source '"+name+"' failed as state '"+state_name+"' is not available. Available states are:"+vec2str(GD::state_names));
+            Abort("Source '"+name+"' failed as state '"+state_name+"' is not available. Available states are:"+vec2str(MFP::state_names));
         }
     }
 
@@ -57,11 +56,11 @@ void SourceTerm::get_includes(const sol::table& def, state_valid valid, Vector<s
 
 
     for (const auto& name : includes) {
-        if ( GD::state_index.find(name) == GD::state_index.end() ) {
+        if ( MFP::state_index.find(name) == MFP::state_index.end() ) {
             Abort("Attempting to reference a state that doesn't exist");
         }
 
-        const int idx = GD::state_index[name];
+        const int idx = MFP::state_index[name];
 
         // check if this state matches the source term
         if (valid) {
@@ -70,7 +69,7 @@ void SourceTerm::get_includes(const sol::table& def, state_valid valid, Vector<s
             }
         }
 
-        index.push_back(GD::state_index[name]);
+        index.push_back(MFP::state_index[name]);
 
 
     }
@@ -81,10 +80,10 @@ void SourceTerm::get_includes(const sol::table& def, state_valid valid, Vector<s
 
     // update the states so they know what they are attached to
     for (const int& i1 : index) {
-        State& state1 = GD::get_state(i1);
+        State& state1 = MFP::get_state(i1);
         for (const int& i2 : index) {
             if (i1 == i2) continue;
-            State& state2 = GD::get_state(i2);
+            State& state2 = MFP::get_state(i2);
 
             Vector<int>& alist = state1.associated_state[state2.get_association_type()];
 
@@ -175,7 +174,7 @@ bool SourceTerm::get_hydro_prim(Vector<Real> &y, Vector<Real> &hydro_prim, const
     bool valid = true;
 
     for (const auto &idx : offsets) {
-        State &istate = *GD::states[idx.global];
+        State &istate = *MFP::states[idx.global];
         const int t = istate.get_type();
         const int num_cons = istate.n_cons();
         const int num_prim = istate.n_prim();

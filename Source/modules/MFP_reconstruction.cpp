@@ -24,9 +24,9 @@ void Reconstruction::get_face_values(Vector<Real>& stencil, Real& lo, Real& hi)
     // do nothing
 }
 
-PhysicsFactory<Reconstruction>& GetReconstructionFactory()
+ClassFactory<Reconstruction>& GetReconstructionFactory()
 {
-    static PhysicsFactory<Reconstruction> F;
+    static ClassFactory<Reconstruction> F;
     return F;
 }
 

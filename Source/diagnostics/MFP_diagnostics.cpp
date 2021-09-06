@@ -287,30 +287,6 @@ void plot_FAB_eb(const FArrayBox& src, const FArrayBox &pts, const int n, std::s
     plot_FAB_eb(src.box(), src, pts, n, title, block);
 }
 
-void plot_poly_spline(const PolySpline poly, const std::string title, bool block)
-{
-    plt::figure_size(1200, 780);
-
-    for (const auto& shape : poly.shapes) {
-
-        Vector<double> plot_x(shape.size()), plot_y(shape.size());
-
-        for (int n=0; n<shape.size(); ++n) {
-            plot_x[n] = shape[n][0];
-            plot_y[n] = shape[n][1];
-        }
-
-        plt::plot(plot_x, plot_y, ".-");
-    }
-
-
-    plt::title(title);
-
-
-    if (block)
-        plt::show(block);
-}
-
 #endif
 
 void plot_FABs_2d(const std::map<std::string,FArrayBox>& src, const int fi, bool log, bool block)

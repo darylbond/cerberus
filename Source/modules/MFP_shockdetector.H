@@ -21,7 +21,6 @@ public:
     virtual Real solve(Vector<Real> &L,Vector<Real> &R) const;
 
     int idx;
-    State* istate;
 
     virtual const std::string& get_tag() const = 0;
     virtual void write_info(nlohmann::json& js) const {return;}
@@ -39,7 +38,7 @@ std::unique_ptr<ShockDetector> ShockDetectorBuilder(const sol::table& def)
     }
 }
 
-PhysicsFactory<ShockDetector>& GetShockDetectorFactory();
+ClassFactory<ShockDetector>& GetShockDetectorFactory();
 
 //-----------------------------------------------------------------------------
 

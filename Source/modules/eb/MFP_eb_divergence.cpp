@@ -4,8 +4,8 @@
 #include <AMReX_YAFluxRegister.H>
 using CellType = YAFluxRegister::CellType;
 
-#include "MFP_state.H"
-#include "MFP_global.H"
+#include "MFP.H"
+#include "MFP_eulerian.H"
 #include "sol.hpp"
 
 #ifdef PYTHON
@@ -13,8 +13,6 @@ using CellType = YAFluxRegister::CellType;
 #include "MFP_diagnostics.H"
 namespace plt = matplotlibcpp;
 #endif
-
-using GD = GlobalData;
 
 DivergenceEB::DivergenceEB()
 {
@@ -65,9 +63,9 @@ bool DivergenceEB::is_inside(const int i,const int j, const int k, const Dim3 &l
             k >= lo.z && k <= hi.z;
 }
 
-PhysicsFactory<DivergenceEB>& GetDivergenceEBBuilder()
+ClassFactory<DivergenceEB>& GetDivergenceEBBuilder()
 {
-    static PhysicsFactory<DivergenceEB> F;
+    static ClassFactory<DivergenceEB> F;
     return F;
 }
 
@@ -86,24 +84,26 @@ RedistributeEB::RedistributeEB(const sol::table &def)
 {
     global_idx = def["global_idx"];
 
+    EulerianState& istate = EulerianState::get_state(global_idx);
+
     // get the redistribution strategy
 
     const sol::table &div_def = def["eb_divergence"];
 
     std::string redist = div_def.get_or<std::string>("strategy", "volume");
 
-    const auto found = findInVector(options,redist);
-    if (found.first) {
-        redistribution_strategy = (RedistributionEB)found.second;
+    if (redist == "uniform") {
+        redistribution_strategy = RedistributionEB::Uniform;
+    } else if (redist == "volume") {
+        redistribution_strategy = RedistributionEB::VolumeFraction;
     } else {
-        Abort("Invalid redistribution option '"+redist+"', valid options are "+vec2str(options));
-
-    }
-
-    if (redist == "density") {
-        State &istate = GD::get_state(global_idx);
-        if (istate.get_cons_density_idx() < 0)
-            Abort("Invalid redistribution option '"+redist+"' for state "+istate.name+" as it does not have a density");
+        const auto found = findInVector(istate.get_cons_names(),redist);
+        if (found.first) {
+            redistribution_idx = found.second;
+            redistribution_strategy = RedistributionEB::Custom;
+        } else {
+            Abort("Invalid redistribution option '"+redist+"', valid options are [\"uniform\", \"volume\"] or "+vec2str(istate.get_cons_names()));
+        }
     }
 
     // get the reredistribution threshold
@@ -133,13 +133,13 @@ void RedistributeEB::calc_eb_divergence(const Box& box,
                                         const Real dt) const
 {
     BL_PROFILE("RedistributeEB::calc_eb_divergence");
-    State &istate = GD::get_state(global_idx);
+    EulerianState &istate = EulerianState::get_state(global_idx);
 
     // make sure arrays are empty
     du.setVal(0.0);
     dm_as_fine.setVal(0.0);
 
-    int nc = istate.n_cons();
+    int nc = istate.get_num_cons();
     Vector<Real> U(nc);
 
     const Dim3 lo = amrex::lbound(box);
@@ -371,12 +371,8 @@ void RedistributeEB::calc_eb_divergence(const Box& box,
                 case RedistributionEB::VolumeFraction :
                     rediswgt4(i,j,k) = vfrac4(i,j,k);
                     break;
-                case RedistributionEB::Density :
-                    rediswgt4(i,j,k) = cons4(i,j,k,istate.get_cons_density_idx());
-                    break;
-                case RedistributionEB::Energy :
-                    State::get_state_vector(cons,i,j,k,U);
-                    rediswgt4(i,j,k) = istate.get_energy_from_cons(U);
+                case RedistributionEB::Custom :
+                    rediswgt4(i,j,k) = cons4(i,j,k,redistribution_idx);
                     break;
                 }
             }
@@ -457,7 +453,7 @@ void RedistributeEB::calc_eb_divergence(const Box& box,
                         bool as_fine_ghost_cell = false;  // ghost cells just outside valid region
                         if (as_fine) {
                             as_fine_valid_cell = is_inside(i,j,k,lo,hi);
-                            as_fine_ghost_cell = levmsk4(i,j,k) == LevelMask::NotCovered; // not covered by other grids
+                            as_fine_ghost_cell = levmsk4(i,j,k) == MFP::LevelMask::NotCovered; // not covered by other grids
                         }
 
                         for (const auto& g : grab) {
@@ -849,7 +845,7 @@ void MergeEB::merge_cells(const Box& box,
                 du4(i,j,k,n) = du_merge;
 
                 // tell other grids how du has changed
-                if (as_fine && (levmsk4(i,j,k) == LevelMask::NotCovered)) {
+                if (as_fine && (levmsk4(i,j,k) == MFP::LevelMask::NotCovered)) {
                     dm_as_fine4(i,j,k,n) = du_merge - du4(cell_idx[0],cell_idx[1], cell_idx[2],n);
                 }
             }

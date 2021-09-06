@@ -1,12 +1,9 @@
 #include "MFP_RK_solver.H"
 
 #include "MFP_utility.H"
-#include "MFP_global.H"
 #include "MFP_source.H"
 
 #include "Eigen"
-
-using GD = GlobalData;
 
 // ====================================================================================
 

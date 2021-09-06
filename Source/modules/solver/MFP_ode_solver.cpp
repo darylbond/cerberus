@@ -3,11 +3,9 @@
 #include<AMReX_Print.H>
 #include <Dense>
 
+#include "MFP.H"
 #include "MFP_utility.H"
-#include "MFP_global.H"
 #include "MFP_source.H"
-
-using GD = GlobalData;
 
 // ====================================================================================
 
@@ -32,7 +30,7 @@ bool SolveODE::valid_solution()
     int global_idx, nc;
     for (int solver_idx = 0; solver_idx < parent->n_states; ++solver_idx) {
         global_idx = parent->local2global_index[solver_idx];
-        State &istate = *GD::states[global_idx];
+        State &istate = *MFP::states[global_idx];
         nc = istate.n_cons();
 
         if (parent->get_solver_state_valid(solver_idx)) {
@@ -54,8 +52,8 @@ bool SolveODE::valid_solution()
 int SolveODE::solve(Real x, Real y, Real z, Real t0, Real t1, int depth=0){return 0;}
 void SolveODE::clear(){}
 
-PhysicsFactory<SolveODE>& GetSolveODEFactory()
+ClassFactory<SolveODE> &GetSolveODEFactory()
 {
-    static PhysicsFactory<SolveODE> F;
+    static ClassFactory<SolveODE> F;
     return F;
 }

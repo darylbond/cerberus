@@ -78,6 +78,14 @@ public:
     virtual amrex::Real advance(amrex::Real time, amrex::Real dt, int iteration,
                                 int ncycle) override;
 
+    enum TimeIntegrator {
+        Euler = 0,
+    };
+
+    static TimeIntegrator time_integration_scheme;
+
+    void advance_euler(Real time, Real dt, int iteration, int ncycle);
+
     Real estTimeStep();
 
     virtual void computeInitialDt(int finest_level, int sub_cycle,
@@ -156,7 +164,6 @@ public:
         ForceRefine=0,
         NoRefine,
         OnlyRefine,
-        NUM
     };
 
     static Vector<RefineBoxType> refine_box_type;
@@ -173,6 +180,8 @@ public:
     static Vector<std::unique_ptr<State>> states;
     static Vector<std::string> state_names;
     static std::map<std::string, int> state_index;
+    static Vector<size_t> eulerian_states;
+    static Vector<size_t> lagrangian_states;
 
     static std::map<std::string,Array<int,AMREX_SPACEDIM+1>> plot_variables;
     static Vector<std::pair<std::string,Optional3D1VFunction>> plot_functions;
@@ -186,7 +195,6 @@ public:
         Covered,    // ghost cells covered by valid cells of this level
         NotCovered, // ghost cells not covered
         PhysBnd,    // outside domain
-        NUM
     };
 
     static constexpr int level_mask_interior =   0;  // valid cells

@@ -26,19 +26,50 @@ Array<int,1> HydroState::flux_vector_idx = {+HydroDef::FluxIdx::Xvel};
 Array<int,1> HydroState::cons_vector_idx = {+HydroDef::ConsIdx::Xmom};
 Array<int,1> HydroState::prim_vector_idx = {+HydroDef::PrimIdx::Xvel};
 
-std::string HydroState::tag = "hydro";
-bool HydroState::registered = GetStateFactory().Register(HydroState::tag, StateBuilder<HydroState>);
-
 HydroState::HydroState() {}
-
-HydroState::HydroState(const sol::table &def)
-{
-    name = def.get<std::string>("name");
-    global_idx = def.get<int>("global_idx");
-}
 
 HydroState::~HydroState(){}
 
+HydroState HydroState::Build(const sol::table& def)
+{
+    //
+    // Reconstruction
+    //
+
+    ClassFactory<Reconstruction> rfact = GetReconstructionFactory();
+
+    std::string rec = def["reconstruction"].get_or<std::string>("null");
+
+    def["reconstruction"] = rec; // consistency when using default option "null"
+
+    std::unique_ptr<Reconstruction> R = rfact.Build(rec, def);
+
+    if (!R)
+        Abort("Invalid reconstruction option '"+rec+"'. Options are "+vec2str(rfact.getKeys()));
+
+
+    //
+    // Flux
+    //
+
+    ClassFactory<HydroRiemannSolver> ffact = GetHydroRiemannSolverFactory();
+
+    std::string flux_name = def["flux"].get_or<std::string>("null");
+
+    def["flux"] = flux_name; // consistency when using default option "null"
+
+    std::unique_ptr<HydroRiemannSolver> F = ffact.Build(flux_name, def);
+
+    if (!F)
+        Abort("Invalid flux option '"+flux_name+"'. Options are "+vec2str(ffact.getKeys()));
+
+
+    HydroState H(*R, *F);
+
+    H.name = def.get<std::string>("name");
+    H.global_idx = def.get<int>("global_idx");
+
+}
 
 void HydroState::set_viscosity()
 {
@@ -303,12 +334,6 @@ void HydroState::init_from_lua()
     //
     set_shock_detector();
 
-
-    //
-    // positivity
-    //
-    enforce_positivity = state_def["enforce_positivity"].get_or(0);
-    extra_slope_limits = state_def["extra_slope_limits"].get_or(1);
 
 }
 
@@ -934,3 +959,479 @@ Real HydroState::get_allowed_time_step(MFP* mfp) const
 
     return dt;
 }
+
+void HydroState::calc_primitives(const Box& box,
+                                 FArrayBox& cons,
+                                 FArrayBox& prim,
+                                 const Real* dx,
+                                 const Real t,
+                                 const Real* prob_lo
+                                 #ifdef AMREX_USE_EB
+                                 ,const FArrayBox& vfrac
+                                 #endif
+                                 ) const
+{
+    BL_PROFILE("HydroState::calc_primitives");
+
+    Array<Real, +HydroDef::ConsIdx::NUM> U;
+    Array<Real, +HydroDef::PrimIdx::NUM> Q;
+
+    const Dim3 lo = amrex::lbound(box);
+    const Dim3 hi = amrex::ubound(box);
+    Array4<Real> const& s4 = cons.array();
+    Array4<Real> const& p4 = prim.array();
+
+#ifdef AMREX_USE_EB
+    Array4<const Real> const& vfrac4 = vfrac.array();
+
+    std::vector<std::array<int,3>> grab;
+    multi_dim_index({-1,AMREX_D_PICK(0,-1,-1),AMREX_D_PICK(0,0,-1)},
+    {1,AMREX_D_PICK(0, 1, 1),AMREX_D_PICK(0,0, 1)},
+                    grab, false);
+#endif
+
+    Real x, y, z;
+
+    for     (int k = lo.z; k <= hi.z; ++k) {
+        z = prob_lo[2] + (k + 0.5)*dx[2];
+        for   (int j = lo.y; j <= hi.y; ++j) {
+            y = prob_lo[1] + (j + 0.5)*dx[1];
+            AMREX_PRAGMA_SIMD
+                    for (int i = lo.x; i <= hi.x; ++i) {
+                x = prob_lo[0] + (i + 0.5)*dx[0];
+
+#ifdef AMREX_USE_EB
+                if (vfrac4(i,j,k) == 0.0) {
+
+                    // iterate over all neighbouring cells checking if it has valid data
+                    // from these calculate the volume weighted average to populate the
+                    // covered cell
+                    Real vtot = 0.0;
+
+                    std::fill(U.begin(), U.end(), 0.0);
+                    for (const auto& index : grab) {
+
+                        const int ii = i+index[0];
+                        const int jj = j+index[1];
+                        const int kk = k+index[2];
+
+                        // make sure our stencil is within bounds
+                        if ((lo.x > ii) || (ii > hi.x) ||
+                                (lo.y > jj) || (jj > hi.y) ||
+                                (lo.z > kk) || (kk > hi.z)) continue;
+
+                        const Real vf = vfrac4(ii,jj,kk);
+                        if (vf > 0.0) {
+                            for (int n=0; n<+HydroDef::ConsIdx::NUM; ++n) {
+                                U[n] += vf*s4(ii,jj,kk,n);
+                            }
+
+                            vtot += vf;
+                        }
+                    }
+
+                    // if we were close enough to a boundary to have valid data we
+                    // average out the volume fraction weighted contributions, otherwise,
+                    // fill in the primitives with zeros
+                    if (vtot > 0.0) {
+                        for (int n=0; n<+HydroDef::ConsIdx::NUM; ++n) {
+                            U[n] /= vtot;
+                        }
+                    } else {
+                        for (int n=0; n<+HydroDef::PrimIdx::NUM; ++n) {
+                            p4(i,j,k,n) = 0.0;
+                        }
+                        continue;
+                    }
+                } else {
+#endif
+                    // grab the conserved variables
+                    for (int n=0; n<+HydroDef::ConsIdx::NUM; ++n) {
+                        U[n] = s4(i,j,k,n);
+                    }
+#ifdef AMREX_USE_EB
+                }
+#endif
+
+
+                // convert to primitive
+                cons2prim(U, Q);
+
+                // modify the primitives vector if needed and upload back to
+                // the conserved vector
+                if (!dynamic_functions.empty()) {
+                    for (const auto &f : dynamic_functions) {
+                        Q[f.first] = (*f.second)(x, y, z, t);
+                    }
+
+                    // copy into primitive
+                    for (int n=0; n<+HydroDef::PrimIdx::NUM; ++n) {
+                        p4(i,j,k,n) = Q[n];
+                    }
+
+                    // convert primitive to conserved
+                    prim2cons(Q, U);
+
+                    // copy back into conserved array
+                    for (int n=0; n<+HydroDef::ConsIdx::NUM; ++n) {
+                        s4(i,j,k,n) = U[n];
+                    }
+                }
+
+                // copy into primitive
+                for (int n=0; n<+HydroDef::PrimIdx::NUM; ++n) {
+                    p4(i,j,k,n) = Q[n];
+                }
+            }
+        }
+    }
+
+    return;
+}
+
+void HydroState::update_boundary_cells(const Box& box,
+                                       const Geometry &geom,
+                                       FArrayBox &prim,
+                                       #ifdef AMREX_USE_EB
+                                       const FArrayBox& vfrac,
+                                       #endif
+                                       const Real time) const
+{
+    BL_PROFILE("HydroState::update_boundary_cells");
+    Vector<BoundaryInfo> limits = get_bc_limits(box, geom);
+
+    if (limits.empty())
+        return;
+
+    const Box& domain = geom.Domain();
+    const Real* dx = geom.CellSize();
+    const Real* prob_lo = geom.ProbLo();
+
+    Real x, y, z;
+    std::map<std::string, Real> Q{{"t", time}};
+
+    Array<int,3> grab;
+
+    Array4<Real> const& p4 = prim.array();
+
+#ifdef AMREX_USE_EB
+    Array4<const Real> const& vfrac4 = vfrac.array();
+#endif
+
+    const BCRec &bc = boundary_conditions.where_is_inflow;
+    for (const auto &L : limits) {
+        if (((L.lo_hi == 0) && (bc.lo(L.dir) == BCType::ext_dir))||
+                ((L.lo_hi == 1) && (bc.hi(L.dir) == BCType::ext_dir))) {
+
+            if (L.lo_hi == 0) {
+                grab[L.dir] = domain.smallEnd(L.dir);
+            } else {
+                grab[L.dir] = domain.bigEnd(L.dir);
+            }
+
+            for (int k=L.kmin; k<=L.kmax; ++k) {
+                z = prob_lo[2] + (k + 0.5)*dx[2];
+                Q["z"] = z;
+                if (L.dir != 2) {
+                    grab[2] = k;
+                }
+                for (int j=L.jmin; j<=L.jmax; ++j) {
+                    y = prob_lo[1] + (j + 0.5)*dx[1];
+                    Q["y"] = y;
+                    if (L.dir != 1) {
+                        grab[1] = j;
+                    }
+                    for (int i=L.imin; i<=L.imax; ++i) {
+                        x = prob_lo[0] + (i + 0.5)*dx[0];
+                        Q["x"] = x;
+                        if (L.dir != 0) {
+                            grab[0] = i;
+                        }
+#ifdef AMREX_USE_EB
+                        if (vfrac4(grab[0],grab[1],grab[2]) == 0.0) {
+                            continue;
+                        }
+#endif
+
+                        // get data from closest internal cell
+                        for (int n=0; n<+HydroDef::PrimIdx::NUM; ++n) {
+                            Q[prim_names[n]] = p4(grab[0],grab[1],grab[2],n);
+                        }
+
+                        // update the primitives from our UDFs, but only those that are valid functions
+                        for (int n=0; n<+HydroDef::PrimIdx::NUM; ++n) {
+                            const Optional3D1VFunction &f = boundary_conditions.get(L.lo_hi, L.dir, prim_names[n]);
+                            if (f.is_valid()) {
+                                p4(i,j,k,n) = f(Q);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+void HydroState::calc_reconstruction(const Box& box,
+                                     FArrayBox &prim,
+                                     Array<FArrayBox, AMREX_SPACEDIM> &rlo,
+                                     Array<FArrayBox, AMREX_SPACEDIM> &rhi
+                                     #ifdef AMREX_USE_EB
+                                     ,const EBCellFlagFab &flag
+                                     ,const FArrayBox &vfrac
+                                     #endif
+                                     ) const
+{
+    BL_PROFILE("HydroState::calc_reconstruction");
+    // if we don't want to apply extra limiting on the slopes (forced to 2nd order)
+    // we can use the default reconstruction scheme
+
+    // convert pressure
+    const Box &pbox = prim.box();
+    const Dim3 p_lo = amrex::lbound(pbox);
+    const Dim3 p_hi = amrex::ubound(pbox);
+
+    FArrayBox gamma_minus_one(pbox);
+    Array4<Real> const& src4 = prim.array();
+    Array4<Real> const& gam4 = gamma_minus_one.array();
+
+#ifdef AMREX_USE_EB
+    std::vector<std::array<int,3>> grab;
+    multi_dim_index({-1,AMREX_D_PICK(0,-1,-1),AMREX_D_PICK(0,0,-1)},
+    {1,AMREX_D_PICK(0, 1, 1),AMREX_D_PICK(0,0, 1)},
+                    grab, false);
+
+    Array4<const EBCellFlag> const& f4 = flag.array();
+    // do we need to check our stencil for covered cells?
+    bool check_eb = flag.getType() != FabType::regular;
+#endif
+
+    const Dim3 lo = amrex::lbound(box);
+    const Dim3 hi = amrex::ubound(box);
+
+    int N = prim.nComp();
+
+    Vector<Real> stencil(reconstruction->stencil_length);
+    int offset = reconstruction->stencil_length/2;
+    Array<int,3> stencil_index;
+    Vector<Real> cell_value(N), cell_slope(N);
+
+    Real rho_lo, rho_hi;
+    Real alpha_lo, alpha_hi;
+    Real abs_phi, phi_scale, coeff_eps;
+    Real gam_lo, gam_hi;
+
+    // make sure our arrays for putting lo and hi reconstructed values into
+    // are the corect size
+    for (int d=0; d<AMREX_SPACEDIM; ++d) {
+        rlo[d].resize(box, N);
+        rhi[d].resize(box, N);
+
+#ifdef AMREX_USE_EB
+        if (check_eb) {
+            rlo[d].copy(prim,box);
+            rhi[d].copy(prim,box);
+        }
+#endif
+    }
+
+    // change pressure to internal energy
+    for     (int k = p_lo.z; k <= p_hi.z; ++k) {
+        for   (int j = p_lo.y; j <= p_hi.y; ++j) {
+            AMREX_PRAGMA_SIMD
+                    for (int i = p_lo.x; i <= p_hi.x; ++i) {
+
+#ifdef AMREX_USE_EB
+                if (f4(i,j,k).isCovered()) {
+                    continue;
+                }
+#endif
+
+                gam4(i,j,k) = get_gamma(src4(i,j,k,+PrimIdx::Alpha)) - 1.0;
+
+                src4(i,j,k,+PrimIdx::Prs) /= gam4(i,j,k);
+
+            }
+        }
+    }
+
+    // now do reconstruction
+
+    // cycle over dimensions
+    for (int d=0; d<AMREX_SPACEDIM; ++d) {
+
+        Array4<Real> const& lo4 = rlo[d].array();
+        Array4<Real> const& hi4 = rhi[d].array();
+
+        for     (int k = lo.z; k <= hi.z; ++k) {
+            for   (int j = lo.y; j <= hi.y; ++j) {
+                AMREX_PRAGMA_SIMD
+                        for (int i = lo.x; i <= hi.x; ++i) {
+
+#ifdef AMREX_USE_EB
+                    if (check_eb) {
+
+                        // covered cell doesn't need calculating
+                        if (f4(i,j,k).isCovered()) {
+                            continue;
+                        }
+
+                        // cell that references a covered cell doesn't need calculating
+                        bool skip = false;
+                        stencil_index.fill(0);
+                        for (int s=0; s<reconstruction->stencil_length; ++s) {
+                            stencil_index[d] = s - offset;
+                            // check if any of the stencil values are from a covered cell
+                            if (f4(i+stencil_index[0], j+stencil_index[1], k+stencil_index[2]).isCovered()) {
+                                skip = true;
+                                break;
+                            }
+                        }
+
+                        if (skip) {
+                            continue;
+                        }
+
+                    }
+#endif
+
+                    // cycle over all components
+                    for (int n = 0; n<N; ++n) {
+
+                        // fill in the stencil along dimension index
+                        stencil_index.fill(0);
+                        for (int s=0; s<reconstruction->stencil_length; ++s) {
+                            stencil_index[d] = s - offset;
+                            stencil[s] = src4(i+stencil_index[0], j+stencil_index[1], k+stencil_index[2], n);
+                        }
+
+                        // perform reconstruction
+                        cell_slope[n] = reconstruction->get_slope(stencil);
+                        cell_value[n] = stencil[offset];
+
+                    }
+
+
+                    // apply corrections to slopes
+                    // J. Sci. Comput. (2014) 60:584-611
+                    // Robust Finite Volume Schemes for Two-Fluid Plasma Equations
+
+                    Real &rho     = cell_value[+PrimIdx::Density];
+                    Real &phi_rho = cell_slope[+PrimIdx::Density];
+
+                    Real &u     = cell_value[+PrimIdx::Xvel];
+                    Real &phi_u = cell_slope[+PrimIdx::Xvel];
+
+                    Real &v     = cell_value[+PrimIdx::Yvel];
+                    Real &phi_v = cell_slope[+PrimIdx::Yvel];
+
+                    Real &w     = cell_value[+PrimIdx::Zvel];
+                    Real &phi_w = cell_slope[+PrimIdx::Zvel];
+
+                    Real &eps     = cell_value[+PrimIdx::Prs];
+                    Real &phi_eps = cell_slope[+PrimIdx::Prs];
+
+                    Real &alpha     = cell_value[+PrimIdx::Alpha];
+                    Real &phi_alpha = cell_slope[+PrimIdx::Alpha];
+
+
+
+                    // correct density slope
+                    if (std::abs(phi_rho) > 2*rho) {
+                        phi_rho = 2*sign(phi_rho, 0.0)*rho;
+                    }
+
+                    // get some face values
+                    rho_lo = rho - 0.5*phi_rho;
+                    rho_hi = rho + 0.5*phi_rho;
+
+                    alpha_lo = alpha - 0.5*phi_alpha;
+                    alpha_hi = alpha + 0.5*phi_alpha;
+
+                    gam_lo = get_gamma(alpha_lo);
+                    gam_hi = get_gamma(alpha_hi);
+
+                    abs_phi = phi_u*phi_u + phi_v*phi_v + phi_w*phi_w;
+
+                    // correct velocity slope
+                    Real eps_face = eps - 0.5*std::abs(phi_eps);
+
+                    if (eps_face <= 0.0) {
+                        // if the reconstructed face value goes non-physical
+                        // just set back to first order with zero slope
+                        phi_u = 0.0;
+                        phi_v = 0.0;
+                        phi_w = 0.0;
+                        phi_eps = 0.0;
+                    } else {
+                        coeff_eps = (rho/(rho_lo*rho_hi))*eps_face;
+                        if ((0.125*abs_phi) > coeff_eps) {
+                            phi_scale = sqrt(abs_phi);
+                            coeff_eps = sqrt(8*coeff_eps);
+                            phi_u = (phi_u/phi_scale)*coeff_eps;
+                            phi_v = (phi_v/phi_scale)*coeff_eps;
+                            phi_w = (phi_w/phi_scale)*coeff_eps;
+                        }
+                        // update eps
+                        abs_phi = phi_u*phi_u + phi_v*phi_v + phi_w*phi_w;
+                        eps -= (rho_lo*rho_hi/rho)*0.125*abs_phi;
+                    }
+
+
+
+                    // density
+                    lo4(i,j,k,+PrimIdx::Density) = rho_lo;
+                    hi4(i,j,k,+PrimIdx::Density) = rho_hi;
+
+                    // x - velocity
+                    lo4(i,j,k,+PrimIdx::Xvel) = u - 0.5*(rho_hi/rho)*phi_u;
+                    hi4(i,j,k,+PrimIdx::Xvel) = u + 0.5*(rho_lo/rho)*phi_u;
+
+                    // y - velocity
+                    lo4(i,j,k,+PrimIdx::Yvel) = v - 0.5*(rho_hi/rho)*phi_v;
+                    hi4(i,j,k,+PrimIdx::Yvel) = v + 0.5*(rho_lo/rho)*phi_v;
+
+                    // z - velocity
+                    lo4(i,j,k,+PrimIdx::Zvel) = w - 0.5*(rho_hi/rho)*phi_w;
+                    hi4(i,j,k,+PrimIdx::Zvel) = w + 0.5*(rho_lo/rho)*phi_w;
+
+                    // epsilon -> pressure
+                    lo4(i,j,k,+PrimIdx::Prs) = (eps - 0.5*phi_eps)*(gam_lo - 1.0);
+                    hi4(i,j,k,+PrimIdx::Prs) = (eps + 0.5*phi_eps)*(gam_hi - 1.0);
+
+                    Real prs = lo4(i,j,k,+PrimIdx::Prs);
+
+                    // tracer
+                    lo4(i,j,k,+PrimIdx::Alpha) = alpha_lo;
+                    hi4(i,j,k,+PrimIdx::Alpha) = alpha_hi;
+
+                    // Temperature (calculate from pressure and density)
+                    lo4(i,j,k,+PrimIdx::Temp) = lo4(i,j,k,+PrimIdx::Prs)/(rho_lo/get_mass(alpha_lo));
+                    hi4(i,j,k,+PrimIdx::Temp) = hi4(i,j,k,+PrimIdx::Prs)/(rho_hi/get_mass(alpha_hi));
+
+                }
+            }
+        }
+    }
+
+
+    // convert back to pressure
+    for     (int k = p_lo.z; k <= p_hi.z; ++k) {
+        for   (int j = p_lo.y; j <= p_hi.y; ++j) {
+            AMREX_PRAGMA_SIMD
+                    for (int i = p_lo.x; i <= p_hi.x; ++i) {
+#ifdef AMREX_USE_EB
+                if (f4(i,j,k).isCovered())
+                    continue;
+#endif
+                src4(i,j,k,+PrimIdx::Prs) *= gam4(i,j,k);
+
+
+
+            }
+        }
+    }
+
+    return;
+}
+

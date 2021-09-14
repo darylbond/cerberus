@@ -6,16 +6,20 @@
 #include "MFP_bc.H"
 #include "MFP.H"
 #include "MFP_hydro_defs.H"
+#include "MFP_reconstruction.H"
+#include "MFP_hydro_riemann.H"
+
+
 
 class HydroState : public EulerianState
 {
 public:
     HydroState();
-    HydroState(const sol::table& def);
+    HydroState(Reconstruction R, HydroRiemannSolver F)
+        : reconstructor(R), flux_solver(F) {}
     ~HydroState();
 
-    static bool registered;
-    static std::string tag;
+    static HydroState Build(const sol::table& def);
 
     static Vector<std::string> cons_names;
     static Vector<std::string> prim_names;
@@ -27,8 +31,9 @@ public:
 
     bool mass_const, charge_const, gamma_const;
     Array<Real,2> mass, charge, gamma;
-    int enforce_positivity;
-    int extra_slope_limits;
+
+    const Reconstruction reconstructor;
+    const HydroRiemannSolver flux_solver;
 
     virtual int get_num_grow() override {return num_grow;}
     virtual void set_num_grow(int n) override {num_grow = std::max(n, num_grow);}
@@ -108,6 +113,25 @@ public:
     RealArray get_speed_from_prim(const Array<Real,+HydroDef::PrimIdx::NUM>& Q) const;
 
     virtual Real get_allowed_time_step(MFP* mfp) const override;
+
+    virtual void calc_primitives(const Box& box,
+                                 FArrayBox& cons,
+                                 FArrayBox &prim,
+                                 const Real* dx,
+                                 const Real t,
+                                 const Real* prob_lo
+                             #ifdef AMREX_USE_EB
+                                 ,const FArrayBox& vfrac
+                             #endif
+                                 ) const override;
+
+    void update_boundary_cells(const Box& box,
+                               const Geometry &geom,
+                               FArrayBox &prim,
+                           #ifdef AMREX_USE_EB
+                               const FArrayBox& vfrac,
+                           #endif
+                               const Real time) const override;
 
 
     static HydroState& get_state(const int idx) {return static_cast<HydroState&>(MFP::get_state(idx));}

@@ -2,8 +2,9 @@
 #include "MFP_state.H"
 #include "MFP_eb_sdf.H"
 #include "MFP_read_geom.h"
-#include "MFP_factory.H"
 #include "MFP_utility.H"
+
+#include "MFP_hydro.H"
 
 void MFP::set_lua_script(const std::string &script)
 {
@@ -67,6 +68,14 @@ void MFP::read_config()
 
     verbosity = lua["verbosity"];
 
+    std::string time_integrator = lua["time_integration_scheme"];
+
+    if (time_integrator == "euler") {
+        time_integration_scheme = TimeIntegrator::Euler;
+    } else {
+        Abort("Time integration scheme "+time_integrator+" is not recognised, try ['euler', ...]");
+    }
+
     linear_solver_verbosity = lua["linear_solver_verbosity"];
 
     //
@@ -82,13 +91,8 @@ void MFP::read_config()
     // what states do we have?
     sol::table names = lua.script("return get_sorted_keys(states)");
 
-    ClassFactory<State> sfact = GetStateFactory();
-
     // get a list of all the tags
     Vector<std::string> state_tags;
-    for (const auto& S : sfact.getRegistered()) {
-        state_tags.push_back(S.first);
-    }
 
 
     int global_idx = 0;
@@ -102,15 +106,30 @@ void MFP::read_config()
 
         std::string state_type = state_def["type"].get<std::string>();
 
-        std::unique_ptr<State> istate = sfact.Build(state_type, state_def);
+        std::unique_ptr<State> istate;
+
+        if (state_type == "hydro") {
+            istate = std::make_unique(HydroState::Build(state_def));
+        }
 
         if (!istate)
             Abort("Failed to read state "+name+", must be one of "+vec2str(state_tags));
+
+        switch (istate->get_classification()) {
+        case State::StateClassification::Eulerian:
+            eulerian_states.push_back(global_idx);
+        case State::StateClassification::Lagrangian:
+            lagrangian_states.push_back(global_idx);
+        default:
+            Abort("How did we get here?");
+        }
 
         states.push_back(std::move(istate));
 
         state_names.push_back(name);
         state_index[name] = global_idx;
+
+
 
         global_idx++;
     }

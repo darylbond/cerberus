@@ -29,6 +29,13 @@ public:
 
     EBData eb_data;
 
+    enum class StateClassification {
+        Null = -1,
+        Eulerian,
+        Lagrangian,
+        NUM
+    };
+
     enum class StateType {
         Null = -1,
         Hydro,
@@ -58,7 +65,7 @@ public:
 
     BoundaryState boundary_conditions;
 
-
+    virtual StateClassification get_classification() const {return StateClassification::Null;}
     virtual StateType get_type() const {return StateType::Null;}
     virtual int get_num_grow() {return 0;}
     virtual void set_num_grow(int n) {return;}
@@ -105,18 +112,5 @@ public:
     virtual std::string str() const;
 
 };
-
-template <typename D>
-std::unique_ptr<State> StateBuilder(const sol::table& def)
-{
-    std::string type = def["type"];
-    if (type == D::tag) {
-        return std::unique_ptr<D>(new D(def));
-    } else {
-        return nullptr;
-    }
-}
-
-ClassFactory<State>& GetStateFactory();
 
 #endif // MFP_GENERIC_H

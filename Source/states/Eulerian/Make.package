@@ -1,7 +1,6 @@
 CEXE_headers += MFP_eulerian.H
 CEXE_sources += MFP_eulerian.cpp
 
-#include $(TOP)/Source/states/Eulerian/field/Make.package
 include $(TOP)/Source/states/Eulerian/hydro/Make.package
 
 INCLUDE_LOCATIONS += $(TOP)/Source/states/Eulerian

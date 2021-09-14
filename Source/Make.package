@@ -1,7 +1,6 @@
 
 CEXE_sources += main.cpp
 
-CEXE_headers += MFP.fwd.H
 CEXE_headers += MFP.H
 CEXE_sources += MFP.cpp
 CEXE_sources += MFP_io.cpp

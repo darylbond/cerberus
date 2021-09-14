@@ -8,8 +8,12 @@ void MFP::variableSetUp()
     // read in all of the user defined parameters
     read_params();
 
+    ParmParse pgm("geometry");
+    Vector<int> periodic(AMREX_SPACEDIM,0);
+    pgm.queryarr("is_periodic",periodic);
+
     for (auto& state : states) {
-        state->variable_setup();
+        state->variable_setup(periodic);
     }
 
     //===================

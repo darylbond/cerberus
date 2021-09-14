@@ -1,4 +1,3 @@
-CEXE_headers += MFP_state.fwd.H
 CEXE_headers += MFP_state.H
 CEXE_sources += MFP_state.cpp
 

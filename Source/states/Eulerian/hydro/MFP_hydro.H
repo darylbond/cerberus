@@ -5,12 +5,7 @@
 #include "MFP_eulerian.H"
 #include "MFP_bc.H"
 #include "MFP.H"
-
-class HydroRiemannSolver;
-#include "MFP_hydro_riemann.H"
-
-class HydroState;
-class HydroViscous;
+#include "MFP_hydro_defs.H"
 
 class HydroState : public EulerianState
 {
@@ -35,9 +30,8 @@ public:
     int enforce_positivity;
     int extra_slope_limits;
 
-    std::unique_ptr<HydroViscous> viscous;
-    std::unique_ptr<HydroRiemannSolver> flux_solver;
-    std::unique_ptr<ShockDetector> shock_detector;
+    virtual int get_num_grow() override {return num_grow;}
+    virtual void set_num_grow(int n) override {num_grow = std::max(n, num_grow);}
 
     virtual int get_num_cons() const override {return +HydroDef::ConsIdx::NUM;}
     virtual const Vector<std::string>& get_cons_names() const override {return cons_names;}
@@ -52,36 +46,66 @@ public:
                              #endif
                                  ) const override;
 
+    int viscous;
     void set_viscosity();
+
     Real init_from_number_density(std::map<std::string, Real> data);
     void set_udf();
+
     void set_flux();
+
+    virtual void variable_setup(Vector<int> periodic) override;
+    virtual void init_data(MFP* mfp) override;
+
 #ifdef AMREX_USE_EB
     virtual void set_eb_bc(const sol::table &bc_def) override;
+
+    // Slip Wall EB
+    void slip_wall_eb();
+
+    // No-Slip Wall EB
+    struct NoSlipWallData {
+        Array<Real,3> wall_velocity;
+        Real wall_temp;
+    };
+
+    Vector<NoSlipWallData> no_slip_wall_eb_data;
+    void no_slip_wall_eb(int idx);
+
+    // Defined Wall EB
+    Vector<Array<Real, +HydroDef::PrimIdx::NUM>> defined_wall_eb_data;
+    void defined_wall_eb(int idx);
+
+
+    // Wall EB
+    void wall_eb(int eb_idx);
+
+
+
 #endif
     virtual void init_from_lua() override;
 
-    static Real get_density_from_cons(const Array<Real,+HydroDef::ConsIdx::NUM>& U);
-    static Real get_density_from_prim(const Array<Real,+HydroDef::PrimIdx::NUM>& Q);
-    static Real get_alpha_from_cons(const Array<Real,+HydroDef::ConsIdx::NUM>& U);
-    static Real get_alpha_from_prim(const Array<Real,+HydroDef::PrimIdx::NUM>& Q);
-    static Real get_mass(Real alpha);
-    static Real get_mass(const Array<Real,+HydroDef::ConsIdx::NUM>& U);
-    static Real get_charge(Real alpha);
-    static Real get_charge(const Array<Real,+HydroDef::ConsIdx::NUM>& U);
-    static Real get_gamma(Real alpha);
-    static Real get_gamma(const Array<Real,+HydroDef::ConsIdx::NUM>& U);
-    static Real get_cp(Real alpha);
-    static Real get_cp(const Array<Real,+HydroDef::ConsIdx::NUM>& U);
-    static bool cons2prim(Vector<Real>& U, Vector<Real>& Q);
-    static void prim2cons(Vector<Real>& Q, Vector<Real>& U);
-    static bool prim_valid(Array<Real,+HydroDef::PrimIdx::NUM>& Q);
-    static bool cons_valid(Array<Real,+HydroDef::ConsIdx::NUM>& U);
-    static Real get_energy_from_cons(const Array<Real,+HydroDef::ConsIdx::NUM>& U);
-    static Real get_temperature_from_cons(const Array<Real,+HydroDef::ConsIdx::NUM>& U);
-    static Real get_temperature_from_prim(const Array<Real,+HydroDef::PrimIdx::NUM>& Q);
-    static RealArray get_speed_from_cons(const Array<Real, +HydroDef::ConsIdx::NUM> &U);
-    static RealArray get_speed_from_prim(const Vector<Real>& Q);
+    Real get_density_from_cons(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const;
+    Real get_density_from_prim(const Array<Real,+HydroDef::PrimIdx::NUM>& Q) const;
+    Real get_alpha_from_cons(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const;
+    Real get_alpha_from_prim(const Array<Real,+HydroDef::PrimIdx::NUM>& Q) const;
+    Real get_mass(Real alpha) const;
+    Real get_mass(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const;
+    Real get_charge(Real alpha) const;
+    Real get_charge(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const;
+    Real get_gamma(Real alpha) const;
+    Real get_gamma(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const;
+    Real get_cp(Real alpha) const;
+    Real get_cp(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const;
+    bool cons2prim(const Array<Real, +HydroDef::ConsIdx::NUM> &U, Array<Real, +HydroDef::PrimIdx::NUM> &Q) const;
+    void prim2cons(const Array<Real, +HydroDef::PrimIdx::NUM> &Q, Array<Real, +HydroDef::ConsIdx::NUM> &U) const;
+    bool prim_valid(Array<Real,+HydroDef::PrimIdx::NUM>& Q) const;
+    bool cons_valid(Array<Real,+HydroDef::ConsIdx::NUM>& U) const;
+    Real get_energy_from_cons(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const;
+    Real get_temperature_from_cons(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const;
+    Real get_temperature_from_prim(const Array<Real,+HydroDef::PrimIdx::NUM>& Q) const;
+    RealArray get_speed_from_cons(const Array<Real, +HydroDef::ConsIdx::NUM> &U) const;
+    RealArray get_speed_from_prim(const Array<Real,+HydroDef::PrimIdx::NUM>& Q) const;
 
     virtual Real get_allowed_time_step(MFP* mfp) const override;
 

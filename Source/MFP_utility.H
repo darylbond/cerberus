@@ -102,6 +102,18 @@ std::string arr2str(const std::array<T, N> &in, const std::string &left = "[",
     return s;
 }
 
+// === ARRAY TO VECTOR ===
+template <typename T, size_t N>
+std::vector<T> arr2vec(const std::array<T, N> &in) {
+
+    std::vector<T> vec(N);
+    for (size_t i = 0; i < N; ++i) {
+        vec[i] = in[i];
+    }
+
+    return vec;
+}
+
 // === CLAMP NUMBER WITHIN RANGE ===
 
 template <typename T>

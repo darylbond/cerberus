@@ -1,7 +1,7 @@
 #include "MFP_hydro.H"
 #include "MFP_lua.H"
-#include "MFP_hydro_bc.H"
 #include "MFP.H"
+#include "MFP_diagnostics.H"
 
 Vector<std::string> HydroState::cons_names = {
     "rho",
@@ -22,26 +22,9 @@ Vector<std::string> HydroState::prim_names = {
     "alpha"
 };
 
-Vector<set_bc> HydroState::bc_set = {
-    &set_scalar_bc,
-    &set_x_vel_bc,
-    &set_y_vel_bc,
-    &set_z_vel_bc,
-    &set_scalar_bc,
-    &set_scalar_bc,
-    &set_scalar_bc
-};
-
 Array<int,1> HydroState::flux_vector_idx = {+HydroDef::FluxIdx::Xvel};
 Array<int,1> HydroState::cons_vector_idx = {+HydroDef::ConsIdx::Xmom};
 Array<int,1> HydroState::prim_vector_idx = {+HydroDef::PrimIdx::Xvel};
-
-std::map<std::string, int> HydroState::bc_names = {{"interior",  PhysBCType::interior},
-                                                   {"inflow",    PhysBCType::inflow},
-                                                   {"outflow",   PhysBCType::outflow},
-                                                   {"symmetry",  PhysBCType::symmetry},
-                                                   {"slipwall",  PhysBCType::slipwall},
-                                                   {"noslipwall",PhysBCType::noslipwall}};
 
 std::string HydroState::tag = "hydro";
 bool HydroState::registered = GetStateFactory().Register(HydroState::tag, StateBuilder<HydroState>);
@@ -64,17 +47,10 @@ void HydroState::set_viscosity()
     // viscous terms coefficients
     //
 
-    ClassFactory<HydroViscous> vfact = GetViscousFactory();
-
     sol::table state_def = MFP::lua["states"][name];
-    state_def["global_idx"] = global_idx;
 
     std::string visc = state_def["viscosity"]["type"].get_or<std::string>("");
 
-    viscous = vfact.Build(visc, state_def);
-
-    if (!visc.empty() && !viscous)
-        Abort("Invalid viscosity option '"+visc+"'. Options are "+vec2str(vfact.getKeys()));
 
 }
 
@@ -84,18 +60,46 @@ void HydroState::set_eb_bc(const sol::table &bc_def)
 
     std::string bc_type = bc_def.get<std::string>("type");
 
-    if (bc_type == HydroSlipWall::tag) {
-        eb_bcs.push_back(std::unique_ptr<BoundaryEB>(new HydroSlipWall(flux_solver.get())));
-    } else if (bc_type == HydroNoSlipWall::tag) {
+    if (bc_type == "slip_wall") {
+
+        eb_bc_index.push_back(std::make_pair(+HydroDef::WallIndex::HydroSlipWall, -1));
+
+    } else if (bc_type == "no_slip_wall") {
         if (!viscous) {
             Abort("Requested EB bc of type '" + bc_type + "' without defining 'viscosity' for state '" + name + "'");
         }
-        eb_bcs.push_back(std::unique_ptr<BoundaryEB>(new HydroNoSlipWall(flux_solver.get(), viscous.get(), bc_def)));
-    } else if (bc_type == DirichletWall::tag) {
-        eb_bcs.push_back(std::unique_ptr<BoundaryEB>(new DirichletWall(flux_solver.get(), prim_names, prim_vector_idx, bc_def)));
+
+        eb_bc_index.push_back(std::make_pair<int,int>(+HydroDef::WallIndex::HydroNoSlipWall, no_slip_wall_eb_data.size()));
+
+        NoSlipWallData dat;
+        dat.wall_temp = bc_def["T"].get_or(-1.0);
+        dat.wall_velocity[0] = 0.0;
+        dat.wall_velocity[1] = bc_def["v1"].get_or(0.0);
+        dat.wall_velocity[2] = bc_def["v2"].get_or(0.0);
+
+        no_slip_wall_eb_data.push_back(dat);
+
+
+    } else if (bc_type == "defined") {
+
+        eb_bc_index.push_back(std::make_pair<int,int>(+HydroDef::WallIndex::HydroDefined, defined_wall_eb_data.size()));
+
+        Array<Real, +HydroDef::PrimIdx::NUM> dat;
+
+        dat[+HydroDef::PrimIdx::Density] = bc_def["rho"].get_or(-1.0);
+        dat[+HydroDef::PrimIdx::Xvel] = bc_def["u"].get_or(-1.0);
+        dat[+HydroDef::PrimIdx::Yvel] = bc_def["v"].get_or(-1.0);
+        dat[+HydroDef::PrimIdx::Zvel] = bc_def["w"].get_or(-1.0);
+        dat[+HydroDef::PrimIdx::Prs] = bc_def["p"].get_or(-1.0);
+        dat[+HydroDef::PrimIdx::Temp] = bc_def["T"].get_or(-1.0);
+
+        defined_wall_eb_data.push_back(dat);
+
     } else {
         Abort("Requested EB bc of type '" + bc_type + "' which is not compatible with state '" + name + "'");
     }
+
+
 }
 #endif
 
@@ -191,20 +195,13 @@ void HydroState::set_flux()
 
     sol::state& lua = MFP::lua;
 
-    ClassFactory<HydroRiemannSolver> rfact = GetHydroRiemannSolverFactory();
 
     sol::table state_def = MFP::lua["states"][name];
-    state_def["global_idx"] = global_idx;
+
 
     std::string flux = state_def["flux"].get_or<std::string>("null");
 
-    if (flux == "null")
-        Abort("Flux option required for state '"+name+"'. Options are "+vec2str(rfact.getKeys()));
 
-    flux_solver = rfact.Build(flux, state_def);
-
-    if (!flux_solver)
-        Abort("Invalid flux solver option '"+flux+"'. Options are "+vec2str(rfact.getKeys()));
 
     return;
 
@@ -234,9 +231,16 @@ void HydroState::init_from_lua()
     gamma_const = gamma[0] == gamma[1];
 
     //
+    // user defined functions
+    //
+    set_udf();
+
+    //
     // viscous terms coefficients
     //
     set_viscosity();
+
+
 
     //
     // domain boundary conditions
@@ -308,28 +312,147 @@ void HydroState::init_from_lua()
 
 }
 
-
-Real HydroState::get_density_from_cons(const Array<Real,+ConsIdx::NUM>& U)
+void HydroState::variable_setup(Vector<int> periodic)
 {
-    return U[+ConsIdx::Density];
+
+    boundary_conditions.fill_bc.resize(+HydroDef::PrimIdx::NUM);
+
+    for (int icomp=0; icomp < +HydroDef::ConsIdx::NUM; ++icomp) {
+        set_bc s = bc_set[icomp]; // the function that sets the bc
+
+        // make sure our periodicity isn't being overwritten
+        for (int d=0; d<AMREX_SPACEDIM; ++d) {
+            if (periodic[d]) {
+                boundary_conditions.phys_fill_bc[icomp].setLo(d, PhysBCType::interior);
+                boundary_conditions.phys_fill_bc[icomp].setHi(d, PhysBCType::interior);
+            }
+        }
+
+        // grab the per component BCRec and apply the set bc function to it
+        (*s)(boundary_conditions.fill_bc[icomp], boundary_conditions.phys_fill_bc[icomp]);
+    }
+
+    Vector<std::string> comp_names(+HydroDef::ConsIdx::NUM);
+    for (int icomp=0; icomp < +HydroDef::ConsIdx::NUM; ++icomp) {
+        comp_names[icomp] = cons_names[icomp] + "-" + name;
+    }
+
+    int ng = num_grow;
+
+#ifdef AMREX_USE_EB
+    Interpolater* interp = &eb_cell_cons_interp;
+#else
+    Interpolater* interp = &cell_cons_interp;
+#endif
+
+    bool state_data_extrap = false;
+    bool store_in_checkpoint = true;
+
+    DescriptorList& desc_lst = MFP::get_desc_lst();
+
+    data_idx = desc_lst.size();
+
+    desc_lst.addDescriptor(data_idx, IndexType::TheCellType(),
+                           StateDescriptor::Point, ng, +HydroDef::ConsIdx::NUM,
+                           interp, state_data_extrap,
+                           store_in_checkpoint);
+
+    desc_lst.setComponent(
+                data_idx, 0, comp_names, boundary_conditions.fill_bc,
+                FillBC());
+
+
+    if (MFP::verbosity >= 1) {
+        Print() << str();
+    }
 }
-Real HydroState::get_density_from_prim(const Array<Real,+PrimIdx::NUM>& Q)
+
+void HydroState::init_data(MFP* mfp)
 {
-    return Q[+PrimIdx::Density];
+
+    const Real* dx = mfp->Geom().CellSize();
+    const Real* prob_lo = mfp->Geom().ProbLo();
+
+    MultiFab& S_new = mfp->get_new_data(data_idx);
+
+    Array<Real, +HydroDef::ConsIdx::NUM> U;
+    Array<Real, +HydroDef::PrimIdx::NUM> Q;
+
+    for (MFIter mfi(S_new); mfi.isValid(); ++mfi) {
+        const Box& box = mfi.validbox();
+        FArrayBox& S_data = S_new[mfi];
+
+        const Dim3 lo = amrex::lbound(box);
+        const Dim3 hi = amrex::ubound(box);
+        Array4<Real> const& S4 = S_data.array();
+
+#ifdef AMREX_USE_EB
+        Array4<const EBCellFlag> const& flag4 = eb_data.flags.array(mfi);
+#endif
+
+        Real x, y, z;
+        for     (int k = lo.z; k <= hi.z; ++k) {
+            z = prob_lo[2] + (k + 0.5)*dx[2];
+            for   (int j = lo.y; j <= hi.y; ++j) {
+                y = prob_lo[1] + (j + 0.5)*dx[1];
+                AMREX_PRAGMA_SIMD
+                        for (int i = lo.x; i <= hi.x; ++i) {
+                    x = prob_lo[0] + (i + 0.5)*dx[0];
+
+#ifdef AMREX_USE_EB
+                    const EBCellFlag &cflag = flag4(i,j,k);
+
+                    if (cflag.isCovered()) {
+                        for (int n=0; n<+HydroDef::ConsIdx::NUM; ++n) {
+                            S4(i,j,k,n) = 0.0;
+                        }
+                        continue;
+                    }
+#endif
+
+                    // grab the primitive variables as defined by the user functions
+                    for (int icomp=0; icomp<+HydroDef::PrimIdx::NUM; ++icomp) {
+                        const std::string& prim_name = prim_names[icomp];
+                        const auto& f = functions[prim_name];
+
+                        Q[icomp] = f(x, y, z);
+
+                    }
+
+                    // convert primitive to conserved
+                    prim2cons(Q, U);
+
+                    // copy into array
+                    for (int n=0; n<+HydroDef::ConsIdx::NUM; ++n) {
+                        S4(i,j,k,n) = U[n];
+                    }
+                }
+            }
+        }
+    }
 }
 
-
-Real HydroState::get_alpha_from_cons(const Array<Real,+ConsIdx::NUM>& U)
+Real HydroState::get_density_from_cons(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const
 {
-    return U[+ConsIdx::Tracer]/U[+ConsIdx::Density];
+    return U[+HydroDef::ConsIdx::Density];
 }
-Real HydroState::get_alpha_from_prim(const Array<Real,+PrimIdx::NUM>& Q)
+Real HydroState::get_density_from_prim(const Array<Real,+HydroDef::PrimIdx::NUM>& Q) const
 {
-    return Q[+PrimIdx::Alpha];
+    return Q[+HydroDef::PrimIdx::Density];
 }
 
 
-Real HydroState::get_mass(Real alpha)
+Real HydroState::get_alpha_from_cons(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const
+{
+    return U[+HydroDef::ConsIdx::Tracer]/U[+HydroDef::ConsIdx::Density];
+}
+Real HydroState::get_alpha_from_prim(const Array<Real,+HydroDef::PrimIdx::NUM>& Q) const
+{
+    return Q[+HydroDef::PrimIdx::Alpha];
+}
+
+
+Real HydroState::get_mass(Real alpha) const
 {
     BL_PROFILE("HydroState::get_mass");
 
@@ -344,7 +467,7 @@ Real HydroState::get_mass(Real alpha)
     return (m0*m1)/(m0*alpha + m1*(1-alpha));
 }
 
-Real HydroState::get_mass(const Array<Real,+ConsIdx::NUM>& U)
+Real HydroState::get_mass(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const
 {
     BL_PROFILE("HydroState::get_mass");
 
@@ -355,7 +478,7 @@ Real HydroState::get_mass(const Array<Real,+ConsIdx::NUM>& U)
     return get_mass(alpha);
 }
 
-Real HydroState::get_charge(Real alpha)
+Real HydroState::get_charge(Real alpha) const
 {
     BL_PROFILE("HydroState::get_charge");
 
@@ -373,7 +496,7 @@ Real HydroState::get_charge(Real alpha)
     return (alpha*m0*q1 + (1-alpha)*m1*q0)/(m0*alpha + m1*(1-alpha));
 }
 
-Real HydroState::get_charge(const Array<Real,+ConsIdx::NUM>& U)
+Real HydroState::get_charge(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const
 {
     BL_PROFILE("HydroState::get_charge");
 
@@ -384,7 +507,7 @@ Real HydroState::get_charge(const Array<Real,+ConsIdx::NUM>& U)
     return get_charge(alpha);
 }
 
-Real HydroState::get_gamma(Real alpha)
+Real HydroState::get_gamma(Real alpha) const
 {
     BL_PROFILE("HydroState::get_gamma");
 
@@ -408,7 +531,7 @@ Real HydroState::get_gamma(Real alpha)
     return ((1-alpha)*cp0 + alpha*cp1)/((1-alpha)*cv0 + alpha*cv1);
 }
 
-Real HydroState::get_gamma(const Array<Real,+ConsIdx::NUM>& U)
+Real HydroState::get_gamma(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const
 {
     BL_PROFILE("HydroState::get_gamma_U");
 
@@ -441,7 +564,7 @@ Real HydroState::get_cp(Real alpha) const
     return (1-alpha)*cp0 + alpha*cp1;
 }
 
-Real HydroState::get_cp(const Array<Real,+ConsIdx::NUM>& U)
+Real HydroState::get_cp(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const
 {
     BL_PROFILE("HydroState::get_cp");
 
@@ -453,16 +576,16 @@ Real HydroState::get_cp(const Array<Real,+ConsIdx::NUM>& U)
 
 
 // in place conversion from conserved to primitive
-bool HydroState::cons2prim(Vector<Real>& U, Vector<Real>& Q)
+bool HydroState::cons2prim(const Array<Real,+HydroDef::ConsIdx::NUM>& U, Array<Real,+HydroDef::PrimIdx::NUM>& Q) const
 {
     BL_PROFILE("HydroState::cons2prim");
 
-    Real rho = U[+ConsIdx::Density];
-    Real mx = U[+ConsIdx::Xmom];
-    Real my = U[+ConsIdx::Ymom];
-    Real mz = U[+ConsIdx::Zmom];
-    Real ed = U[+ConsIdx::Eden];
-    Real tr = U[+ConsIdx::Tracer];
+    Real rho = U[+HydroDef::ConsIdx::Density];
+    Real mx = U[+HydroDef::ConsIdx::Xmom];
+    Real my = U[+HydroDef::ConsIdx::Ymom];
+    Real mz = U[+HydroDef::ConsIdx::Zmom];
+    Real ed = U[+HydroDef::ConsIdx::Eden];
+    Real tr = U[+HydroDef::ConsIdx::Tracer];
 
     Real rhoinv = 1/rho;
     Real u = mx*rhoinv;
@@ -475,28 +598,28 @@ bool HydroState::cons2prim(Vector<Real>& U, Vector<Real>& Q)
     Real p = (ed - ke)*(g - 1);
     Real T = p*rhoinv*m;
 
-    Q[+PrimIdx::Density] = rho;
-    Q[+PrimIdx::Xvel] = u;
-    Q[+PrimIdx::Yvel] = v;
-    Q[+PrimIdx::Zvel] = w;
-    Q[+PrimIdx::Prs] = p;
-    Q[+PrimIdx::Alpha] = alpha;
-    Q[+PrimIdx::Temp] = T;
+    Q[+HydroDef::PrimIdx::Density] = rho;
+    Q[+HydroDef::PrimIdx::Xvel] = u;
+    Q[+HydroDef::PrimIdx::Yvel] = v;
+    Q[+HydroDef::PrimIdx::Zvel] = w;
+    Q[+HydroDef::PrimIdx::Prs] = p;
+    Q[+HydroDef::PrimIdx::Alpha] = alpha;
+    Q[+HydroDef::PrimIdx::Temp] = T;
 
     return prim_valid(Q);
 }
 
 // in-place conversion from primitive to conserved variables
-void HydroState::prim2cons(Vector<Real>& Q, Vector<Real>& U)
+void HydroState::prim2cons(const Array<Real, +HydroDef::PrimIdx::NUM> &Q, Array<Real,+HydroDef::ConsIdx::NUM>& U) const
 {
     BL_PROFILE("HydroState::prim2cons");
 
-    Real rho = Q[+PrimIdx::Density];
-    Real u = Q[+PrimIdx::Xvel];
-    Real v = Q[+PrimIdx::Yvel];
-    Real w = Q[+PrimIdx::Zvel];
-    Real p = Q[+PrimIdx::Prs];
-    Real alpha = Q[+PrimIdx::Alpha];
+    Real rho = Q[+HydroDef::PrimIdx::Density];
+    Real u = Q[+HydroDef::PrimIdx::Xvel];
+    Real v = Q[+HydroDef::PrimIdx::Yvel];
+    Real w = Q[+HydroDef::PrimIdx::Zvel];
+    Real p = Q[+HydroDef::PrimIdx::Prs];
+    Real alpha = Q[+HydroDef::PrimIdx::Alpha];
 
     Real mx = u*rho;
     Real my = v*rho;
@@ -506,19 +629,19 @@ void HydroState::prim2cons(Vector<Real>& Q, Vector<Real>& U)
     Real g = get_gamma(alpha);
     Real ed = p/(g - 1) + ke;
 
-    U[+ConsIdx::Density] = rho;
-    U[+ConsIdx::Xmom] = mx;
-    U[+ConsIdx::Ymom] = my;
-    U[+ConsIdx::Zmom] = mz;
-    U[+ConsIdx::Eden] = ed;
-    U[+ConsIdx::Tracer] = tr;
+    U[+HydroDef::ConsIdx::Density] = rho;
+    U[+HydroDef::ConsIdx::Xmom] = mx;
+    U[+HydroDef::ConsIdx::Ymom] = my;
+    U[+HydroDef::ConsIdx::Zmom] = mz;
+    U[+HydroDef::ConsIdx::Eden] = ed;
+    U[+HydroDef::ConsIdx::Tracer] = tr;
 
 }
 
 
-bool HydroState::prim_valid(Array<Real,+PrimIdx::NUM>& Q)
+bool HydroState::prim_valid(Array<Real,+HydroDef::PrimIdx::NUM>& Q) const
 {
-    if ((Q[+PrimIdx::Density] <= 0.0) ||  (Q[+PrimIdx::Prs] <= 0.0)
+    if ((Q[+HydroDef::PrimIdx::Density] <= 0.0) ||  (Q[+HydroDef::PrimIdx::Prs] <= 0.0)
             ) {
         //        amrex::Abort("Primitive values outside of physical bounds!!");
         return false;
@@ -526,9 +649,9 @@ bool HydroState::prim_valid(Array<Real,+PrimIdx::NUM>& Q)
     return true;
 }
 
-bool HydroState::cons_valid(Array<Real,+ConsIdx::NUM>& U)
+bool HydroState::cons_valid(Array<Real,+HydroDef::ConsIdx::NUM>& U) const
 {
-    if ((U[+ConsIdx::Density] <= 0.0) ||  (U[+ConsIdx::Eden] <= 0.0)
+    if ((U[+HydroDef::ConsIdx::Density] <= 0.0) ||  (U[+HydroDef::ConsIdx::Eden] <= 0.0)
             ) {
         //        amrex::Abort("Primitive values outside of physical bounds!!");
         return false;
@@ -536,21 +659,21 @@ bool HydroState::cons_valid(Array<Real,+ConsIdx::NUM>& U)
     return true;
 }
 
-Real HydroState::get_energy_from_cons(const Array<Real,+ConsIdx::NUM>& U)
+Real HydroState::get_energy_from_cons(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const
 {
-    return U[+ConsIdx::Eden];
+    return U[+HydroDef::ConsIdx::Eden];
 }
 
-Real HydroState::get_temperature_from_cons(const Array<Real,+ConsIdx::NUM>& U)
+Real HydroState::get_temperature_from_cons(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const
 {
     BL_PROFILE("HydroState::get_temperature_from_cons");
 
-    Real rho = U[+ConsIdx::Density];
-    Real mx = U[+ConsIdx::Xmom];
-    Real my = U[+ConsIdx::Ymom];
-    Real mz = U[+ConsIdx::Zmom];
-    Real ed = U[+ConsIdx::Eden];
-    Real tr = U[+ConsIdx::Tracer];
+    Real rho = U[+HydroDef::ConsIdx::Density];
+    Real mx = U[+HydroDef::ConsIdx::Xmom];
+    Real my = U[+HydroDef::ConsIdx::Ymom];
+    Real mz = U[+HydroDef::ConsIdx::Zmom];
+    Real ed = U[+HydroDef::ConsIdx::Eden];
+    Real tr = U[+HydroDef::ConsIdx::Tracer];
 
     Real rhoinv = 1/rho;
     Real ke = 0.5*rhoinv*(mx*mx + my*my + mz*mz);
@@ -564,21 +687,21 @@ Real HydroState::get_temperature_from_cons(const Array<Real,+ConsIdx::NUM>& U)
 
 }
 
-Real HydroState::get_temperature_from_prim(const Array<Real,+PrimIdx::NUM>& Q)
+Real HydroState::get_temperature_from_prim(const Array<Real,+HydroDef::PrimIdx::NUM>& Q) const
 {
-    return Q[+PrimIdx::Temp];
+    return Q[+HydroDef::PrimIdx::Temp];
 }
 
-RealArray HydroState::get_speed_from_cons(const Array<Real,+ConsIdx::NUM>& U)
+RealArray HydroState::get_speed_from_cons(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const
 {
     BL_PROFILE("HydroState::get_speed_from_cons");
 
-    Real rho = U[+ConsIdx::Density];
-    Real mx = U[+ConsIdx::Xmom];
-    Real my = U[+ConsIdx::Ymom];
-    Real mz = U[+ConsIdx::Zmom];
-    Real ed = U[+ConsIdx::Eden];
-    Real tr = U[+ConsIdx::Tracer];
+    Real rho = U[+HydroDef::ConsIdx::Density];
+    Real mx = U[+HydroDef::ConsIdx::Xmom];
+    Real my = U[+HydroDef::ConsIdx::Ymom];
+    Real mz = U[+HydroDef::ConsIdx::Zmom];
+    Real ed = U[+HydroDef::ConsIdx::Eden];
+    Real tr = U[+HydroDef::ConsIdx::Tracer];
 
     Real rhoinv = 1/rho;
 
@@ -598,17 +721,17 @@ RealArray HydroState::get_speed_from_cons(const Array<Real,+ConsIdx::NUM>& U)
 
 }
 
-RealArray HydroState::get_speed_from_prim(const Vector<Real>& Q)
+RealArray HydroState::get_speed_from_prim(const Array<Real,+HydroDef::PrimIdx::NUM>& Q) const
 {
     BL_PROFILE("HydroState::get_speed_from_prim");
 
-    Real g = get_gamma(Q[+PrimIdx::Alpha]);
+    Real g = get_gamma(Q[+HydroDef::PrimIdx::Alpha]);
 
-    Real a = std::sqrt(g*Q[+PrimIdx::Prs]/Q[+PrimIdx::Density]);
+    Real a = std::sqrt(g*Q[+HydroDef::PrimIdx::Prs]/Q[+HydroDef::PrimIdx::Density]);
 
-    RealArray s = {AMREX_D_DECL(a + std::abs(Q[+PrimIdx::Xvel]),
-                   a + std::abs(Q[+PrimIdx::Yvel]),
-                   a + std::abs(Q[+PrimIdx::Zvel]))};
+    RealArray s = {AMREX_D_DECL(a + std::abs(Q[+HydroDef::PrimIdx::Xvel]),
+                   a + std::abs(Q[+HydroDef::PrimIdx::Yvel]),
+                   a + std::abs(Q[+HydroDef::PrimIdx::Zvel]))};
 
 
     return s;
@@ -648,7 +771,7 @@ void HydroState::get_plot_output(const Box& box,
 
     // check conserved variables
     std::map<std::string,int> cons_tags;
-    for (int i=0; i<+ConsIdx::NUM; ++i) {
+    for (int i=0; i<+HydroDef::ConsIdx::NUM; ++i) {
         const std::string s = cons_names[i];
         const std::string var_name = s+"-"+name;
         if ( out.find(var_name) == out.end() ) continue;
@@ -658,7 +781,7 @@ void HydroState::get_plot_output(const Box& box,
 
     // check primitive variables
     std::map<std::string,int> prim_tags;
-    for (int i=0; i<+PrimIdx::NUM; ++i) {
+    for (int i=0; i<+HydroDef::PrimIdx::NUM; ++i) {
         const std::string s = prim_names[i];
         if (s == cons_names[0]) continue;
         const std::string var_name = s+"-"+name;
@@ -699,7 +822,8 @@ void HydroState::get_plot_output(const Box& box,
     }
 
     // temporary storage for retrieving the state data
-    Vector<Real> S(+ConsIdx::NUM), Q(+PrimIdx::NUM);
+    Array<Real, +HydroDef::ConsIdx::NUM> S;
+    Array<Real, +HydroDef::PrimIdx::NUM> Q;
 
     Array4<const Real> const& src4 = src.array();
 
@@ -714,7 +838,7 @@ void HydroState::get_plot_output(const Box& box,
                 }
 #endif
 
-                for (int n=0; n<+ConsIdx::NUM; ++n) {
+                for (int n=0; n<+HydroDef::ConsIdx::NUM; ++n) {
                     S[n] = src4(i,j,k,n);
                 }
 
@@ -752,7 +876,7 @@ Real HydroState::get_allowed_time_step(MFP* mfp) const
 
     MultiFab& data = mfp->get_new_data(data_idx);
 
-    Array<Real,+ConsIdx::NUM> U;
+    Array<Real,+HydroDef::ConsIdx::NUM> U;
 
     Real max_speed = std::numeric_limits<Real>::max();
 
@@ -770,7 +894,7 @@ Real HydroState::get_allowed_time_step(MFP* mfp) const
 
         Array4<const Real> const& vf4 = vfrac.array();
 #endif
-        Array4<const Real> const& data4 = data.array(mfi);
+        Array4<const Real> const& data4 = data[mfi].array();
 
         for     (int k = lo.z; k <= hi.z; ++k) {
             for   (int j = lo.y; j <= hi.y; ++j) {
@@ -783,8 +907,8 @@ Real HydroState::get_allowed_time_step(MFP* mfp) const
                     }
 #endif
 
-                    for (int n = 0; n<+ConsIdx::NUM; ++n) {
-                        U[i] = data4(i,j,k,n);
+                    for (int n = 0; n<+HydroDef::ConsIdx::NUM; ++n) {
+                        U[n] = data4(i,j,k,n);
                     }
 
                     const RealArray speed = get_speed_from_cons(U);
@@ -804,9 +928,9 @@ Real HydroState::get_allowed_time_step(MFP* mfp) const
     }
 
     // check for any viscous time step limitation
-    if (viscous) {
-        dt = std::min(dt, viscous->get_min_dt(mfp));
-    }
+    //    if (viscous) {
+    //        dt = std::min(dt, viscous->get_min_dt(mfp));
+    //    }
 
     return dt;
 }

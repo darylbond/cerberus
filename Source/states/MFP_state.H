@@ -13,7 +13,6 @@ class MFP;
 
 #include "MFP_eb_structs.H"
 #include "MFP_fillbc.H"
-#include "MFP_reconstruction.H"
 
 
 using namespace amrex;
@@ -27,7 +26,6 @@ public:
     std::string name;
     int global_idx;
     int data_idx;
-    int num_grow;
 
     EBData eb_data;
 
@@ -60,12 +58,10 @@ public:
 
     BoundaryState boundary_conditions;
 
-    std::unique_ptr<Reconstruction> reconstruction;
-
 
     virtual StateType get_type() const {return StateType::Null;}
-    virtual int get_num_grow() {return num_grow;}
-    virtual void set_num_grow(int n) {num_grow = std::max(n, num_grow);}
+    virtual int get_num_grow() {return 0;}
+    virtual void set_num_grow(int n) {return;}
 
     virtual Vector<std::string> get_plot_output_names() const = 0;
     virtual void get_plot_output(const Box& box,
@@ -79,7 +75,7 @@ public:
 
     virtual void init_from_lua() {return;}
     virtual void post_init_from_lua() {return;}
-    virtual void variable_setup() {return;}
+    virtual void variable_setup(Vector<int> periodic) {return;}
     virtual void init_data(MFP* mfp) {return;}
 
     virtual Real get_allowed_time_step(MFP* mfp) const = 0;
@@ -96,6 +92,12 @@ public:
 
     void update_eb_flags(const Geometry &geom,
                          EBCellFlagFab& flags) const;
+
+    // keep track of the embedded boundaries that are being applied by this state
+    // first index is the state local definition of the eb bc
+    // second index is for grabbing any data to go with the bc
+    Vector<std::pair<int,int>> eb_bc_index;
+
 #endif
 
     virtual void write_info(nlohmann::json& js) const;

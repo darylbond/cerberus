@@ -50,9 +50,9 @@ void MFP::calc_slope(const Box& box,
                      #endif
                      const Real *dx,
                      int index,
-                     int dim,
-                     Reconstruction &reco)
+                     int dim)
 {
+    /*
     BL_PROFILE("State::calc_slope");
     const Dim3 lo = amrex::lbound(box);
     const Dim3 hi = amrex::ubound(box);
@@ -107,7 +107,7 @@ void MFP::calc_slope(const Box& box,
         }
     }
 
-
+    */
     return;
 }
 
@@ -219,7 +219,7 @@ void MFP::getPlotData(MultiFab &plot_data,
 
             // get any gradients
 
-            for (const std::string& var_name : updated) {
+            /*for (const std::string& var_name : updated) {
 
                 const Array<int,AMREX_SPACEDIM+1> var_grad = plot_variables[var_name];
 
@@ -253,7 +253,7 @@ void MFP::getPlotData(MultiFab &plot_data,
                                dx, 0, i,
                                *istate.reconstruction.get());
                 }
-            }
+            }*/
         }
 
 //        plot_FABs_2d(dat_arrays,0,false,true);

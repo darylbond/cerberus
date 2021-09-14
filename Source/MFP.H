@@ -1,8 +1,6 @@
 #ifndef MFP_H_
 #define MFP_H_
 
-#include "MFP.fwd.H"
-
 #ifdef AMREX_USE_EB
 #include <AMReX_EBCellFlag.H>
 #include <AMReX_EBFluxRegister.H>
@@ -18,7 +16,6 @@
 
 #include "MFP_eb_structs.H"
 #include "MFP_optional_func.H"
-#include "MFP_reconstruction.H"
 
 class State;
 
@@ -49,12 +46,11 @@ public:
                     const FArrayBox& src,
                     FArrayBox &slope,
                 #ifdef AMREX_USE_EB
-                    const EBCellFlagFab &flag,
+                const EBCellFlagFab &flag,
                 #endif
                     const Real *dx,
                     int index,
-                    int dim,
-                    Reconstruction &reco);
+                    int dim);
 
     void getPlotData(MultiFab &plot_data, std::vector<std::string> &plot_names);
 

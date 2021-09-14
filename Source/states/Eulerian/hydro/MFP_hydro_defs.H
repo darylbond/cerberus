@@ -42,6 +42,13 @@ struct HydroDef
         Flux=1,
         Prim=1
     };
+
+    enum class WallIndex : int {
+        HydroSlipWall = 0,
+        HydroNoSlipWall,
+        HydroDefined,
+        NUM
+    };
 };
 
 

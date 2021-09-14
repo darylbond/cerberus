@@ -221,7 +221,7 @@ void MFP::read_config()
             std::string state_name = state.as<std::string>();
             if (state_name != "func") {
                 State &istate = get_state(state_name);
-                eb_dat.states.push_back({istate.global_idx,istate.eb_bcs.size()});
+                eb_dat.states.push_back({istate.global_idx,istate.eb_bc_index.size()});
 
                 // define bc
                 istate.set_eb_bc(bc_def);
@@ -416,11 +416,6 @@ void MFP::read_params()
 #ifdef AMREX_DEBUG
     save_lua_script();
 #endif
-
-    ParmParse pgm("geometry");
-
-    Vector<int> is_per(AMREX_SPACEDIM,0);
-    pgm.queryarr("is_periodic",is_per);
 
     ParmParse amr("amr");
 

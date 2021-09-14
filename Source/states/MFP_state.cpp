@@ -8,8 +8,6 @@ State::State()
     name = "null";
     global_idx = -1;
     data_idx = -1;
-    num_grow = 0;
-
 }
 
 State::~State(){}

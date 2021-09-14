@@ -3,8 +3,6 @@
 
 #include "MFP.H"
 #include "MFP_state.H"
-#include "MFP_shockdetector.H"
-#include "MFP_eb_divergence.H"
 
 class EulerianState : public State
 {
@@ -12,13 +10,11 @@ public:
     EulerianState();
     ~EulerianState();
 
+    int num_grow;
     bool reflux;
 
     std::map<std::string,Optional3D1VFunction> functions;
     std::map<int,Optional3D1VFunction*> dynamic_functions; // index is for primitive values
-
-    std::unique_ptr<Reconstruction> reconstruction;
-    std::unique_ptr<DivergenceEB> eb_div;
 
     virtual int get_num_cons() const {return 0;}
     virtual const Vector<std::string>& get_cons_names() const = 0;

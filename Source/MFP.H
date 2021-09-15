@@ -78,13 +78,14 @@ public:
     virtual amrex::Real advance(amrex::Real time, amrex::Real dt, int iteration,
                                 int ncycle) override;
 
-    enum TimeIntegrator {
+    enum class TimeIntegrator {
         Euler = 0,
+        CTU,
     };
 
     static TimeIntegrator time_integration_scheme;
 
-    void advance_euler(Real time, Real dt, int iteration, int ncycle);
+    void advance_one_step(Real time, Real dt, int iteration, int ncycle, bool CTU=false);
 
     Real estTimeStep();
 

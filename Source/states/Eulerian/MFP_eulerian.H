@@ -31,7 +31,8 @@ public:
 
     virtual void init_from_lua() override;
 
-    virtual bool is_transported() {return true;}
+    virtual bool is_transported() const {return true;}
+    virtual bool is_viscous() const {return false;}
 
     virtual void calc_primitives(const Box& box,
                                  FArrayBox& cons,
@@ -51,6 +52,65 @@ public:
                                        const FArrayBox& vfrac,
                                    #endif
                                        const Real time) const = 0;
+
+    virtual void calc_reconstruction(const Box& box,
+                                     FArrayBox &prim,
+                                     Array<FArrayBox, AMREX_SPACEDIM> &rlo,
+                                     Array<FArrayBox, AMREX_SPACEDIM> &rhi
+                                 #ifdef AMREX_USE_EB
+                                     ,const EBCellFlagFab &flag
+                                     ,const FArrayBox &vfrac
+                                 #endif
+                                     ) const = 0;
+
+    virtual void calc_time_averaged_faces(const Box& box,
+                                          const FArrayBox &prim,
+                                          Array<FArrayBox, AMREX_SPACEDIM> &rlo,
+                                          Array<FArrayBox, AMREX_SPACEDIM> &rhi,
+                                      #ifdef AMREX_USE_EB
+                                          const EBCellFlagFab& flag,
+                                      #endif
+                                          const Real* dx,
+                                          Real dt) const = 0;
+
+    virtual void face_bc(const int dir,
+                         Box const& box,
+                         const FArrayBox& src,
+                         FArrayBox& dest,
+                         const Geometry &geom,
+                     #ifdef AMREX_USE_EB
+                         const EBCellFlagFab& flag,
+                     #endif
+                         const Real time,
+                         const bool do_all) const = 0;
+
+    virtual void update_face_prim(const Box& box, const Geometry& geom,
+                                  Array<FArrayBox, AMREX_SPACEDIM> &r_lo,
+                                  Array<FArrayBox, AMREX_SPACEDIM> &r_hi,
+                              #ifdef AMREX_USE_EB
+                                  const EBCellFlagFab& flag,
+                              #endif
+                                  const Real time, const bool do_all) const = 0;
+
+    virtual void calc_fluxes(const Box& box,
+                             Array<FArrayBox, AMREX_SPACEDIM> &r_lo,
+                             Array<FArrayBox, AMREX_SPACEDIM> &r_hi,
+                             Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
+                         #ifdef AMREX_USE_EB
+                             const EBCellFlagFab& flag,
+                         #endif
+                             const Real *dx,
+                             const Real dt) const = 0;
+
+    virtual void correct_face_prim(const Box& box,
+                                   Array<FArrayBox, AMREX_SPACEDIM> &r_lo,
+                                   Array<FArrayBox, AMREX_SPACEDIM> &r_hi,
+                                   const Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
+                               #ifdef AMREX_USE_EB
+                                   const EBCellFlagFab &flag,
+                               #endif
+                                   const Real *dx,
+                                   const Real dt) const = 0;
 
     static EulerianState& get_state(const int idx) {return static_cast<EulerianState&>(MFP::get_state(idx));}
 

@@ -162,10 +162,13 @@ Real MFP::advance(Real time, Real dt, int iteration, int ncycle)
 
     switch (time_integration_scheme) {
     case TimeIntegrator::Euler:
-        advance_euler(time, dt, iteration, ncycle);
+        advance_one_step(time, dt, iteration, ncycle);
+        break;
+    case TimeIntegrator::CTU:
+        advance_one_step(time, dt, iteration, ncycle, true);
         break;
     default:
-        advance_euler(time, dt, iteration, ncycle);
+        advance_one_step(time, dt, iteration, ncycle);
     }
 
     for (int i = 0; i < states.size(); ++i) {
@@ -180,7 +183,7 @@ Real MFP::advance(Real time, Real dt, int iteration, int ncycle)
     return dt;
 }
 
-void MFP::advance_euler(Real time, Real dt, int iteration, int ncycle)
+void MFP::advance_one_step(Real time, Real dt, int iteration, int ncycle, bool CTU)
 {
 
     BL_PROFILE("MFP::advance_euler");
@@ -361,8 +364,10 @@ void MFP::advance_euler(Real time, Real dt, int iteration, int ncycle)
                                        prim,
                                        R_lo[data_idx],
                                        R_hi[data_idx]
-                                       EB_OPTIONAL(,flag)
-                                       EB_OPTIONAL(,vfrac)
+                           #ifdef AMREX_USE_EB
+                                       ,flag
+                                       ,vfrac
+                           #endif
                                        );
 
             // ===================================================================
@@ -371,12 +376,14 @@ void MFP::advance_euler(Real time, Real dt, int iteration, int ncycle)
             // TODO: this step currently assumes a single speed for all components and
             // should be updated to calculate the correct characteristic speeds
             // for each component individually
-            if (gd.do_CTU) {
+            if (CTU) {
                 istate.calc_time_averaged_faces(rbox,
                                                 prim,
                                                 R_lo[data_idx],
                                                 R_hi[data_idx],
-                                                EB_OPTIONAL(flag,)
+                                #ifdef AMREX_USE_EB
+                                                flag,
+                                #endif
                                                 dx,
                                                 dt);
             }
@@ -387,29 +394,29 @@ void MFP::advance_euler(Real time, Real dt, int iteration, int ncycle)
             // update particle locations and velocities using the reconstructed
             // face values to interpolate the local velocity for each particle
 #ifdef AMREX_PARTICLES
-            if (gd.do_tracer_particles && istate.particle_index > -1) {
-                AmrTracerParticleContainer* pc = particles[istate.particle_index];
-                if (pc) {
+            //            if (gd.do_tracer_particles && istate.particle_index > -1) {
+            //                AmrTracerParticleContainer* pc = particles[istate.particle_index];
+            //                if (pc) {
 
-                    // grab the starting index for velocity
-                    const int vel_idx = istate.get_prim_vector_idx()[0];
+            //                    // grab the starting index for velocity
+            //                    const int vel_idx = istate.get_prim_vector_idx()[0];
 
-                    // grab the tile of particles
-                    auto& ptile = pc->ParticlesAt(level, mfi);
+            //                    // grab the tile of particles
+            //                    auto& ptile = pc->ParticlesAt(level, mfi);
 
-                    // update the position and velocity of the tracer particles
-                    // using the reconstructed primitive values on cell faces
-                    push_particles(ptile,
-                                   prim,
-                                   R_lo[data_idx],
-                                   R_hi[data_idx],
-                                   vel_idx,
-                                   dt
-                                   EB_OPTIONAL(,flag)
-                                   );
+            //                    // update the position and velocity of the tracer particles
+            //                    // using the reconstructed primitive values on cell faces
+            //                    push_particles(ptile,
+            //                                   prim,
+            //                                   R_lo[data_idx],
+            //                                   R_hi[data_idx],
+            //                                   vel_idx,
+            //                                   dt
+            //                                   EB_OPTIONAL(,flag)
+            //                                   );
 
-                }
-            }
+            //                }
+            //            }
 #endif
 
         }
@@ -417,16 +424,16 @@ void MFP::advance_euler(Real time, Real dt, int iteration, int ncycle)
         // ==========================================================================
         // 2. Apply face value modifications (assumes t = t + dt/2)
 
-        if (gd.do_face_src && gd.do_CTU) {
-            calc_face_source(rbox,
-                             conserved,
-                             R_lo,
-                             R_hi,
-                             EB_OPTIONAL(fab_flags,)
-                             dx,
-                             time+dt/2,
-                             dt);
-        }
+        //        if (do_face_src && CTU) {
+        //            calc_face_source(rbox,
+        //                             conserved,
+        //                             R_lo,
+        //                             R_hi,
+        //                             EB_OPTIONAL(fab_flags,)
+        //                             dx,
+        //                             time+dt/2,
+        //                             dt);
+        //        }
 
         // ==========================================================================
         // 3.1 Setup for flux calculation
@@ -439,21 +446,14 @@ void MFP::advance_euler(Real time, Real dt, int iteration, int ncycle)
                 continue;
 
 
-            State& istate = gd.get_state(idx);
-
-            // do we have a shock detector?
-            if (gd.Shock_Idx > 0 && istate.shock_idx > -1) {
-                shock[idx].resize(rbox);
-                shock[idx].setVal(0.0);
-                shock_ptrs[idx] = &shock[idx];
-            }
+            EulerianState& istate = EulerianState::get_state(idx);
 
             nu = local_new[idx].nComp();
             for (int d=0; d<AMREX_SPACEDIM; ++d) {
                 // get a node centered box in direction d that encloses the original box
                 Box fbox = surroundingNodes(box, d);
 
-                if (gd.do_CTU || (istate.viscous && num_grow_eb > 0)) {
+                if (CTU || (istate.is_viscous() && num_grow_eb > 0)) {
                     // enlarge the fluxes for face corrections
                     // grow in all directions but that of the flux
                     IntVect expand(1);
@@ -480,13 +480,15 @@ void MFP::advance_euler(Real time, Real dt, int iteration, int ncycle)
                 continue;
             }
 
-            State &istate = gd.get_state(idx);
+            EulerianState &istate = EulerianState::get_state(idx);
 
             istate.update_face_prim(box,
                                     geom,
                                     R_lo[idx],
                                     R_hi[idx],
-                                    EB_OPTIONAL(*fab_flags[idx],)
+                        #ifdef AMREX_USE_EB
+                                    *fab_flags[idx],
+                        #endif
                                     time);
         }
 
@@ -497,18 +499,19 @@ void MFP::advance_euler(Real time, Real dt, int iteration, int ncycle)
             if (active[idx] == FabType::covered) continue;
 
 
-            State &istate = gd.get_state(idx);
+            EulerianState &istate = EulerianState::get_state(idx);
 
             istate.calc_fluxes(box,
-                               R_lo,
-                               R_hi,
+                               R_lo[idx],
+                               R_hi[idx],
                                fluxes[idx],
-                               EB_OPTIONAL(*fab_flags[idx],)
-                               dx, dt,
-                               shock_ptrs[idx]);
+                   #ifdef AMREX_USE_EB
+                               *fab_flags[idx],
+                   #endif
+                               dx, dt);
 
 #if AMREX_SPACEDIM > 1
-            if (gd.do_CTU) {
+            if (CTU) {
                 // now that we have done the fluxes, do we need to correct them???
                 // correction is done according to the following steps:
                 // 1. calculate the fluxes (above)
@@ -519,7 +522,9 @@ void MFP::advance_euler(Real time, Real dt, int iteration, int ncycle)
                                          R_lo[idx],
                                          R_hi[idx],
                                          fluxes[idx],
-                                         EB_OPTIONAL(*fab_flags[idx],)
+                         #ifdef AMREX_USE_EB
+                                         *fab_flags[idx],
+                         #endif
                                          dx, dt);
 
                 // following the update of the face values we need to update any boundary conditions
@@ -528,7 +533,9 @@ void MFP::advance_euler(Real time, Real dt, int iteration, int ncycle)
                                         geom,
                                         R_lo[idx],
                                         R_hi[idx],
-                                        EB_OPTIONAL(*fab_flags[idx],)
+                        #ifdef AMREX_USE_EB
+                                        *fab_flags[idx],
+                        #endif
                                         time,
                                         true);
             }
@@ -537,23 +544,24 @@ void MFP::advance_euler(Real time, Real dt, int iteration, int ncycle)
 
         //---
 #if AMREX_SPACEDIM > 1
-        if (gd.do_CTU) {
+        if (do_CTU) {
             for (int idx=0; idx<n_eulerian; ++idx) {
 
 
                 if (active[idx] == FabType::covered) continue;
 
 
-                State &istate = gd.get_state(idx);
+                EulerianState &istate = EulerianState::get_state(idx);
 
                 // recalculate the fluxes
                 istate.calc_fluxes(box,
-                                   R_lo,
-                                   R_hi,
+                                   R_lo[idx],
+                                   R_hi[idx],
                                    fluxes[idx],
-                                   EB_OPTIONAL(*fab_flags[idx],)
-                                   dx, dt,
-                                   shock_ptrs[idx]);
+                   #ifdef AMREX_USE_EB
+                                   *fab_flags[idx],
+                   #endif
+                                   dx, dt);
             }
         }
 #endif
@@ -565,7 +573,7 @@ void MFP::advance_euler(Real time, Real dt, int iteration, int ncycle)
             if (active[idx] == FabType::covered) continue;
 
 
-            State &istate = gd.get_state(idx);
+            EulerianState &istate = EulerianState::get_state(idx);
 
             // now calculate any viscous fluxes
 
@@ -575,7 +583,9 @@ void MFP::advance_euler(Real time, Real dt, int iteration, int ncycle)
             istate.calc_viscous_fluxes(grow(box,num_grow_eb),
                                        fluxes[idx],
                                        pbox, primitives,
-                                       EB_OPTIONAL(*fab_flags[idx],)
+                           #ifdef AMREX_USE_EB
+                                       *fab_flags[idx],
+                           #endif
                                        dx);
 
             // shock tracking

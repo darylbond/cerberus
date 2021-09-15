@@ -8,15 +8,15 @@
 #include "MFP_hydro_defs.H"
 #include "MFP_reconstruction.H"
 #include "MFP_hydro_riemann.H"
-
+#include "MFP_hydro_viscous.H"
 
 
 class HydroState : public EulerianState
 {
 public:
     HydroState();
-    HydroState(Reconstruction R, HydroRiemannSolver F)
-        : reconstructor(R), flux_solver(F) {}
+    HydroState(Reconstruction R, HydroRiemannSolver F, HydroViscous V)
+        : reconstructor(R), flux_solver(F), viscous(V) {}
     ~HydroState();
 
     static HydroState Build(const sol::table& def);
@@ -34,6 +34,10 @@ public:
 
     const Reconstruction reconstructor;
     const HydroRiemannSolver flux_solver;
+    const HydroViscous viscous;
+
+
+    virtual bool is_viscous() const override {return viscous.get_type() > -1;}
 
     virtual int get_num_grow() override {return num_grow;}
     virtual void set_num_grow(int n) override {num_grow = std::max(n, num_grow);}
@@ -125,14 +129,76 @@ public:
                              #endif
                                  ) const override;
 
-    void update_boundary_cells(const Box& box,
-                               const Geometry &geom,
-                               FArrayBox &prim,
-                           #ifdef AMREX_USE_EB
-                               const FArrayBox& vfrac,
-                           #endif
-                               const Real time) const override;
+    virtual void update_boundary_cells(const Box& box,
+                                       const Geometry &geom,
+                                       FArrayBox &prim,
+                                   #ifdef AMREX_USE_EB
+                                       const FArrayBox& vfrac,
+                                   #endif
+                                       const Real time) const override;
 
+    virtual void calc_reconstruction(const Box& box,
+                                     FArrayBox &prim,
+                                     Array<FArrayBox, AMREX_SPACEDIM> &rlo,
+                                     Array<FArrayBox, AMREX_SPACEDIM> &rhi
+                                 #ifdef AMREX_USE_EB
+                                     ,const EBCellFlagFab &flag
+                                     ,const FArrayBox &vfrac
+                                 #endif
+                                     ) const override;
+
+    virtual void calc_time_averaged_faces(const Box& box,
+                                          const FArrayBox &prim,
+                                          Array<FArrayBox, AMREX_SPACEDIM> &rlo,
+                                          Array<FArrayBox, AMREX_SPACEDIM> &rhi,
+                                      #ifdef AMREX_USE_EB
+                                          const EBCellFlagFab& flag,
+                                      #endif
+                                          const Real* dx,
+                                          Real dt) const override;
+
+    virtual void face_bc(const int dir,
+                         Box const& box,
+                         const FArrayBox& src,
+                         FArrayBox& dest,
+                         const Geometry &geom,
+                     #ifdef AMREX_USE_EB
+                         const EBCellFlagFab& flag,
+                     #endif
+                         const Real time,
+                         const bool do_all) const override;
+
+    virtual void update_face_prim(const Box& box, const Geometry& geom,
+                                  Array<FArrayBox, AMREX_SPACEDIM> &r_lo,
+                                  Array<FArrayBox, AMREX_SPACEDIM> &r_hi,
+                              #ifdef AMREX_USE_EB
+                                  const EBCellFlagFab& flag,
+                              #endif
+                                  const Real time, const bool do_all) const override;
+
+
+    void load_state_for_flux(Array4<const Real> &face,
+                             int i, int j, int k, Vector<Real> &S) const;
+
+    virtual void calc_fluxes(const Box& box,
+                             Array<FArrayBox, AMREX_SPACEDIM> &r_lo,
+                             Array<FArrayBox, AMREX_SPACEDIM> &r_hi,
+                             Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
+                         #ifdef AMREX_USE_EB
+                             const EBCellFlagFab& flag,
+                         #endif
+                             const Real *dx,
+                             const Real dt) const override;
+
+    virtual void correct_face_prim(const Box& box,
+                                   Array<FArrayBox, AMREX_SPACEDIM> &r_lo,
+                                   Array<FArrayBox, AMREX_SPACEDIM> &r_hi,
+                                   const Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
+                               #ifdef AMREX_USE_EB
+                                   const EBCellFlagFab &flag,
+                               #endif
+                                   const Real *dx,
+                                   const Real dt) const override;
 
     static HydroState& get_state(const int idx) {return static_cast<HydroState&>(MFP::get_state(idx));}
 

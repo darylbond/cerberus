@@ -4,6 +4,7 @@ CEXE_sources += MFP_hydro.cpp
 CEXE_sources += MFP_hydro_bc.cpp
 
 include $(TOP)/Source/states/Eulerian/hydro/riemann/Make.package
+include $(TOP)/Source/states/Eulerian/hydro/viscous/Make.package
 
 INCLUDE_LOCATIONS += $(TOP)/Source/states/Eulerian/hydro
 VPATH_LOCATIONS   += $(TOP)/Source/states/Eulerian/hydro

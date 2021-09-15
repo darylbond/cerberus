@@ -2,6 +2,7 @@
 #include "MFP_lua.H"
 #include "MFP.H"
 #include "MFP_diagnostics.H"
+#include "MFP_transforms.H"
 
 Vector<std::string> HydroState::cons_names = {
     "rho",
@@ -63,11 +64,26 @@ HydroState HydroState::Build(const sol::table& def)
     if (!F)
         Abort("Invalid flux option '"+flux_name+"'. Options are "+vec2str(ffact.getKeys()));
 
+    //
+    // Viscosity
+    //
 
-    HydroState H(*R, *F);
+    ClassFactory<HydroViscous> vfact = GetViscousFactory();
+
+    std::string visc = def["viscosity"]["type"].get_or<std::string>("");
+
+    std::unique_ptr<HydroViscous> V = vfact.Build(visc, def);
+
+    if (!visc.empty() && !viscous)
+        Abort("Invalid viscosity option '"+visc+"'. Options are "+vec2str(vfact.getKeys()));
+
+
+    HydroState H(*R, *F, *V);
 
     H.name = def.get<std::string>("name");
     H.global_idx = def.get<int>("global_idx");
+
+    return H;
 
 }
 
@@ -1209,12 +1225,10 @@ void HydroState::calc_reconstruction(const Box& box,
     const Dim3 lo = amrex::lbound(box);
     const Dim3 hi = amrex::ubound(box);
 
-    int N = prim.nComp();
-
-    Vector<Real> stencil(reconstruction->stencil_length);
-    int offset = reconstruction->stencil_length/2;
+    Vector<Real> stencil(reconstructor.stencil_length);
+    int offset = reconstructor.stencil_length/2;
     Array<int,3> stencil_index;
-    Vector<Real> cell_value(N), cell_slope(N);
+    Array<Real, +HydroDef::PrimIdx::NUM> cell_value, cell_slope;
 
     Real rho_lo, rho_hi;
     Real alpha_lo, alpha_hi;
@@ -1224,8 +1238,8 @@ void HydroState::calc_reconstruction(const Box& box,
     // make sure our arrays for putting lo and hi reconstructed values into
     // are the corect size
     for (int d=0; d<AMREX_SPACEDIM; ++d) {
-        rlo[d].resize(box, N);
-        rhi[d].resize(box, N);
+        rlo[d].resize(box, +HydroDef::PrimIdx::NUM);
+        rhi[d].resize(box, +HydroDef::PrimIdx::NUM);
 
 #ifdef AMREX_USE_EB
         if (check_eb) {
@@ -1247,9 +1261,9 @@ void HydroState::calc_reconstruction(const Box& box,
                 }
 #endif
 
-                gam4(i,j,k) = get_gamma(src4(i,j,k,+PrimIdx::Alpha)) - 1.0;
+                gam4(i,j,k) = get_gamma(src4(i,j,k,+HydroDef::PrimIdx::Alpha)) - 1.0;
 
-                src4(i,j,k,+PrimIdx::Prs) /= gam4(i,j,k);
+                src4(i,j,k,+HydroDef::PrimIdx::Prs) /= gam4(i,j,k);
 
             }
         }
@@ -1279,7 +1293,7 @@ void HydroState::calc_reconstruction(const Box& box,
                         // cell that references a covered cell doesn't need calculating
                         bool skip = false;
                         stencil_index.fill(0);
-                        for (int s=0; s<reconstruction->stencil_length; ++s) {
+                        for (int s=0; s<reconstructor.stencil_length; ++s) {
                             stencil_index[d] = s - offset;
                             // check if any of the stencil values are from a covered cell
                             if (f4(i+stencil_index[0], j+stencil_index[1], k+stencil_index[2]).isCovered()) {
@@ -1296,17 +1310,17 @@ void HydroState::calc_reconstruction(const Box& box,
 #endif
 
                     // cycle over all components
-                    for (int n = 0; n<N; ++n) {
+                    for (int n = 0; n<+HydroDef::PrimIdx::NUM; ++n) {
 
                         // fill in the stencil along dimension index
                         stencil_index.fill(0);
-                        for (int s=0; s<reconstruction->stencil_length; ++s) {
+                        for (int s=0; s<reconstructor.stencil_length; ++s) {
                             stencil_index[d] = s - offset;
                             stencil[s] = src4(i+stencil_index[0], j+stencil_index[1], k+stencil_index[2], n);
                         }
 
                         // perform reconstruction
-                        cell_slope[n] = reconstruction->get_slope(stencil);
+                        cell_slope[n] = reconstructor.get_slope(stencil);
                         cell_value[n] = stencil[offset];
 
                     }
@@ -1316,23 +1330,23 @@ void HydroState::calc_reconstruction(const Box& box,
                     // J. Sci. Comput. (2014) 60:584-611
                     // Robust Finite Volume Schemes for Two-Fluid Plasma Equations
 
-                    Real &rho     = cell_value[+PrimIdx::Density];
-                    Real &phi_rho = cell_slope[+PrimIdx::Density];
+                    Real &rho     = cell_value[+HydroDef::PrimIdx::Density];
+                    Real &phi_rho = cell_slope[+HydroDef::PrimIdx::Density];
 
-                    Real &u     = cell_value[+PrimIdx::Xvel];
-                    Real &phi_u = cell_slope[+PrimIdx::Xvel];
+                    Real &u     = cell_value[+HydroDef::PrimIdx::Xvel];
+                    Real &phi_u = cell_slope[+HydroDef::PrimIdx::Xvel];
 
-                    Real &v     = cell_value[+PrimIdx::Yvel];
-                    Real &phi_v = cell_slope[+PrimIdx::Yvel];
+                    Real &v     = cell_value[+HydroDef::PrimIdx::Yvel];
+                    Real &phi_v = cell_slope[+HydroDef::PrimIdx::Yvel];
 
-                    Real &w     = cell_value[+PrimIdx::Zvel];
-                    Real &phi_w = cell_slope[+PrimIdx::Zvel];
+                    Real &w     = cell_value[+HydroDef::PrimIdx::Zvel];
+                    Real &phi_w = cell_slope[+HydroDef::PrimIdx::Zvel];
 
-                    Real &eps     = cell_value[+PrimIdx::Prs];
-                    Real &phi_eps = cell_slope[+PrimIdx::Prs];
+                    Real &eps     = cell_value[+HydroDef::PrimIdx::Prs];
+                    Real &phi_eps = cell_slope[+HydroDef::PrimIdx::Prs];
 
-                    Real &alpha     = cell_value[+PrimIdx::Alpha];
-                    Real &phi_alpha = cell_slope[+PrimIdx::Alpha];
+                    Real &alpha     = cell_value[+HydroDef::PrimIdx::Alpha];
+                    Real &phi_alpha = cell_slope[+HydroDef::PrimIdx::Alpha];
 
 
 
@@ -1380,34 +1394,34 @@ void HydroState::calc_reconstruction(const Box& box,
 
 
                     // density
-                    lo4(i,j,k,+PrimIdx::Density) = rho_lo;
-                    hi4(i,j,k,+PrimIdx::Density) = rho_hi;
+                    lo4(i,j,k,+HydroDef::PrimIdx::Density) = rho_lo;
+                    hi4(i,j,k,+HydroDef::PrimIdx::Density) = rho_hi;
 
                     // x - velocity
-                    lo4(i,j,k,+PrimIdx::Xvel) = u - 0.5*(rho_hi/rho)*phi_u;
-                    hi4(i,j,k,+PrimIdx::Xvel) = u + 0.5*(rho_lo/rho)*phi_u;
+                    lo4(i,j,k,+HydroDef::PrimIdx::Xvel) = u - 0.5*(rho_hi/rho)*phi_u;
+                    hi4(i,j,k,+HydroDef::PrimIdx::Xvel) = u + 0.5*(rho_lo/rho)*phi_u;
 
                     // y - velocity
-                    lo4(i,j,k,+PrimIdx::Yvel) = v - 0.5*(rho_hi/rho)*phi_v;
-                    hi4(i,j,k,+PrimIdx::Yvel) = v + 0.5*(rho_lo/rho)*phi_v;
+                    lo4(i,j,k,+HydroDef::PrimIdx::Yvel) = v - 0.5*(rho_hi/rho)*phi_v;
+                    hi4(i,j,k,+HydroDef::PrimIdx::Yvel) = v + 0.5*(rho_lo/rho)*phi_v;
 
                     // z - velocity
-                    lo4(i,j,k,+PrimIdx::Zvel) = w - 0.5*(rho_hi/rho)*phi_w;
-                    hi4(i,j,k,+PrimIdx::Zvel) = w + 0.5*(rho_lo/rho)*phi_w;
+                    lo4(i,j,k,+HydroDef::PrimIdx::Zvel) = w - 0.5*(rho_hi/rho)*phi_w;
+                    hi4(i,j,k,+HydroDef::PrimIdx::Zvel) = w + 0.5*(rho_lo/rho)*phi_w;
 
                     // epsilon -> pressure
-                    lo4(i,j,k,+PrimIdx::Prs) = (eps - 0.5*phi_eps)*(gam_lo - 1.0);
-                    hi4(i,j,k,+PrimIdx::Prs) = (eps + 0.5*phi_eps)*(gam_hi - 1.0);
+                    lo4(i,j,k,+HydroDef::PrimIdx::Prs) = (eps - 0.5*phi_eps)*(gam_lo - 1.0);
+                    hi4(i,j,k,+HydroDef::PrimIdx::Prs) = (eps + 0.5*phi_eps)*(gam_hi - 1.0);
 
-                    Real prs = lo4(i,j,k,+PrimIdx::Prs);
+                    Real prs = lo4(i,j,k,+HydroDef::PrimIdx::Prs);
 
                     // tracer
-                    lo4(i,j,k,+PrimIdx::Alpha) = alpha_lo;
-                    hi4(i,j,k,+PrimIdx::Alpha) = alpha_hi;
+                    lo4(i,j,k,+HydroDef::PrimIdx::Alpha) = alpha_lo;
+                    hi4(i,j,k,+HydroDef::PrimIdx::Alpha) = alpha_hi;
 
                     // Temperature (calculate from pressure and density)
-                    lo4(i,j,k,+PrimIdx::Temp) = lo4(i,j,k,+PrimIdx::Prs)/(rho_lo/get_mass(alpha_lo));
-                    hi4(i,j,k,+PrimIdx::Temp) = hi4(i,j,k,+PrimIdx::Prs)/(rho_hi/get_mass(alpha_hi));
+                    lo4(i,j,k,+HydroDef::PrimIdx::Temp) = lo4(i,j,k,+HydroDef::PrimIdx::Prs)/(rho_lo/get_mass(alpha_lo));
+                    hi4(i,j,k,+HydroDef::PrimIdx::Temp) = hi4(i,j,k,+HydroDef::PrimIdx::Prs)/(rho_hi/get_mass(alpha_hi));
 
                 }
             }
@@ -1424,7 +1438,7 @@ void HydroState::calc_reconstruction(const Box& box,
                 if (f4(i,j,k).isCovered())
                     continue;
 #endif
-                src4(i,j,k,+PrimIdx::Prs) *= gam4(i,j,k);
+                src4(i,j,k,+HydroDef::PrimIdx::Prs) *= gam4(i,j,k);
 
 
 
@@ -1432,6 +1446,1192 @@ void HydroState::calc_reconstruction(const Box& box,
         }
     }
 
+    return;
+}
+
+
+
+void HydroState::calc_time_averaged_faces(const Box& box,
+                                          const FArrayBox &prim,
+                                          Array<FArrayBox, AMREX_SPACEDIM> &rlo,
+                                          Array<FArrayBox, AMREX_SPACEDIM> &rhi,
+                                          #ifdef AMREX_USE_EB
+                                          const EBCellFlagFab& flag,
+                                          #endif
+                                          const Real* dx,
+                                          Real dt) const
+{
+    BL_PROFILE("HydroState::calc_time_averaged_faces");
+    const Dim3 lo = amrex::lbound(box);
+    const Dim3 hi = amrex::ubound(box);
+
+    Array4<const Real> const& p4 = prim.array();
+
+    Array<Real, +HydroDef::PrimIdx::NUM> Q;
+
+#ifdef AMREX_USE_EB
+    Array4<const EBCellFlag> const& f4 = flag.array();
+#endif
+
+    Real lo_face, centre, hi_face, a6;
+    Real dt_2dx;
+
+    const Real ft = 4.0/3.0;
+
+    for     (int k = lo.z; k <= hi.z; ++k) {
+        for   (int j = lo.y; j <= hi.y; ++j) {
+            AMREX_PRAGMA_SIMD
+                    for (int i = lo.x; i <= hi.x; ++i) {
+
+#ifdef AMREX_USE_EB
+                if (f4(i,j,k).isCovered()) {
+                    continue;
+                }
+#endif
+
+                for (int n=0; n<+HydroDef::PrimIdx::NUM; ++n) {
+                    Q[n] = p4(i,j,k,n);
+                }
+
+                const RealArray local_c = get_speed_from_prim(Q);
+
+
+                for (int d=0; d<AMREX_SPACEDIM; ++d) {
+
+                    Array4<Real> const& lo4 = rlo[d].array();
+                    Array4<Real> const& hi4 = rhi[d].array();
+
+                    dt_2dx = 0.5*dt/dx[d];
+
+                    // cycle over all components
+                    for (int n=0; n<+HydroDef::PrimIdx::NUM; ++n) {
+
+                        lo_face = lo4(i,j,k,n);
+                        hi_face = hi4(i,j,k,n);
+                        centre = p4(i,j,k,n);
+
+                        a6 = 6.0*centre - 3*(lo_face + hi_face);
+
+                        lo4(i,j,k,n) += local_c[d]*dt_2dx*(hi_face - lo_face + (1 - local_c[d]*ft*dt_2dx)*a6);
+                        hi4(i,j,k,n) -= local_c[d]*dt_2dx*(hi_face - lo_face - (1 - local_c[d]*ft*dt_2dx)*a6);
+
+                    }
+                }
+            }
+        }
+    }
+
+    return;
+}
+
+/*
+* the data passed to this function is indexed by cell
+* but resides at the interface
+*/
+
+void HydroState::face_bc(const int dir,
+                         Box const& box,
+                         const FArrayBox& src,
+                         FArrayBox& dest,
+                         const Geometry &geom,
+                         #ifdef AMREX_USE_EB
+                         const EBCellFlagFab& flag,
+                         #endif
+                         const Real time,
+                         const bool do_all) const
+{
+    BL_PROFILE("HydroState::face_bc");
+    const Dim3 lo = amrex::lbound(box);
+    const Dim3 hi = amrex::ubound(box);
+
+    const Box& domain = geom.Domain();
+    const Dim3 domlo = amrex::lbound(domain);
+    const Dim3 domhi = amrex::ubound(domain);
+
+    const Real* prob_lo = geom.ProbLo();
+    const Real* dx = geom.CellSize();
+
+    Real x, y, z;
+    std::map<std::string, Real> Q{{"t", time}};
+
+    // define the limits of our operations
+    Vector<BoundaryInfo> limits;
+
+    BoundaryInfo bi;
+    bi.imin = lo.x;
+    bi.imax = hi.x;
+    bi.jmin = lo.y;
+    bi.jmax = hi.y;
+    bi.kmin = lo.z;
+    bi.kmax = hi.z;
+
+
+
+    if (dir == 0) {
+
+        int ilo = domlo.x;
+        int ihi = domhi.x + 1; // account for face indexing
+
+        if (lo.x == ilo) {
+            limits.push_back(bi);
+            BoundaryInfo &b = limits.back();
+            b.imin = lo.x;
+            b.imax = lo.x;
+            b.lo_hi = 0;
+        }
+
+        if (hi.x == ihi) {
+            limits.push_back(bi);
+            BoundaryInfo &b = limits.back();
+            b.imin = hi.x;
+            b.imax = hi.x;
+            b.lo_hi = 1;
+        }
+    }
+
+#if AMREX_SPACEDIM >= 2
+    if (dir == 1) {
+        int jlo = domlo.y;
+        int jhi = domhi.y + 1; // account for face indexing
+
+        if (lo.y == jlo) {
+            limits.push_back(bi);
+            BoundaryInfo &b = limits.back();
+            b.jmin = lo.y;
+            b.jmax = lo.y;
+            b.lo_hi = 0;
+        }
+
+        if (hi.y == jhi) {
+            limits.push_back(bi);
+            BoundaryInfo &b = limits.back();
+            b.jmin = hi.y;
+            b.jmax = hi.y;
+            b.lo_hi = 1;
+        }
+    }
+#endif
+
+#if AMREX_SPACEDIM == 3
+    if (dir == 2) {
+        int klo = domlo.z;
+        int khi = domhi.z + 1; // account for face indexing
+
+        if (lo.z == klo) {
+            limits.push_back(bi);
+            BoundaryInfo &b = limits.back();
+            b.kmin = lo.z;
+            b.kmax = lo.z;
+            b.lo_hi = 0;
+        }
+
+        if (hi.z == khi) {
+            limits.push_back(bi);
+            BoundaryInfo &b = limits.back();
+            b.kmin = hi.z;
+            b.kmax = hi.z;
+            b.lo_hi = 1;
+        }
+    }
+#endif
+
+    Array4<Real> const& d4 = dest.array();
+    Array4<const Real> const& s4 = src.array();
+
+#ifdef AMREX_USE_EB
+    Array4<const EBCellFlag> const& f4 = flag.array();
+#endif
+
+    if (do_all) {
+        // first do the usual boundary conditions
+        for (int n=0; n<+HydroDef::PrimIdx::NUM; ++n) {
+            const BCRec &bc = boundary_conditions.fill_bc[n];
+
+            for (const auto &L : limits) {
+
+                if (
+                        ((L.lo_hi == 0) && (bc.lo(dir) == BCType::foextrap))||
+                        ((L.lo_hi == 1) && (bc.hi(dir) == BCType::foextrap))||
+
+                        ((L.lo_hi == 0) && (bc.lo(dir) == BCType::hoextrap))||
+                        ((L.lo_hi == 1) && (bc.hi(dir) == BCType::hoextrap))||
+
+                        ((L.lo_hi == 0) && (bc.lo(dir) == BCType::reflect_even))||
+                        ((L.lo_hi == 1) && (bc.hi(dir) == BCType::reflect_even))
+                        ) {
+                    for (int k=L.kmin; k<=L.kmax; ++k) {
+                        for (int j=L.jmin; j<=L.jmax; ++j) {
+                            for (int i=L.imin; i<=L.imax; ++i) {
+
+#ifdef AMREX_USE_EB
+                                if (f4(i,j,k).isCovered()) {
+                                    continue;
+                                }
+#endif
+
+
+                                d4(i,j,k,n) = s4(i,j,k,n);
+                            }
+                        }
+                    }
+                }
+                if (((L.lo_hi == 0) && (bc.lo(dir) == BCType::reflect_odd))||
+                        ((L.lo_hi == 1) && (bc.hi(dir) == BCType::reflect_odd))) {
+                    for (int k=L.kmin; k<=L.kmax; ++k) {
+                        for (int j=L.jmin; j<=L.jmax; ++j) {
+                            for (int i=L.imin; i<=L.imax; ++i) {
+
+#ifdef AMREX_USE_EB
+                                if (f4(i,j,k).isCovered()) {
+                                    continue;
+                                }
+#endif
+
+
+                                d4(i,j,k,n) = -s4(i,j,k,n);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // now do any dirichlet boundaries
+    Array<Real,3> offset = {0.5, 0.5, 0.5};
+    offset[dir] = 0.0;
+    const BCRec &bc = boundary_conditions.where_is_inflow;
+    for (const auto &L : limits) {
+        if (((L.lo_hi == 0) && (bc.lo(dir) == BCType::ext_dir))||
+                ((L.lo_hi == 1) && (bc.hi(dir) == BCType::ext_dir))) {
+
+            for (int k=L.kmin; k<=L.kmax; ++k) {
+                z = prob_lo[2] + (k+offset[2])*dx[2];
+                Q["z"] = z;
+                for (int j=L.jmin; j<=L.jmax; ++j) {
+                    y = prob_lo[1] + (j+offset[1])*dx[1];
+                    Q["y"] = y;
+                    for (int i=L.imin; i<=L.imax; ++i) {
+                        x = prob_lo[0] + (i+offset[0])*dx[0];
+                        Q["x"] = x;
+
+#ifdef AMREX_USE_EB
+                        if (f4(i,j,k).isCovered()) {
+                            continue;
+                        }
+#endif
+
+                        // load data from the other side of the face
+                        for (int n=0; n<+HydroDef::PrimIdx::NUM; ++n) {
+                            Q[prim_names[n]] = s4(i,j,k,n);
+                        }
+
+                        // update the primitives from our UDFs, but only those that are valid functions
+                        for (int n=0; n<+HydroDef::PrimIdx::NUM; ++n) {
+                            const Optional3D1VFunction &f = boundary_conditions.get(L.lo_hi, dir, prim_names[n]);
+                            if (f.is_valid()) {
+                                d4(i,j,k,n) = f(Q);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return;
+}
+
+
+void HydroState::update_face_prim(const Box& box, const Geometry& geom,
+                                  Array<FArrayBox, AMREX_SPACEDIM> &r_lo,
+                                  Array<FArrayBox, AMREX_SPACEDIM> &r_hi,
+                                  #ifdef AMREX_USE_EB
+                                  const EBCellFlagFab& flag,
+                                  #endif
+                                  const Real time, const bool do_all) const
+{
+    BL_PROFILE("State::update_face_prim");
+    const Box domain = geom.Domain();
+    const int*     domainlo    = domain.loVect();
+    const int*     domainhi    = domain.hiVect();
+
+
+
+    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+        if (geom.isPeriodic(d)) {
+            continue;
+        }
+
+        if (box.smallEnd(d) <= domainlo[d]) {
+            Box lo = box;
+            lo.setBig(d,domainlo[d]);
+            lo.setSmall(d,domainlo[d]);
+
+            // get the left and right reconstructed primitives for all faces
+            FArrayBox &L = r_hi[d];
+            FArrayBox &R = r_lo[d];
+
+            // adjust the boxes so that we can use the same index
+            L.shift(d,1);
+
+            face_bc(d,
+                    lo,
+                    R,
+                    L,
+                    geom,
+        #ifdef AMREX_USE_EB
+                    flag,
+        #endif
+                    time,
+                    do_all);
+
+            // change it back
+            L.shift(d,-1);
+        }
+
+        if (box.bigEnd(d) >= domainhi[d]) {
+            Box hi = box;
+            hi.setBig(d,  domainhi[d]+1);
+            hi.setSmall(d,domainhi[d]+1);
+
+            // get the left and right reconstructed primitives for all faces
+            FArrayBox &L = r_hi[d];
+            FArrayBox &R = r_lo[d];
+
+            // adjust the boxes so that we can use the same index
+            L.shift(d,1);
+
+            face_bc(d,
+                    hi,
+                    L,
+                    R,
+                    geom,
+        #ifdef AMREX_USE_EB
+                    flag,
+        #endif
+                    time,
+                    do_all);
+
+            // change it back
+            L.shift(d,-1);
+        }
+    }
+}
+
+// given all of the available face values load the ones expected by the flux calc into a vector
+void HydroState::load_state_for_flux(Array4<const Real> &face,
+                                     int i, int j, int k, Vector<Real> &S) const
+{
+    BL_PROFILE("HydroState::load_state_for_flux");
+
+
+    S[+HydroDef::FluxIdx::Density] = face(i,j,k,+HydroDef::PrimIdx::Density);
+    S[+HydroDef::FluxIdx::Xvel] = face(i,j,k,+HydroDef::PrimIdx::Xvel);
+    S[+HydroDef::FluxIdx::Yvel] = face(i,j,k,+HydroDef::PrimIdx::Yvel);
+    S[+HydroDef::FluxIdx::Zvel] = face(i,j,k,+HydroDef::PrimIdx::Zvel);
+    S[+HydroDef::FluxIdx::Prs] = face(i,j,k,+HydroDef::PrimIdx::Prs);
+    S[+HydroDef::FluxIdx::Alpha] = face(i,j,k,+HydroDef::PrimIdx::Alpha);
+    S[+HydroDef::FluxIdx::Gamma] = get_gamma(S[+HydroDef::FluxIdx::Alpha]);
+
+    return;
+}
+
+void HydroState::calc_fluxes(const Box& box,
+                             Array<FArrayBox, AMREX_SPACEDIM> &r_lo,
+                             Array<FArrayBox, AMREX_SPACEDIM> &r_hi,
+                             Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
+                             #ifdef AMREX_USE_EB
+                             const EBCellFlagFab& flag,
+                             #endif
+                             const Real *dx,
+                             const Real dt) const
+{
+    BL_PROFILE("HydroState::calc_fluxes");
+    const Dim3 lo = amrex::lbound(box);
+    const Dim3 hi = amrex::ubound(box);
+
+    Array<int, 3> index;
+    Array<Real, +HydroDef::FluxIdx::NUM> L, R;
+    Array<Real, +HydroDef::ConsIdx::NUM> F;
+
+#ifdef AMREX_USE_EB
+    Array4<const EBCellFlag> const& f4 = flag.array();
+#endif
+
+    // cycle over dimensions
+    for (int d=0; d<AMREX_SPACEDIM; ++d) {
+
+        FArrayBox& flux = fluxes[d];
+        flux.setVal(0.0);
+        Array4<Real> const& flux4 = flux.array();
+
+        const Box &fbox = flux.box();
+        const Dim3 flo = amrex::lbound(fbox);
+        const Dim3 fhi = amrex::ubound(fbox);
+
+        index.fill(0);
+        index[d] = 1;
+
+        Array4<const Real> lo4, hi4;
+
+        lo4 = r_lo[d].array();
+        hi4 = r_hi[d].array();
+
+        for     (int k = flo.z; k <= fhi.z; ++k) {
+            for   (int j = flo.y; j <= fhi.y; ++j) {
+                AMREX_PRAGMA_SIMD
+                        for (int i = flo.x; i <= fhi.x; ++i) {
+
+#ifdef AMREX_USE_EB
+
+                    // both cells have to be covered before we skip
+                    if (f4(i,j,k).isCovered() && f4(i-index[0],j-index[1],k-index[2]).isCovered())
+                        continue;
+#endif
+
+                    // get left and right states
+                    load_state_for_flux(hi4, i-index[0],j-index[1],k-index[2], L);
+                    load_state_for_flux(lo4, i,j,k, R);
+
+
+                    // rotate the vectors
+                    transform_global2local(L, d, flux_vector_idx);
+                    transform_global2local(R, d, flux_vector_idx);
+
+
+                    flux_solver.solve(L, R, F, &shk);
+
+                    // rotate the flux back to local frame
+                    transform_local2global(F, d, cons_vector_idx);
+
+                    // load the flux into the array
+                    for (int n=0; n<+HydroDef::ConsIdx::NUM; ++n) {
+                        flux4(i,j,k,n) += F[n];
+                    }
+
+                }
+            }
+        }
+    }
+
+    return;
+}
+
+
+void HydroState::correct_face_prim(const Box& box,
+                                   Array<FArrayBox, AMREX_SPACEDIM> &r_lo,
+                                   Array<FArrayBox, AMREX_SPACEDIM> &r_hi,
+                                   const Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
+                                   #ifdef AMREX_USE_EB
+                                   const EBCellFlagFab &flag,
+                                   #endif
+                                   const Real *dx,
+                                   const Real dt) const
+{
+    BL_PROFILE("State::correct_face_prim");
+    const Dim3 lo = amrex::lbound(box);
+    const Dim3 hi = amrex::ubound(box);
+
+    Array<Real, +HydroDef::PrimIdx::NUM> L_prim, R_prim;
+    Array<Real, +HydroDef::FluxIdx::NUM> F;
+    Array<Real, +HydroDef::ConsIdx::NUM> L_cons, R_cons;
+
+#ifdef AMREX_USE_EB
+    Array4<const EBCellFlag> const& f4 = flag.array();
+
+    // do we need to check our stencil for covered cells?
+    bool check_eb = flag.getType() != FabType::regular;
+#endif
+
+    // the below loops selects the alternative dimensions to calculate the corrections from
+    // e.g. 1D: d1 = 0, d2 = -
+    // e.g. 2D: d1 = 0, d2 = 1
+    //          d1 = 1, d2 = 0
+    // e.g. 3D: d1 = 0, d2 = 1, 2
+    //          d1 = 1, d2 = 2, 0
+    //          d1 = 2, d2 = 0, 1
+
+    Array<int, 3> idx1, idx2;
+
+    Real hiF, loF;
+    int d1, dd, d2;
+
+    for (d1=0; d1<AMREX_SPACEDIM; ++d1) { // face direction
+        idx1.fill(0);
+        idx1[d1] = 1;
+
+        Array4<Real> const &lo4 = r_lo[d1].array();
+        Array4<Real> const &hi4 = r_hi[d1].array();
+
+        for (dd=1; dd<AMREX_SPACEDIM; ++dd) {
+            d2 = (d1+dd)%AMREX_SPACEDIM; // flux direction
+
+            idx2.fill(0);
+            idx2[d2] = 1;
+
+            Array4<const Real> const &flux4 = fluxes[d2].array();
+
+            for     (int k = lo.z; k <= hi.z + idx1[2]; ++k) {
+                for   (int j = lo.y; j <= hi.y + idx1[1]; ++j) {
+                    AMREX_PRAGMA_SIMD
+                            for (int i = lo.x; i <= hi.x + idx1[0]; ++i) {
+
+#ifdef AMREX_USE_EB
+                        if (check_eb) {
+                            // only calculate corrections for faces where the stencil of fluxes is full
+
+                            // a) this interface has a valid flux
+                            if (f4(i,j,k).isDisconnected(-idx1[0],-idx1[1],-idx1[2]))
+                                continue;
+
+                            // b) right cell has valid fluxes hi and lo
+                            if (f4(i,j,k).isDisconnected( idx2[0], idx2[1], idx2[2]))
+                                continue;
+                            if (f4(i,j,k).isDisconnected(-idx2[0],-idx2[1],-idx2[2]))
+                                continue;
+
+                            // c) left cell has valid fluxes hi and lo
+                            if (f4(i-idx1[0],j-idx1[1],k-idx1[2]).isDisconnected( idx2[0], idx2[1], idx2[2]))
+                                continue;
+                            if (f4(i-idx1[0],j-idx1[1],k-idx1[2]).isDisconnected(-idx2[0],-idx2[1],-idx2[2]))
+                                continue;
+                        }
+#endif
+
+                        // get left and right states
+                        for (int n=0; n<+HydroDef::PrimIdx::NUM; ++n ) {
+                            L_prim[n] = hi4(i-idx1[0],j-idx1[1],k-idx1[2],n);
+                            R_prim[n] = lo4(i,j,k,n);
+                        }
+
+                        // convert to conserved
+                        prim2cons(L_prim, L_cons);
+                        prim2cons(R_prim, R_cons);
+
+                        /* example for x-direction in 2D
+                                   * L & R = reconstructed x- face values
+                                   * hiF & loF = fluxes in y- direction on hi and lo faces
+                                   *   relative to the reconstructed values
+                                   * diagonal lines represent the contributing factors to L & R
+                                   *
+                                   * L* = L + 0.5*dt*dy*(loF_L - hiF_L)
+                                   * R* = R + 0.5*dt*dy*(loF_R - hiF_R)
+                                   *
+                                   *
+                                   * | - - hiF_L - - | - - hiF_R - - |
+                                   * |        \      |     /         |
+                                   * |          \    |   /           |
+                                   * |             L | R             |
+                                   * |          /    |   \           |
+                                   * |        /      |     \         |
+                                   * | - - loF_L - - | - - loF_R - - |
+                                   */
+
+                        // left side
+                        for (int n=0; n<+HydroDef::ConsIdx::NUM; ++n ) {
+                            loF = flux4(i-idx1[0],j-idx1[1],k-idx1[2],n);
+                            hiF = flux4(i-idx1[0]+idx2[0],j-idx1[1]+idx2[1],k-idx1[2]+idx2[2],n);
+
+                            L_cons[n] += 0.5*dt/dx[d2]*(loF - hiF);
+                        }
+
+                        // right side
+                        for (int n=0; n<+HydroDef::ConsIdx::NUM; ++n ) {
+                            loF = flux4(i,j,k,n);
+                            hiF = flux4(i+idx2[0],j+idx2[1],k+idx2[2],n);
+
+                            R_cons[n] += 0.5*dt/dx[d2]*(loF - hiF);
+                        }
+
+                        // convert to primitive
+                        cons2prim(L_cons, L_prim);
+                        cons2prim(R_cons, R_prim);
+
+                        // update reconstruction
+                        for (int n=0; n<+HydroDef::PrimIdx::NUM; ++n ) {
+                            hi4(i-idx1[0],j-idx1[1],k-idx1[2],n) = L_prim[n];
+                            lo4(i,j,k,n) = R_prim[n];
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+void HydroState::calc_viscous_fluxes(const Box& box,
+                                     Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
+                                     const Box& pbox,
+                                     const Vector<FArrayBox> &prim,
+                                     #ifdef AMREX_USE_EB
+                                     const EBCellFlagFab& flag,
+                                     #endif
+                                     const Real* dx) const
+{
+    BL_PROFILE("HydroState::calc_viscous_fluxes");
+    // now calculate viscous fluxes and load them into the flux arrays
+
+    switch (viscous.get_type()) {
+    case +HydroViscous::DiffusionType::Neutral :
+
+        calc_neutral_viscous_fluxes(box,
+                                    fluxes,
+                                    pbox,
+                                    prim[global_idx],
+                            #ifdef AMREX_USE_EB
+                                    flag,
+                            #endif
+                                    dx);
+        break;
+    case +HydroViscous::DiffusionType::Ion :
+        calc_ion_viscous_fluxes(box,
+                                fluxes,
+                                pbox,
+                                prim,
+                        #ifdef AMREX_USE_EB
+                                flag,
+                        #endif
+                                dx);
+        break;
+    case +HydroViscous::DiffusionType::Electron :
+        calc_electron_viscous_fluxes(box,
+                                     fluxes,
+                                     pbox,
+                                     prim,
+                             #ifdef AMREX_USE_EB
+                                     flag,
+                             #endif
+                                     dx);
+        break;
+    default :
+        break;
+    }
+
+}
+
+void HydroState::calc_neutral_diffusion_terms(const Box& box,
+                                              const FArrayBox& prim,
+                                              FArrayBox& diff
+                                              #ifdef AMREX_USE_EB
+                                              ,const EBCellFlagFab& flag
+                                              #endif
+                                              ) const
+{
+    BL_PROFILE("HydroState::calc_neutral_diffusion_terms");
+    const Dim3 lo = amrex::lbound(box);
+    const Dim3 hi = amrex::ubound(box);
+
+    Array4<const Real> const& prim4 = prim.array();
+    Array4<Real> const& d4 = diff.array();
+
+#ifdef AMREX_USE_EB
+    Array4<const EBCellFlag> const& f4 = flag.array();
+#endif
+
+    Array<Real,+HydroDef::PrimIdx::NUM> Q;
+    Real T, mu, kappa;
+
+    for     (int k = lo.z; k <= hi.z; ++k) {
+        for   (int j = lo.y; j <= hi.y; ++j) {
+            AMREX_PRAGMA_SIMD
+                    for (int i = lo.x; i <= hi.x; ++i) {
+
+#ifdef AMREX_USE_EB
+                if (f4(i,j,k).isCovered())
+                    continue;
+#endif
+
+                for (int n=0; n<+HydroDef::PrimIdx::NUM; ++n) {
+                    Q[n] = prim4(i,j,k,n);
+                }
+
+                viscous.get_coeffs(Q, T, mu, kappa);
+
+
+                d4(i,j,k,Viscous::NeutralTemp) = T;
+                d4(i,j,k,Viscous::NeutralKappa) = kappa;
+                d4(i,j,k,Viscous::NeutralMu) = mu;
+            }
+        }
+    }
+
+    return;
+}
+
+
+void HydroState::calc_neutral_viscous_fluxes(const Box& box, Array<FArrayBox,
+                                             AMREX_SPACEDIM> &fluxes,
+                                             const Box& pbox,
+                                             const FArrayBox &prim,
+                                             #ifdef AMREX_USE_EB
+                                             const EBCellFlagFab& flag,
+                                             #endif
+                                             const Real* dx) const
+{
+    BL_PROFILE("HydroState::calc_neutral_viscous_fluxes");
+#ifdef AMREX_USE_EB
+    if (flag.getType() != FabType::regular) {
+        calc_neutral_viscous_fluxes_eb(box, fluxes, pbox, prim, flag, dx);
+        return;
+    }
+#endif
+
+    FArrayBox diff(pbox, viscous.get_num());
+    calc_neutral_diffusion_terms(pbox,
+                                 prim,
+                                 diff
+                             #ifdef AMREX_USE_EB
+                                 ,flag
+                             #endif
+                                 );
+
+    const Dim3 lo = amrex::lbound(box);
+    const Dim3 hi = amrex::ubound(box);
+
+    Array<Real, AMREX_SPACEDIM> dxinv;
+    for (int d=0; d<AMREX_SPACEDIM; ++d) {
+        dxinv[d] = 1/dx[d];
+    }
+
+    Array4<const Real> const& p4 = prim.array();
+    Array4<const Real> const& d4 = diff.array();
+
+#ifdef AMREX_USE_EB
+    Array4<const EBCellFlag> const& f4 = flag.array();
+#endif
+
+    Real dudx=0, dudy=0, dudz=0, dvdx=0, dvdy=0, dwdx=0, dwdz=0, divu=0;
+    const Real two_thirds = 2/3;
+
+    Real tauxx, tauxy, tauxz, dTdx, muf;
+
+    int iTemp = Viscous::NeutralTemp;
+    int iMu = Viscous::NeutralMu;
+    int iKappa = Viscous::NeutralKappa;
+
+    Vector<int> prim_vel_id = get_prim_vector_idx();
+
+    int Xvel = prim_vel_id[0] + 0;
+    int Yvel = prim_vel_id[0] + 1;
+    int Zvel = prim_vel_id[0] + 2;
+
+    Vector<int> cons_vel_id = get_cons_vector_idx();
+
+    int Xmom = cons_vel_id[0] + 0;
+    int Ymom = cons_vel_id[0] + 1;
+    int Zmom = cons_vel_id[0] + 2;
+
+    Vector<int> nrg_id = get_nrg_idx();
+    int Eden = nrg_id[0];
+
+    Array4<Real> const& fluxX = fluxes[0].array();
+    for     (int k = lo.z; k <= hi.z; ++k) {
+        for   (int j = lo.y; j <= hi.y; ++j) {
+            AMREX_PRAGMA_SIMD
+                    for (int i = lo.x; i <= hi.x + 1; ++i) {
+
+#ifdef AMREX_USE_EB
+                if (f4(i,j,k).isCovered())
+                    continue;
+#endif
+
+                dTdx = (d4(i,j,k,iTemp) - d4(i-1,j,k,iTemp))*dxinv[0];
+
+                dudx = (p4(i,j,k,Xvel) - p4(i-1,j,k,Xvel))*dxinv[0];
+                dvdx = (p4(i,j,k,Yvel) - p4(i-1,j,k,Yvel))*dxinv[0];
+                dwdx = (p4(i,j,k,Zvel) - p4(i-1,j,k,Zvel))*dxinv[0];
+
+#if AMREX_SPACEDIM >= 2
+                dudy = (p4(i,j+1,k,Xvel)+p4(i-1,j+1,k,Xvel)-p4(i,j-1,k,Xvel)-p4(i-1,j-1,k,Xvel))*(0.25*dxinv[1]);
+                dvdy = (p4(i,j+1,k,Yvel)+p4(i-1,j+1,k,Yvel)-p4(i,j-1,k,Yvel)-p4(i-1,j-1,k,Yvel))*(0.25*dxinv[1]);
+#endif
+#if AMREX_SPACEDIM == 3
+                dudz = (p4(i,j,k+1,Xvel)+p4(i-1,j,k+1,Xvel)-p4(i,j,k-1,Xvel)-p4(i-1,j,k-1,Xvel))*(0.25*dxinv[2]);
+                dwdz = (p4(i,j,k+1,Zvel)+p4(i-1,j,k+1,Zvel)-p4(i,j,k-1,Zvel)-p4(i-1,j,k-1,Zvel))*(0.25*dxinv[2]);
+#endif
+                divu = dudx + dvdy + dwdz;
+
+                muf = 0.5*(d4(i,j,k,iMu)+d4(i-1,j,k,iMu));
+                tauxx = muf*(2*dudx-two_thirds*divu);
+                tauxy = muf*(dudy+dvdx);
+                tauxz = muf*(dudz+dwdx);
+
+                fluxX(i,j,k,Xmom) -= tauxx;
+                fluxX(i,j,k,Ymom) -= tauxy;
+                fluxX(i,j,k,Zmom) -= tauxz;
+                fluxX(i,j,k,Eden) -= 0.5*((p4(i,j,k,Xvel) +  p4(i-1,j,k,Xvel))*tauxx
+                                          +(p4(i,j,k,Yvel) + p4(i-1,j,k,Yvel))*tauxy
+                                          +(p4(i,j,k,Zvel) + p4(i-1,j,k,Zvel))*tauxz
+                                          +(d4(i,j,k,iKappa)+d4(i-1,j,k,iKappa))*dTdx);
+
+            }
+        }
+    }
+
+#if AMREX_SPACEDIM >= 2
+    Real tauyy, tauyz, dTdy;
+    Real dvdz=0, dwdy=0;
+    Array4<Real> const& fluxY = fluxes[1].array();
+    for     (int k = lo.z; k <= hi.z; ++k) {
+        for   (int j = lo.y; j <= hi.y + 1; ++j) {
+            AMREX_PRAGMA_SIMD
+                    for (int i = lo.x; i <= hi.x; ++i) {
+
+#ifdef AMREX_USE_EB
+                if (f4(i,j,k).isCovered())
+                    continue;
+#endif
+
+                dTdy = (d4(i,j,k,iTemp)-d4(i,j-1,k,iTemp))*dxinv[1];
+                dudy = (p4(i,j,k,Xvel)-p4(i,j-1,k,Xvel))*dxinv[1];
+                dvdy = (p4(i,j,k,Yvel)-p4(i,j-1,k,Yvel))*dxinv[1];
+                dwdy = (p4(i,j,k,Zvel)-p4(i,j-1,k,Zvel))*dxinv[1];
+                dudx = (p4(i+1,j,k,Xvel)+p4(i+1,j-1,k,Xvel)-p4(i-1,j,k,Xvel)-p4(i-1,j-1,k,Xvel))*(0.25*dxinv[0]);
+                dvdx = (p4(i+1,j,k,Yvel)+p4(i+1,j-1,k,Yvel)-p4(i-1,j,k,Yvel)-p4(i-1,j-1,k,Yvel))*(0.25*dxinv[0]);
+#if AMREX_SPACEDIM == 3
+                dvdz = (p4(i,j,k+1,Yvel)+p4(i,j-1,k+1,Yvel)-p4(i,j,k-1,Yvel)-p4(i,j-1,k-1,Yvel))*(0.25*dxinv[2]);
+                dwdz = (p4(i,j,k+1,Zvel)+p4(i,j-1,k+1,Zvel)-p4(i,j,k-1,Zvel)-p4(i,j-1,k-1,Zvel))*(0.25*dxinv[2]);
+#endif
+                divu = dudx + dvdy + dwdz;
+                muf = 0.5*(d4(i,j,k,iMu)+d4(i,j-1,k,iMu));
+                tauyy = muf*(2*dvdy-two_thirds*divu);
+                tauxy = muf*(dudy+dvdx);
+                tauyz = muf*(dwdy+dvdz);
+
+                fluxY(i,j,k,Xmom) -= tauxy;
+                fluxY(i,j,k,Ymom) -= tauyy;
+                fluxY(i,j,k,Zmom) -= tauyz;
+                fluxY(i,j,k,Eden) -= 0.5*((p4(i,j,k,Xvel)+p4(i,j-1,k,Xvel))*tauxy
+                                          +(p4(i,j,k,Yvel)+p4(i,j-1,k,Yvel))*tauyy
+                                          +(p4(i,j,k,Zvel)+p4(i,j-1,k,Zvel))*tauyz
+                                          +(d4(i,j,k,iKappa) + d4(i,j-1,k,iKappa))*dTdy);
+
+            }
+        }
+    }
+
+
+#endif
+#if AMREX_SPACEDIM == 3
+    Real tauzz, dTdz;
+    Array4<Real> const& fluxZ = fluxes[2].array();
+    for     (int k = lo.z; k <= hi.z; ++k) {
+        for   (int j = lo.y; j <= hi.y + 1; ++j) {
+            AMREX_PRAGMA_SIMD
+                    for (int i = lo.x; i <= hi.x; ++i) {
+
+#ifdef AMREX_USE_EB
+                if (f4(i,j,k).isCovered())
+                    continue;
+#endif
+
+                dTdz = (d4(i,j,k,iTemp)-d4(i,j,k-1,iTemp))*dxinv[2];
+                dudz = (p4(i,j,k,Xvel)-p4(i,j,k-1,Xvel))*dxinv[2];
+                dvdz = (p4(i,j,k,Yvel)-p4(i,j,k-1,Yvel))*dxinv[2];
+                dwdz = (p4(i,j,k,Zvel)-p4(i,j,k-1,Zvel))*dxinv[2];
+                dudx = (p4(i+1,j,k,Xvel)+p4(i+1,j,k-1,Xvel)-p4(i-1,j,k,Xvel)-p4(i-1,j,k-1,Xvel))*(0.25*dxinv[0]);
+                dwdx = (p4(i+1,j,k,Zvel)+p4(i+1,j,k-1,Zvel)-p4(i-1,j,k,Zvel)-p4(i-1,j,k-1,Zvel))*(0.25*dxinv[0]);
+                dvdy = (p4(i,j+1,k,Yvel)+p4(i,j+1,k-1,Yvel)-p4(i,j-1,k,Yvel)-p4(i,j-1,k-1,Yvel))*(0.25*dxinv[1]);
+                dwdy = (p4(i,j+1,k,Zvel)+p4(i,j+1,k-1,Zvel)-p4(i,j-1,k,Zvel)-p4(i,j-1,k-1,Zvel))*(0.25*dxinv[1]);
+                divu = dudx + dvdy + dwdz;
+                muf = 0.5*(d4(i,j,k,iMu)+d4(i,j,k-1,iMu));
+                tauxz = muf*(dudz+dwdx);
+                tauyz = muf*(dvdz+dwdy);
+                tauzz = muf*(2.*dwdz-two_thirds*divu);
+
+                fluxZ(i,j,k,Xmom) -= tauxz;
+                fluxZ(i,j,k,Ymom) -= tauyz;
+                fluxZ(i,j,k,Zmom) -= tauzz;
+                fluxZ(i,j,k,Eden) -= 0.5*((p4(i,j,k,Xvel)+p4(i,j,k-1,Xvel))*tauxz
+                                          +(p4(i,j,k,Yvel)+p4(i,j,k-1,Yvel))*tauyz
+                                          +(p4(i,j,k,Zvel)+p4(i,j,k-1,Zvel))*tauzz
+                                          +(d4(i,j,k,iKappa) +d4(i,j,k-1,iKappa))*dTdz);
+
+            }
+        }
+    }
+
+#endif
+
+
+    return;
+}
+
+#ifdef AMREX_USE_EB
+void HydroState::calc_neutral_viscous_fluxes_eb(const Box& box, Array<FArrayBox,
+                                                AMREX_SPACEDIM> &fluxes,
+                                                const Box& pbox,
+                                                const FArrayBox &prim,
+                                                EB_OPTIONAL(const EBCellFlagFab& flag,)
+                                                const Real* dx) const
+{
+    BL_PROFILE("HydroState::calc_neutral_viscous_fluxes_eb");
+    FArrayBox diff(pbox, Viscous::NUM_NEUTRAL_DIFF_COEFFS);
+    calc_neutral_diffusion_terms(pbox,
+                                 prim,
+                                 diff
+                                 EB_OPTIONAL(,flag)
+                                 );
+
+    const Dim3 lo = amrex::lbound(box);
+    const Dim3 hi = amrex::ubound(box);
+
+    Array<Real, AMREX_SPACEDIM> dxinv;
+    for (int d=0; d<AMREX_SPACEDIM; ++d) {
+        dxinv[d] = 1/dx[d];
+    }
+
+    Array4<const Real> const& p4 = prim.array();
+    Array4<const Real> const& d4 = diff.array();
+
+    Array4<const EBCellFlag> const& f4 = flag.array();
+
+    Real dudx=0, dudy=0, dudz=0, dvdx=0, dvdy=0, dwdx=0, dwdz=0, divu=0;
+    const Real two_thirds = 2/3;
+
+    const Array<Real,3>  weights = {0.0, 1.0, 0.5};
+    Real whi, wlo;
+
+    Real tauxx, tauxy, tauxz, dTdx, muf;
+
+    int iTemp = Viscous::NeutralTemp;
+    int iMu = Viscous::NeutralMu;
+    int iKappa = Viscous::NeutralKappa;
+
+    Vector<int> prim_vel_id = get_prim_vector_idx();
+
+    int Xvel = prim_vel_id[0] + 0;
+    int Yvel = prim_vel_id[0] + 1;
+    int Zvel = prim_vel_id[0] + 2;
+
+    Vector<int> cons_vel_id = get_cons_vector_idx();
+
+    int Xmom = cons_vel_id[0] + 0;
+    int Ymom = cons_vel_id[0] + 1;
+    int Zmom = cons_vel_id[0] + 2;
+
+    Vector<int> nrg_id = get_nrg_idx();
+    int Eden = nrg_id[0];
+
+
+    // X - direction
+    Array4<Real> const& fluxX = fluxes[0].array();
+    for     (int k = lo.z-AMREX_D_PICK(0,0,1); k <= hi.z+AMREX_D_PICK(0,0,1); ++k) {
+        for   (int j = lo.y-AMREX_D_PICK(0,1,1); j <= hi.y+AMREX_D_PICK(0,1,1); ++j) {
+            AMREX_PRAGMA_SIMD
+                    for (int i = lo.x; i <= hi.x + 1; ++i) {
+
+                bool covered = f4(i,j,k).isCovered();
+                bool connected = f4(i,j,k).isConnected(-1,0,0);
+                bool other_covered = f4(i-1,j,k).isCovered();
+
+                // only calculate fluxes for fluid cells and between cells that are connected
+                if (covered || other_covered || !connected)
+                    continue;
+
+                dTdx = (d4(i,j,k,iTemp) - d4(i-1,j,k,iTemp))*dxinv[0];
+
+                dudx = (p4(i,j,k,Xvel) - p4(i-1,j,k,Xvel))*dxinv[0];
+                dvdx = (p4(i,j,k,Yvel) - p4(i-1,j,k,Yvel))*dxinv[0];
+                dwdx = (p4(i,j,k,Zvel) - p4(i-1,j,k,Zvel))*dxinv[0];
+
+#if AMREX_SPACEDIM >= 2
+
+                const int jhip = j + (int)f4(i,j,k).isConnected(0, 1,0);
+                const int jhim = j - (int)f4(i,j,k).isConnected(0,-1,0);
+                const int jlop = j + (int)f4(i-1,j,k).isConnected(0, 1,0);
+                const int jlom = j - (int)f4(i-1,j,k).isConnected(0,-1,0);
+                whi = weights[jhip-jhim];
+                wlo = weights[jlop-jlom];
+                dudy = (0.5*dxinv[1]) * ((p4(i  ,jhip,k,Xvel)-p4(i  ,jhim,k,Xvel))*whi+(p4(i-1,jlop,k,Xvel)-p4(i-1,jlom,k,Xvel))*wlo);
+                dvdy = (0.50*dxinv[1]) * ((p4(i  ,jhip,k,Yvel)-p4(i  ,jhim,k,Yvel))*whi+(p4(i-1,jlop,k,Yvel)-p4(i-1,jlom,k,Yvel))*wlo);
+
+#endif
+#if AMREX_SPACEDIM == 3
+
+                const int khip = k + (int)f4(i,j,k).isConnected(0,0, 1);
+                const int khim = k - (int)f4(i,j,k).isConnected(0,0,-1);
+                const int klop = k + (int)f4(i-1,j,k).isConnected(0,0, 1);
+                const int klom = k - (int)f4(i-1,j,k).isConnected(0,0,-1);
+                whi = weights[khip-khim];
+                wlo = weights[klop-klom];
+                dudz = (0.5*dxinv[2]) * ((p4(i  ,j,khip,Xvel)-p4(i  ,j,khim,Xvel))*whi + (p4(i-1,j,klop,Xvel)-p4(i-1,j,klom,Xvel))*wlo);
+                dwdz = (0.5*dxinv[2]) * ((p4(i  ,j,khip,Zvel)-p4(i  ,j,khim,Zvel))*whi + (p4(i-1,j,klop,Zvel)-p4(i-1,j,klom,Zvel))*wlo);
+
+#endif
+                divu = dudx + dvdy + dwdz;
+
+                muf = 0.5*(d4(i,j,k,iMu)+d4(i-1,j,k,iMu));
+                tauxx = muf*(2*dudx-two_thirds*divu);
+                tauxy = muf*(dudy+dvdx);
+                tauxz = muf*(dudz+dwdx);
+
+                fluxX(i,j,k,Xmom) -= tauxx;
+                fluxX(i,j,k,Ymom) -= tauxy;
+                fluxX(i,j,k,Zmom) -= tauxz;
+                fluxX(i,j,k,Eden) -= 0.5*((p4(i,j,k,Xvel) +  p4(i-1,j,k,Xvel))*tauxx
+                                          +(p4(i,j,k,Yvel) + p4(i-1,j,k,Yvel))*tauxy
+                                          +(p4(i,j,k,Zvel) + p4(i-1,j,k,Zvel))*tauxz
+                                          +(d4(i,j,k,iKappa)+d4(i-1,j,k,iKappa))*dTdx);
+            }
+        }
+    }
+
+    // Y - direction
+#if AMREX_SPACEDIM >= 2
+    Real tauyy, tauyz, dTdy;
+    Real dvdz=0, dwdy=0;
+    Array4<Real> const& fluxY = fluxes[1].array();
+    for     (int k = lo.z-AMREX_D_PICK(0,0,1); k <= hi.z+AMREX_D_PICK(0,0,1); ++k) {
+        for   (int j = lo.y; j <= hi.y + 1; ++j) {
+            AMREX_PRAGMA_SIMD
+                    for (int i = lo.x-1; i <= hi.x+1; ++i) {
+
+                bool covered = f4(i,j,k).isCovered();
+                bool connected = f4(i,j,k).isConnected(0,-1,0);
+                bool other_covered = f4(i,j-1,k).isCovered();
+
+                // only calculate fluxes for fluid cells and between cells that are connected
+                if (covered || other_covered || !connected)
+                    continue;
+
+                dTdy = (d4(i,j,k,iTemp)-d4(i,j-1,k,iTemp))*dxinv[1];
+                dudy = (p4(i,j,k,Xvel)-p4(i,j-1,k,Xvel))*dxinv[1];
+                dvdy = (p4(i,j,k,Yvel)-p4(i,j-1,k,Yvel))*dxinv[1];
+                dwdy = (p4(i,j,k,Zvel)-p4(i,j-1,k,Zvel))*dxinv[1];
+
+                const int ihip = i + (int)f4(i,j,  k).isConnected( 1,0,0);
+                const int ihim = i - (int)f4(i,j,  k).isConnected(-1,0,0);
+                const int ilop = i + (int)f4(i,j-1,k).isConnected( 1,0,0);
+                const int ilom = i - (int)f4(i,j-1,k).isConnected(-1,0,0);
+                whi = weights[ihip-ihim];
+                wlo = weights[ilop-ilom];
+
+                dudx = (0.5*dxinv[0]) * ((p4(ihip,j  ,k,Xvel)-p4(ihim,j  ,k,Xvel))*whi + (p4(ilop,j-1,k,Xvel)-p4(ilom,j-1,k,Xvel))*wlo);
+                dvdx = (0.5*dxinv[0]) * ((p4(ihip,j  ,k,Yvel)-p4(ihim,j  ,k,Yvel))*whi + (p4(ilop,j-1,k,Yvel)-p4(ilom,j-1,k,Yvel))*wlo);
+
+#if AMREX_SPACEDIM == 3
+
+                const int khip = k + (int)f4(i,j,  k).isConnected(0,0, 1);
+                const int khim = k - (int)f4(i,j,  k).isConnected(0,0,-1);
+                const int klop = k + (int)f4(i,j-1,k).isConnected(0,0, 1);
+                const int klom = k - (int)f4(i,j-1,k).isConnected(0,0,-1);
+                whi = weights[khip-khim];
+                wlo = weights[klop-klom];
+
+                dvdz = (0.5*dxinv[2]) * ((p4(i,j  ,khip,Yvel)-p4(i,j  ,khim,Yvel))*whi + (p4(i,j-1,klop,Yvel)-p4(i,j-1,klom,Yvel))*wlo);
+                dwdz = (0.5*dxinv[2]) * ((p4(i,j  ,khip,Zvel)-p4(i,j  ,khim,Zvel))*whi + (p4(i,j-1,klop,Zvel)-p4(i,j-1,klom,Zvel))*wlo);
+
+#endif
+                divu = dudx + dvdy + dwdz;
+                muf = 0.5*(d4(i,j,k,iMu)+d4(i,j-1,k,iMu));
+                tauyy = muf*(2*dvdy-two_thirds*divu);
+                tauxy = muf*(dudy+dvdx);
+                tauyz = muf*(dwdy+dvdz);
+
+                fluxY(i,j,k,Xmom) -= tauxy;
+                fluxY(i,j,k,Ymom) -= tauyy;
+                fluxY(i,j,k,Zmom) -= tauyz;
+                fluxY(i,j,k,Eden) -= 0.5*((p4(i,j,k,Xvel)+p4(i,j-1,k,Xvel))*tauxy
+                                          +(p4(i,j,k,Yvel)+p4(i,j-1,k,Yvel))*tauyy
+                                          +(p4(i,j,k,Zvel)+p4(i,j-1,k,Zvel))*tauyz
+                                          +(d4(i,j,k,iKappa) + d4(i,j-1,k,iKappa))*dTdy);
+
+            }
+        }
+    }
+#endif
+
+    // Z - direction
+#if AMREX_SPACEDIM == 3
+    Real tauzz, dTdz;
+    Array4<Real> const& fluxZ = fluxes[2].array();
+    for     (int k = lo.z; k <= hi.z+1; ++k) {
+        for   (int j = lo.y-1; j <= hi.y + 1; ++j) {
+            AMREX_PRAGMA_SIMD
+                    for (int i = lo.x-1; i <= hi.x+1; ++i) {
+
+                bool covered = f4(i,j,k).isCovered();
+                bool connected = f4(i,j,k).isConnected(0,0,-1);
+                bool other_covered = f4(i,j,k-1).isCovered();
+
+                // only calculate fluxes for fluid cells and between cells that are connected
+                if (covered || other_covered || !connected)
+                    continue;
+
+                dTdz = (d4(i,j,k,iTemp)-d4(i,j,k-1,iTemp))*dxinv[2];
+                dudz = (p4(i,j,k,Xvel)-p4(i,j,k-1,Xvel))*dxinv[2];
+                dvdz = (p4(i,j,k,Yvel)-p4(i,j,k-1,Yvel))*dxinv[2];
+                dwdz = (p4(i,j,k,Zvel)-p4(i,j,k-1,Zvel))*dxinv[2];
+
+                const int ihip = i + (int)f4(i,j,k  ).isConnected( 1,0,0);
+                const int ihim = i - (int)f4(i,j,k  ).isConnected(-1,0,0);
+                const int ilop = i + (int)f4(i,j,k-1).isConnected( 1,0,0);
+                const int ilom = i - (int)f4(i,j,k-1).isConnected(-1,0,0);
+                whi = weights[ihip-ihim];
+                wlo = weights[ilop-ilom];
+
+                dudx = (0.5*dxinv[0]) * ((p4(ihip,j,k  ,Xvel)-p4(ihim,j,k  ,Xvel))*whi + (p4(ilop,j,k-1,Xvel)-p4(ilom,j,k-1,Xvel))*wlo);
+                dwdx = (0.5*dxinv[0]) * ((p4(ihip,j,k  ,Zvel)-p4(ihim,j,k  ,Zvel))*whi + (p4(ilop,j,k-1,Zvel)-p4(ilom,j,k-1,Zvel))*wlo);
+
+                const int jhip = j + (int)f4(i,j,k  ).isConnected(0 ,1,0);
+                const int jhim = j - (int)f4(i,j,k  ).isConnected(0,-1,0);
+                const int jlop = j + (int)f4(i,j,k-1).isConnected(0 ,1,0);
+                const int jlom = j - (int)f4(i,j,k-1).isConnected(0,-1,0);
+                whi = weights[jhip-jhim];
+                wlo = weights[jlop-jlom];
+
+                dvdy = (0.5*dxinv[1]) * ((p4(i,jhip,k  ,Yvel)-p4(i,jhim,k  ,Yvel))*whi + (p4(i,jlop,k-1,Yvel)-p4(i,jlom,k-1,Yvel))*wlo);
+                dwdy = (0.5*dxinv[1]) * ((p4(i,jhip,k  ,Zvel)-p4(i,jhim,k  ,Zvel))*whi + (p4(i,jlop,k-1,Zvel)-p4(i,jlom,k-1,Zvel))*wlo);
+
+                divu = dudx + dvdy + dwdz;
+                muf = 0.5*(d4(i,j,k,iMu)+d4(i,j,k-1,iMu));
+                tauxz = muf*(dudz+dwdx);
+                tauyz = muf*(dvdz+dwdy);
+                tauzz = muf*(2.*dwdz-two_thirds*divu);
+
+                fluxZ(i,j,k,Xmom) -= tauxz;
+                fluxZ(i,j,k,Ymom) -= tauyz;
+                fluxZ(i,j,k,Zmom) -= tauzz;
+                fluxZ(i,j,k,Eden) -= 0.5*((p4(i,j,k,Xvel)+p4(i,j,k-1,Xvel))*tauxz
+                                          +(p4(i,j,k,Yvel)+p4(i,j,k-1,Yvel))*tauyz
+                                          +(p4(i,j,k,Zvel)+p4(i,j,k-1,Zvel))*tauzz
+                                          +(d4(i,j,k,iKappa) +d4(i,j,k-1,iKappa))*dTdz);
+
+            }
+        }
+    }
+
+#endif
+
+}
+
+#endif
+
+// ====================================================================================
+void HydroState::calc_ion_diffusion_terms(const Box& box,const Vector<FArrayBox>& prim,
+                                          State& EMstate,Array4<const Real> const& prim_EM4,
+                                          State& ELEstate,Array4<const Real> const& prim_ELE4,
+                                          FArrayBox& diff
+                                          #ifdef AMREX_USE_EB
+                                          ,const EBCellFlagFab& flag
+                                          #endif
+                                          ) const {
+
+    BL_PROFILE("HydroState::calc_ion_diffusion_terms");
+    return;
+}
+
+void HydroState::calc_ion_viscous_fluxes(const Box& box,
+                                         Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
+                                         const Box& pbox, const Vector<FArrayBox>& prim,
+                                         #ifdef AMREX_USE_EB
+                                         const EBCellFlagFab& flag,
+                                         #endif
+                                         const Real* dx) const {
+
+    BL_PROFILE("HydroState::calc_ion_viscous_fluxes");
     return;
 }
 

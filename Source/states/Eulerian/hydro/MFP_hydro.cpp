@@ -4,13 +4,17 @@
 #include "MFP_diagnostics.H"
 #include "MFP_transforms.H"
 
+#include "Eigen"
+
+
 Vector<std::string> HydroState::cons_names = {
     "rho",
     "x_mom",
     "y_mom",
     "z_mom",
     "nrg",
-    "tracer"
+    "tracer",
+    "shock",
 };
 
 Vector<std::string> HydroState::prim_names = {
@@ -27,65 +31,171 @@ Array<int,1> HydroState::flux_vector_idx = {+HydroDef::FluxIdx::Xvel};
 Array<int,1> HydroState::cons_vector_idx = {+HydroDef::ConsIdx::Xmom};
 Array<int,1> HydroState::prim_vector_idx = {+HydroDef::PrimIdx::Xvel};
 
+std::map<std::string, int> HydroState::bc_names = {{"interior",  PhysBCType::interior},
+                                                   {"inflow",    PhysBCType::inflow},
+                                                   {"outflow",   PhysBCType::outflow},
+                                                   {"symmetry",  PhysBCType::symmetry},
+                                                   {"slipwall",  PhysBCType::slipwall},
+                                                   {"noslipwall",PhysBCType::noslipwall}};
+
+Vector<set_bc> HydroState::bc_set = {
+    &set_scalar_bc,
+    &set_x_vel_bc,
+    &set_y_vel_bc,
+    &set_z_vel_bc,
+    &set_scalar_bc,
+    &set_scalar_bc,
+    &set_scalar_bc,
+    &set_scalar_bc
+};
+
+std::string HydroState::tag = "hydro";
+bool HydroState::registered = GetStateFactory().Register(HydroState::tag, StateBuilder<HydroState>);
+
 HydroState::HydroState() {}
+
+HydroState::HydroState(const sol::table& def)
+{
+    name = def.get<std::string>("name");
+    global_idx = def.get<int>("global_idx");
+}
 
 HydroState::~HydroState(){}
 
-HydroState HydroState::Build(const sol::table& def)
+//HydroState HydroState::Build(const sol::table& def)
+//{
+
+//    std::string name = def.get<std::string>("name");
+//    int global_idx = def.get<int>("global_idx");
+
+//    //
+//    // Reconstruction
+//    //
+
+//    ClassFactory<Reconstruction> rfact = GetReconstructionFactory();
+
+//    std::string rec = def["reconstruction"].get_or<std::string>("null");
+
+//    def["reconstruction"] = rec; // consistency when using default option "null"
+
+//    std::unique_ptr<Reconstruction> R = rfact.Build(rec, def);
+
+//    if (!R)
+//        Abort("Invalid reconstruction option '"+rec+"'. Options are "+vec2str(rfact.getKeys()));
+
+
+//    //
+//    // Flux
+//    //
+
+//    ClassFactory<HydroRiemannSolver> ffact = GetHydroRiemannSolverFactory();
+
+//    std::string flux_name = def["flux"].get_or<std::string>("null");
+
+//    def["flux"] = flux_name; // consistency when using default option "null"
+
+//    std::unique_ptr<HydroRiemannSolver> F = ffact.Build(flux_name, def);
+
+//    if (!F)
+//        Abort("Invalid flux option '"+flux_name+"'. Options are "+vec2str(ffact.getKeys()));
+
+//    //
+//    // Viscosity
+//    //
+
+//    ClassFactory<HydroViscous> vfact = GetViscousFactory();
+
+//    std::string visc = def["viscosity"]["type"].get_or<std::string>("");
+
+//    std::unique_ptr<HydroViscous> V = vfact.Build(visc, def);
+
+//    if (!visc.empty() && !V)
+//        Abort("Invalid viscosity option '"+visc+"'. Options are "+vec2str(vfact.getKeys()));
+
+//    //
+//    // Embedded boundaries
+//    //
+
+//#ifdef AMREX_USE_EB
+//    Vector<HydroBoundaryEB> EB;
+
+
+
+//    // get a sorted list of keys so that we have consistent tagging of boundaries
+//    sol::table eb_keys = MFP::lua.script("return get_sorted_keys(embedded_boundaries)");
+//    sol::table eb_list = MFP::lua["embedded_boundaries"];
+
+//    for (const auto& eb_key : eb_keys) {
+//        //        const sol::object &eb_name = eb_item.first;
+//        const sol::table &eb_desc = eb_list[eb_key.second.as<std::string>()];
+
+//        // get the names of the states that this geometry is interacting with
+//        // and the type of boundary condition that state uses to interact with
+//        // the embedded boundary
+
+//        const sol::table &bcs = eb_desc["bcs"];
+//        for (const auto& bc : bcs) {
+//            std::string state_name = bc.first.as<std::string>();
+//            const sol::table &bc_def = bc.second;
+//            if (state_name == name) {
+
+//                std::string bc_type = bc_def.get<std::string>("type");
+
+//                if (bc_type == HydroSlipWall::tag) {
+//                    EB.push_back(HydroSlipWall(F.get()));
+//                } else if (bc_type == HydroNoSlipWall::tag) {
+//                    if (!V) {
+//                        Abort("Requested EB bc of type '" + bc_type + "' without defining 'viscosity' for state '" + name + "'");
+//                    }
+//                    EB.push_back(HydroNoSlipWall(F.get(), V.get(), bc_def));
+//                } else if (bc_type == DirichletWall::tag) {
+//                    EB.push_back(DirichletWall(F.get(), prim_names, prim_vector_idx, bc_def));
+//                } else {
+//                    Abort("Requested EB bc of type '" + bc_type + "' which is not compatible with state '" + name + "'");
+//                }
+
+//            }
+//        }
+//    }
+
+//#endif
+
+
+//    HydroState H(*R,
+//                 *F,
+//                 *V,
+//             #ifdef AMREX_USE_EB
+//                 EB
+//             #endif
+//                 );
+
+//    H.name = def.get<std::string>("name");
+//    H.global_idx = def.get<int>("global_idx");
+
+//    return H;
+
+//}
+
+#ifdef AMREX_USE_EB
+void HydroState::set_eb_bc(const sol::table &bc_def)
 {
-    //
-    // Reconstruction
-    //
 
-    ClassFactory<Reconstruction> rfact = GetReconstructionFactory();
+    std::string bc_type = bc_def.get<std::string>("type");
 
-    std::string rec = def["reconstruction"].get_or<std::string>("null");
-
-    def["reconstruction"] = rec; // consistency when using default option "null"
-
-    std::unique_ptr<Reconstruction> R = rfact.Build(rec, def);
-
-    if (!R)
-        Abort("Invalid reconstruction option '"+rec+"'. Options are "+vec2str(rfact.getKeys()));
-
-
-    //
-    // Flux
-    //
-
-    ClassFactory<HydroRiemannSolver> ffact = GetHydroRiemannSolverFactory();
-
-    std::string flux_name = def["flux"].get_or<std::string>("null");
-
-    def["flux"] = flux_name; // consistency when using default option "null"
-
-    std::unique_ptr<HydroRiemannSolver> F = ffact.Build(flux_name, def);
-
-    if (!F)
-        Abort("Invalid flux option '"+flux_name+"'. Options are "+vec2str(ffact.getKeys()));
-
-    //
-    // Viscosity
-    //
-
-    ClassFactory<HydroViscous> vfact = GetViscousFactory();
-
-    std::string visc = def["viscosity"]["type"].get_or<std::string>("");
-
-    std::unique_ptr<HydroViscous> V = vfact.Build(visc, def);
-
-    if (!visc.empty() && !viscous)
-        Abort("Invalid viscosity option '"+visc+"'. Options are "+vec2str(vfact.getKeys()));
-
-
-    HydroState H(*R, *F, *V);
-
-    H.name = def.get<std::string>("name");
-    H.global_idx = def.get<int>("global_idx");
-
-    return H;
-
+    if (bc_type == HydroSlipWall::tag) {
+        eb_bcs.push_back(std::unique_ptr<HydroBoundaryEB>(new HydroSlipWall(flux_solver.get())));
+    } else if (bc_type == HydroNoSlipWall::tag) {
+        if (!viscous) {
+            Abort("Requested EB bc of type '" + bc_type + "' without defining 'viscosity' for state '" + name + "'");
+        }
+        eb_bcs.push_back(std::unique_ptr<HydroBoundaryEB>(new HydroNoSlipWall(flux_solver.get(), viscous.get(), bc_def)));
+    } else if (bc_type == DirichletWall::tag) {
+        eb_bcs.push_back(std::unique_ptr<HydroBoundaryEB>(new DirichletWall(flux_solver.get(), bc_def)));
+    } else {
+        Abort("Requested EB bc of type '" + bc_type + "' which is not compatible with state '" + name + "'");
+    }
 }
+#endif
 
 void HydroState::set_viscosity()
 {
@@ -94,62 +204,18 @@ void HydroState::set_viscosity()
     // viscous terms coefficients
     //
 
+    ClassFactory<HydroViscous> vfact = GetHydroViscousFactory();
+
     sol::table state_def = MFP::lua["states"][name];
+    state_def["global_idx"] = global_idx;
 
     std::string visc = state_def["viscosity"]["type"].get_or<std::string>("");
 
+    viscous = vfact.Build(visc, state_def);
 
+    if (!visc.empty() && !viscous)
+        Abort("Invalid viscosity option '"+visc+"'. Options are "+vec2str(vfact.getKeys()));
 }
-
-#ifdef AMREX_USE_EB
-void HydroState::set_eb_bc(const sol::table &bc_def)
-{
-
-    std::string bc_type = bc_def.get<std::string>("type");
-
-    if (bc_type == "slip_wall") {
-
-        eb_bc_index.push_back(std::make_pair(+HydroDef::WallIndex::HydroSlipWall, -1));
-
-    } else if (bc_type == "no_slip_wall") {
-        if (!viscous) {
-            Abort("Requested EB bc of type '" + bc_type + "' without defining 'viscosity' for state '" + name + "'");
-        }
-
-        eb_bc_index.push_back(std::make_pair<int,int>(+HydroDef::WallIndex::HydroNoSlipWall, no_slip_wall_eb_data.size()));
-
-        NoSlipWallData dat;
-        dat.wall_temp = bc_def["T"].get_or(-1.0);
-        dat.wall_velocity[0] = 0.0;
-        dat.wall_velocity[1] = bc_def["v1"].get_or(0.0);
-        dat.wall_velocity[2] = bc_def["v2"].get_or(0.0);
-
-        no_slip_wall_eb_data.push_back(dat);
-
-
-    } else if (bc_type == "defined") {
-
-        eb_bc_index.push_back(std::make_pair<int,int>(+HydroDef::WallIndex::HydroDefined, defined_wall_eb_data.size()));
-
-        Array<Real, +HydroDef::PrimIdx::NUM> dat;
-
-        dat[+HydroDef::PrimIdx::Density] = bc_def["rho"].get_or(-1.0);
-        dat[+HydroDef::PrimIdx::Xvel] = bc_def["u"].get_or(-1.0);
-        dat[+HydroDef::PrimIdx::Yvel] = bc_def["v"].get_or(-1.0);
-        dat[+HydroDef::PrimIdx::Zvel] = bc_def["w"].get_or(-1.0);
-        dat[+HydroDef::PrimIdx::Prs] = bc_def["p"].get_or(-1.0);
-        dat[+HydroDef::PrimIdx::Temp] = bc_def["T"].get_or(-1.0);
-
-        defined_wall_eb_data.push_back(dat);
-
-    } else {
-        Abort("Requested EB bc of type '" + bc_type + "' which is not compatible with state '" + name + "'");
-    }
-
-
-}
-#endif
-
 
 Real HydroState::init_from_number_density(std::map<std::string, Real> data)
 {
@@ -240,18 +306,43 @@ void HydroState::set_flux()
 
     if (!is_transported()) return;
 
-    sol::state& lua = MFP::lua;
-
+    ClassFactory<HydroRiemannSolver> rfact = GetHydroRiemannSolverFactory();
 
     sol::table state_def = MFP::lua["states"][name];
-
+    state_def["global_idx"] = global_idx;
 
     std::string flux = state_def["flux"].get_or<std::string>("null");
 
+    if (flux == "null")
+        Abort("Flux option required for state '"+name+"'. Options are "+vec2str(rfact.getKeys()));
+
+    flux_solver = rfact.Build(flux, state_def);
+
+    if (!flux_solver)
+        Abort("Invalid flux solver option '"+flux+"'. Options are "+vec2str(rfact.getKeys()));
 
 
     return;
 
+}
+
+void HydroState::set_shock_detector()
+{
+
+    ClassFactory<HydroShockDetector> sdfact = GetHydroShockDetectorFactory();
+
+    sol::table sd_def = MFP::lua["states"][name]["shock_detector"].get_or(sol::table());
+
+    if (!sd_def.valid()) return;
+
+    sd_def["global_idx"] = global_idx;
+
+    std::string sd_name = sd_def["name"].get_or<std::string>("");
+
+    shock_detector = sdfact.Build(sd_name, sd_def);
+
+    if (!sd_name.empty() && !shock_detector)
+        Abort("Invalid shock_detector option '"+sd_name+"'. Options are "+vec2str(sdfact.getKeys()));
 }
 
 void HydroState::init_from_lua()
@@ -286,7 +377,6 @@ void HydroState::init_from_lua()
     // viscous terms coefficients
     //
     set_viscosity();
-
 
 
     //
@@ -679,7 +769,6 @@ void HydroState::prim2cons(const Array<Real, +HydroDef::PrimIdx::NUM> &Q, Array<
 
 }
 
-
 bool HydroState::prim_valid(Array<Real,+HydroDef::PrimIdx::NUM>& Q) const
 {
     if ((Q[+HydroDef::PrimIdx::Density] <= 0.0) ||  (Q[+HydroDef::PrimIdx::Prs] <= 0.0)
@@ -992,6 +1081,8 @@ void HydroState::calc_primitives(const Box& box,
     Array<Real, +HydroDef::ConsIdx::NUM> U;
     Array<Real, +HydroDef::PrimIdx::NUM> Q;
 
+    prim.resize(box, +HydroDef::PrimIdx::NUM);
+
     const Dim3 lo = amrex::lbound(box);
     const Dim3 hi = amrex::ubound(box);
     Array4<Real> const& s4 = cons.array();
@@ -1225,8 +1316,8 @@ void HydroState::calc_reconstruction(const Box& box,
     const Dim3 lo = amrex::lbound(box);
     const Dim3 hi = amrex::ubound(box);
 
-    Vector<Real> stencil(reconstructor.stencil_length);
-    int offset = reconstructor.stencil_length/2;
+    Vector<Real> stencil(reconstructor->stencil_length);
+    int offset = reconstructor->stencil_length/2;
     Array<int,3> stencil_index;
     Array<Real, +HydroDef::PrimIdx::NUM> cell_value, cell_slope;
 
@@ -1293,7 +1384,7 @@ void HydroState::calc_reconstruction(const Box& box,
                         // cell that references a covered cell doesn't need calculating
                         bool skip = false;
                         stencil_index.fill(0);
-                        for (int s=0; s<reconstructor.stencil_length; ++s) {
+                        for (int s=0; s<reconstructor->stencil_length; ++s) {
                             stencil_index[d] = s - offset;
                             // check if any of the stencil values are from a covered cell
                             if (f4(i+stencil_index[0], j+stencil_index[1], k+stencil_index[2]).isCovered()) {
@@ -1314,13 +1405,13 @@ void HydroState::calc_reconstruction(const Box& box,
 
                         // fill in the stencil along dimension index
                         stencil_index.fill(0);
-                        for (int s=0; s<reconstructor.stencil_length; ++s) {
+                        for (int s=0; s<reconstructor->stencil_length; ++s) {
                             stencil_index[d] = s - offset;
                             stencil[s] = src4(i+stencil_index[0], j+stencil_index[1], k+stencil_index[2], n);
                         }
 
                         // perform reconstruction
-                        cell_slope[n] = reconstructor.get_slope(stencil);
+                        cell_slope[n] = reconstructor->get_slope(stencil);
                         cell_value[n] = stencil[offset];
 
                     }
@@ -1820,8 +1911,8 @@ void HydroState::update_face_prim(const Box& box, const Geometry& geom,
 }
 
 // given all of the available face values load the ones expected by the flux calc into a vector
-void HydroState::load_state_for_flux(Array4<const Real> &face,
-                                     int i, int j, int k, Vector<Real> &S) const
+void HydroState::load_state_for_flux(const Array4<const Real> &face,
+                                     int i, int j, int k, Array<Real, +HydroDef::FluxIdx::NUM> &S) const
 {
     BL_PROFILE("HydroState::load_state_for_flux");
 
@@ -1831,6 +1922,7 @@ void HydroState::load_state_for_flux(Array4<const Real> &face,
     S[+HydroDef::FluxIdx::Yvel] = face(i,j,k,+HydroDef::PrimIdx::Yvel);
     S[+HydroDef::FluxIdx::Zvel] = face(i,j,k,+HydroDef::PrimIdx::Zvel);
     S[+HydroDef::FluxIdx::Prs] = face(i,j,k,+HydroDef::PrimIdx::Prs);
+    S[+HydroDef::FluxIdx::Temp] = face(i,j,k,+HydroDef::PrimIdx::Temp);
     S[+HydroDef::FluxIdx::Alpha] = face(i,j,k,+HydroDef::PrimIdx::Alpha);
     S[+HydroDef::FluxIdx::Gamma] = get_gamma(S[+HydroDef::FluxIdx::Alpha]);
 
@@ -1838,6 +1930,7 @@ void HydroState::load_state_for_flux(Array4<const Real> &face,
 }
 
 void HydroState::calc_fluxes(const Box& box,
+                             FArrayBox &cons,
                              Array<FArrayBox, AMREX_SPACEDIM> &r_lo,
                              Array<FArrayBox, AMREX_SPACEDIM> &r_hi,
                              Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
@@ -1858,6 +1951,8 @@ void HydroState::calc_fluxes(const Box& box,
 #ifdef AMREX_USE_EB
     Array4<const EBCellFlag> const& f4 = flag.array();
 #endif
+
+    Array4<Real> const& cons4 = cons.array();
 
     // cycle over dimensions
     for (int d=0; d<AMREX_SPACEDIM; ++d) {
@@ -1900,7 +1995,12 @@ void HydroState::calc_fluxes(const Box& box,
                     transform_global2local(R, d, flux_vector_idx);
 
 
-                    flux_solver.solve(L, R, F, &shk);
+                    Real shk = shock_detector->solve(L, R);
+
+                    cons4(i-index[0],j-index[1],k-index[2],+HydroDef::ConsIdx::Shock) = std::max(cons4(i-index[0],j-index[1],k-index[2],+HydroDef::ConsIdx::Shock), shk);
+                    cons4(i,j,k,+HydroDef::ConsIdx::Shock) = std::max(cons4(i,j,k,+HydroDef::ConsIdx::Shock), shk);
+
+                    flux_solver->solve(L, R, F, &shk);
 
                     // rotate the flux back to local frame
                     transform_local2global(F, d, cons_vector_idx);
@@ -2060,63 +2160,13 @@ void HydroState::correct_face_prim(const Box& box,
     }
 }
 
-void HydroState::calc_viscous_fluxes(const Box& box,
-                                     Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
-                                     const Box& pbox,
-                                     const Vector<FArrayBox> &prim,
-                                     #ifdef AMREX_USE_EB
-                                     const EBCellFlagFab& flag,
-                                     #endif
-                                     const Real* dx) const
-{
-    BL_PROFILE("HydroState::calc_viscous_fluxes");
-    // now calculate viscous fluxes and load them into the flux arrays
-
-    switch (viscous.get_type()) {
-    case +HydroViscous::DiffusionType::Neutral :
-
-        calc_neutral_viscous_fluxes(box,
-                                    fluxes,
-                                    pbox,
-                                    prim[global_idx],
-                            #ifdef AMREX_USE_EB
-                                    flag,
-                            #endif
-                                    dx);
-        break;
-    case +HydroViscous::DiffusionType::Ion :
-        calc_ion_viscous_fluxes(box,
-                                fluxes,
-                                pbox,
-                                prim,
-                        #ifdef AMREX_USE_EB
-                                flag,
-                        #endif
-                                dx);
-        break;
-    case +HydroViscous::DiffusionType::Electron :
-        calc_electron_viscous_fluxes(box,
-                                     fluxes,
-                                     pbox,
-                                     prim,
-                             #ifdef AMREX_USE_EB
-                                     flag,
-                             #endif
-                                     dx);
-        break;
-    default :
-        break;
-    }
-
-}
-
-void HydroState::calc_neutral_diffusion_terms(const Box& box,
-                                              const FArrayBox& prim,
-                                              FArrayBox& diff
-                                              #ifdef AMREX_USE_EB
-                                              ,const EBCellFlagFab& flag
-                                              #endif
-                                              ) const
+void HydroState::calc_diffusion_terms(const Box& box,
+                                      const FArrayBox& prim,
+                                      FArrayBox& diff
+                                      #ifdef AMREX_USE_EB
+                                      ,const EBCellFlagFab& flag
+                                      #endif
+                                      ) const
 {
     BL_PROFILE("HydroState::calc_neutral_diffusion_terms");
     const Dim3 lo = amrex::lbound(box);
@@ -2146,12 +2196,12 @@ void HydroState::calc_neutral_diffusion_terms(const Box& box,
                     Q[n] = prim4(i,j,k,n);
                 }
 
-                viscous.get_coeffs(Q, T, mu, kappa);
+                viscous->get_coeffs(Q, T, mu, kappa);
 
 
-                d4(i,j,k,Viscous::NeutralTemp) = T;
-                d4(i,j,k,Viscous::NeutralKappa) = kappa;
-                d4(i,j,k,Viscous::NeutralMu) = mu;
+                d4(i,j,k,+HydroViscous::CoeffIdx::Temp) = T;
+                d4(i,j,k,+HydroViscous::CoeffIdx::Kappa) = kappa;
+                d4(i,j,k,+HydroViscous::CoeffIdx::Mu) = mu;
             }
         }
     }
@@ -2160,31 +2210,30 @@ void HydroState::calc_neutral_diffusion_terms(const Box& box,
 }
 
 
-void HydroState::calc_neutral_viscous_fluxes(const Box& box, Array<FArrayBox,
-                                             AMREX_SPACEDIM> &fluxes,
-                                             const Box& pbox,
-                                             const FArrayBox &prim,
-                                             #ifdef AMREX_USE_EB
-                                             const EBCellFlagFab& flag,
-                                             #endif
-                                             const Real* dx) const
+void HydroState::calc_viscous_fluxes(const Box& box, Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
+                                     const Box& pbox,
+                                     const FArrayBox &prim,
+                                     #ifdef AMREX_USE_EB
+                                     const EBCellFlagFab& flag,
+                                     #endif
+                                     const Real* dx) const
 {
-    BL_PROFILE("HydroState::calc_neutral_viscous_fluxes");
+    BL_PROFILE("HydroState::calc_viscous_fluxes");
 #ifdef AMREX_USE_EB
     if (flag.getType() != FabType::regular) {
-        calc_neutral_viscous_fluxes_eb(box, fluxes, pbox, prim, flag, dx);
+        calc_viscous_fluxes_eb(box, fluxes, pbox, prim, flag, dx);
         return;
     }
 #endif
 
-    FArrayBox diff(pbox, viscous.get_num());
-    calc_neutral_diffusion_terms(pbox,
-                                 prim,
-                                 diff
-                             #ifdef AMREX_USE_EB
-                                 ,flag
-                             #endif
-                                 );
+    FArrayBox diff(pbox, +HydroViscous::CoeffIdx::NUM);
+    calc_diffusion_terms(pbox,
+                         prim,
+                         diff
+                     #ifdef AMREX_USE_EB
+                         ,flag
+                     #endif
+                         );
 
     const Dim3 lo = amrex::lbound(box);
     const Dim3 hi = amrex::ubound(box);
@@ -2206,25 +2255,6 @@ void HydroState::calc_neutral_viscous_fluxes(const Box& box, Array<FArrayBox,
 
     Real tauxx, tauxy, tauxz, dTdx, muf;
 
-    int iTemp = Viscous::NeutralTemp;
-    int iMu = Viscous::NeutralMu;
-    int iKappa = Viscous::NeutralKappa;
-
-    Vector<int> prim_vel_id = get_prim_vector_idx();
-
-    int Xvel = prim_vel_id[0] + 0;
-    int Yvel = prim_vel_id[0] + 1;
-    int Zvel = prim_vel_id[0] + 2;
-
-    Vector<int> cons_vel_id = get_cons_vector_idx();
-
-    int Xmom = cons_vel_id[0] + 0;
-    int Ymom = cons_vel_id[0] + 1;
-    int Zmom = cons_vel_id[0] + 2;
-
-    Vector<int> nrg_id = get_nrg_idx();
-    int Eden = nrg_id[0];
-
     Array4<Real> const& fluxX = fluxes[0].array();
     for     (int k = lo.z; k <= hi.z; ++k) {
         for   (int j = lo.y; j <= hi.y; ++j) {
@@ -2236,15 +2266,15 @@ void HydroState::calc_neutral_viscous_fluxes(const Box& box, Array<FArrayBox,
                     continue;
 #endif
 
-                dTdx = (d4(i,j,k,iTemp) - d4(i-1,j,k,iTemp))*dxinv[0];
+                dTdx = (d4(i,j,k,+HydroViscous::CoeffIdx::Temp) - d4(i-1,j,k,+HydroViscous::CoeffIdx::Temp))*dxinv[0];
 
-                dudx = (p4(i,j,k,Xvel) - p4(i-1,j,k,Xvel))*dxinv[0];
-                dvdx = (p4(i,j,k,Yvel) - p4(i-1,j,k,Yvel))*dxinv[0];
-                dwdx = (p4(i,j,k,Zvel) - p4(i-1,j,k,Zvel))*dxinv[0];
+                dudx = (p4(i,j,k,+HydroDef::PrimIdx::Xvel) - p4(i-1,j,k,+HydroDef::PrimIdx::Xvel))*dxinv[0];
+                dvdx = (p4(i,j,k,+HydroDef::PrimIdx::Yvel) - p4(i-1,j,k,+HydroDef::PrimIdx::Yvel))*dxinv[0];
+                dwdx = (p4(i,j,k,+HydroDef::PrimIdx::Zvel) - p4(i-1,j,k,+HydroDef::PrimIdx::Zvel))*dxinv[0];
 
 #if AMREX_SPACEDIM >= 2
-                dudy = (p4(i,j+1,k,Xvel)+p4(i-1,j+1,k,Xvel)-p4(i,j-1,k,Xvel)-p4(i-1,j-1,k,Xvel))*(0.25*dxinv[1]);
-                dvdy = (p4(i,j+1,k,Yvel)+p4(i-1,j+1,k,Yvel)-p4(i,j-1,k,Yvel)-p4(i-1,j-1,k,Yvel))*(0.25*dxinv[1]);
+                dudy = (p4(i,j+1,k,+HydroDef::PrimIdx::Xvel)+p4(i-1,j+1,k,+HydroDef::PrimIdx::Xvel)-p4(i,j-1,k,+HydroDef::PrimIdx::Xvel)-p4(i-1,j-1,k,+HydroDef::PrimIdx::Xvel))*(0.25*dxinv[1]);
+                dvdy = (p4(i,j+1,k,+HydroDef::PrimIdx::Yvel)+p4(i-1,j+1,k,+HydroDef::PrimIdx::Yvel)-p4(i,j-1,k,+HydroDef::PrimIdx::Yvel)-p4(i-1,j-1,k,+HydroDef::PrimIdx::Yvel))*(0.25*dxinv[1]);
 #endif
 #if AMREX_SPACEDIM == 3
                 dudz = (p4(i,j,k+1,Xvel)+p4(i-1,j,k+1,Xvel)-p4(i,j,k-1,Xvel)-p4(i-1,j,k-1,Xvel))*(0.25*dxinv[2]);
@@ -2252,18 +2282,18 @@ void HydroState::calc_neutral_viscous_fluxes(const Box& box, Array<FArrayBox,
 #endif
                 divu = dudx + dvdy + dwdz;
 
-                muf = 0.5*(d4(i,j,k,iMu)+d4(i-1,j,k,iMu));
+                muf = 0.5*(d4(i,j,k,+HydroViscous::CoeffIdx::Mu)+d4(i-1,j,k,+HydroViscous::CoeffIdx::Mu));
                 tauxx = muf*(2*dudx-two_thirds*divu);
                 tauxy = muf*(dudy+dvdx);
                 tauxz = muf*(dudz+dwdx);
 
-                fluxX(i,j,k,Xmom) -= tauxx;
-                fluxX(i,j,k,Ymom) -= tauxy;
-                fluxX(i,j,k,Zmom) -= tauxz;
-                fluxX(i,j,k,Eden) -= 0.5*((p4(i,j,k,Xvel) +  p4(i-1,j,k,Xvel))*tauxx
-                                          +(p4(i,j,k,Yvel) + p4(i-1,j,k,Yvel))*tauxy
-                                          +(p4(i,j,k,Zvel) + p4(i-1,j,k,Zvel))*tauxz
-                                          +(d4(i,j,k,iKappa)+d4(i-1,j,k,iKappa))*dTdx);
+                fluxX(i,j,k,+HydroDef::ConsIdx::Xmom) -= tauxx;
+                fluxX(i,j,k,+HydroDef::ConsIdx::Ymom) -= tauxy;
+                fluxX(i,j,k,+HydroDef::ConsIdx::Zmom) -= tauxz;
+                fluxX(i,j,k,+HydroDef::ConsIdx::Eden) -= 0.5*((p4(i,j,k,+HydroDef::PrimIdx::Xvel) +  p4(i-1,j,k,+HydroDef::PrimIdx::Xvel))*tauxx
+                                                              +(p4(i,j,k,+HydroDef::PrimIdx::Yvel) + p4(i-1,j,k,+HydroDef::PrimIdx::Yvel))*tauxy
+                                                              +(p4(i,j,k,+HydroDef::PrimIdx::Zvel) + p4(i-1,j,k,+HydroDef::PrimIdx::Zvel))*tauxz
+                                                              +(d4(i,j,k,+HydroViscous::CoeffIdx::Kappa)+d4(i-1,j,k,+HydroViscous::CoeffIdx::Kappa))*dTdx);
 
             }
         }
@@ -2283,29 +2313,29 @@ void HydroState::calc_neutral_viscous_fluxes(const Box& box, Array<FArrayBox,
                     continue;
 #endif
 
-                dTdy = (d4(i,j,k,iTemp)-d4(i,j-1,k,iTemp))*dxinv[1];
-                dudy = (p4(i,j,k,Xvel)-p4(i,j-1,k,Xvel))*dxinv[1];
-                dvdy = (p4(i,j,k,Yvel)-p4(i,j-1,k,Yvel))*dxinv[1];
-                dwdy = (p4(i,j,k,Zvel)-p4(i,j-1,k,Zvel))*dxinv[1];
-                dudx = (p4(i+1,j,k,Xvel)+p4(i+1,j-1,k,Xvel)-p4(i-1,j,k,Xvel)-p4(i-1,j-1,k,Xvel))*(0.25*dxinv[0]);
-                dvdx = (p4(i+1,j,k,Yvel)+p4(i+1,j-1,k,Yvel)-p4(i-1,j,k,Yvel)-p4(i-1,j-1,k,Yvel))*(0.25*dxinv[0]);
+                dTdy = (d4(i,j,k,+HydroViscous::CoeffIdx::Temp)-d4(i,j-1,k,+HydroViscous::CoeffIdx::Temp))*dxinv[1];
+                dudy = (p4(i,j,k,+HydroDef::PrimIdx::Xvel)-p4(i,j-1,k,+HydroDef::PrimIdx::Xvel))*dxinv[1];
+                dvdy = (p4(i,j,k,+HydroDef::PrimIdx::Yvel)-p4(i,j-1,k,+HydroDef::PrimIdx::Yvel))*dxinv[1];
+                dwdy = (p4(i,j,k,+HydroDef::PrimIdx::Zvel)-p4(i,j-1,k,+HydroDef::PrimIdx::Zvel))*dxinv[1];
+                dudx = (p4(i+1,j,k,+HydroDef::PrimIdx::Xvel)+p4(i+1,j-1,k,+HydroDef::PrimIdx::Xvel)-p4(i-1,j,k,+HydroDef::PrimIdx::Xvel)-p4(i-1,j-1,k,+HydroDef::PrimIdx::Xvel))*(0.25*dxinv[0]);
+                dvdx = (p4(i+1,j,k,+HydroDef::PrimIdx::Yvel)+p4(i+1,j-1,k,+HydroDef::PrimIdx::Yvel)-p4(i-1,j,k,+HydroDef::PrimIdx::Yvel)-p4(i-1,j-1,k,+HydroDef::PrimIdx::Yvel))*(0.25*dxinv[0]);
 #if AMREX_SPACEDIM == 3
                 dvdz = (p4(i,j,k+1,Yvel)+p4(i,j-1,k+1,Yvel)-p4(i,j,k-1,Yvel)-p4(i,j-1,k-1,Yvel))*(0.25*dxinv[2]);
                 dwdz = (p4(i,j,k+1,Zvel)+p4(i,j-1,k+1,Zvel)-p4(i,j,k-1,Zvel)-p4(i,j-1,k-1,Zvel))*(0.25*dxinv[2]);
 #endif
                 divu = dudx + dvdy + dwdz;
-                muf = 0.5*(d4(i,j,k,iMu)+d4(i,j-1,k,iMu));
+                muf = 0.5*(d4(i,j,k,+HydroViscous::CoeffIdx::Mu)+d4(i,j-1,k,+HydroViscous::CoeffIdx::Mu));
                 tauyy = muf*(2*dvdy-two_thirds*divu);
                 tauxy = muf*(dudy+dvdx);
                 tauyz = muf*(dwdy+dvdz);
 
-                fluxY(i,j,k,Xmom) -= tauxy;
-                fluxY(i,j,k,Ymom) -= tauyy;
-                fluxY(i,j,k,Zmom) -= tauyz;
-                fluxY(i,j,k,Eden) -= 0.5*((p4(i,j,k,Xvel)+p4(i,j-1,k,Xvel))*tauxy
-                                          +(p4(i,j,k,Yvel)+p4(i,j-1,k,Yvel))*tauyy
-                                          +(p4(i,j,k,Zvel)+p4(i,j-1,k,Zvel))*tauyz
-                                          +(d4(i,j,k,iKappa) + d4(i,j-1,k,iKappa))*dTdy);
+                fluxY(i,j,k,+HydroDef::ConsIdx::Xmom) -= tauxy;
+                fluxY(i,j,k,+HydroDef::ConsIdx::Ymom) -= tauyy;
+                fluxY(i,j,k,+HydroDef::ConsIdx::Zmom) -= tauyz;
+                fluxY(i,j,k,+HydroDef::ConsIdx::Eden) -= 0.5*((p4(i,j,k,+HydroDef::PrimIdx::Xvel)+p4(i,j-1,k,+HydroDef::PrimIdx::Xvel))*tauxy
+                                                              +(p4(i,j,k,+HydroDef::PrimIdx::Yvel)+p4(i,j-1,k,+HydroDef::PrimIdx::Yvel))*tauyy
+                                                              +(p4(i,j,k,+HydroDef::PrimIdx::Zvel)+p4(i,j-1,k,+HydroDef::PrimIdx::Zvel))*tauyz
+                                                              +(d4(i,j,k,+HydroViscous::CoeffIdx::Kappa) + d4(i,j-1,k,+HydroViscous::CoeffIdx::Kappa))*dTdy);
 
             }
         }
@@ -2340,13 +2370,13 @@ void HydroState::calc_neutral_viscous_fluxes(const Box& box, Array<FArrayBox,
                 tauyz = muf*(dvdz+dwdy);
                 tauzz = muf*(2.*dwdz-two_thirds*divu);
 
-                fluxZ(i,j,k,Xmom) -= tauxz;
-                fluxZ(i,j,k,Ymom) -= tauyz;
-                fluxZ(i,j,k,Zmom) -= tauzz;
-                fluxZ(i,j,k,Eden) -= 0.5*((p4(i,j,k,Xvel)+p4(i,j,k-1,Xvel))*tauxz
-                                          +(p4(i,j,k,Yvel)+p4(i,j,k-1,Yvel))*tauyz
-                                          +(p4(i,j,k,Zvel)+p4(i,j,k-1,Zvel))*tauzz
-                                          +(d4(i,j,k,iKappa) +d4(i,j,k-1,iKappa))*dTdz);
+                fluxZ(i,j,k,+HydroDef::ConsIdx::Xmom) -= tauxz;
+                fluxZ(i,j,k,+HydroDef::ConsIdx::Ymom) -= tauyz;
+                fluxZ(i,j,k,+HydroDef::ConsIdx::Zmom) -= tauzz;
+                fluxZ(i,j,k,+HydroDef::ConsIdx::Eden) -= 0.5*((p4(i,j,k,+HydroDef::PrimIdx::Xvel)+p4(i,j,k-1,+HydroDef::PrimIdx::Xvel))*tauxz
+                                                              +(p4(i,j,k,+HydroDef::PrimIdx::Yvel)+p4(i,j,k-1,+HydroDef::PrimIdx::Yvel))*tauyz
+                                                              +(p4(i,j,k,+HydroDef::PrimIdx::Zvel)+p4(i,j,k-1,+HydroDef::PrimIdx::Zvel))*tauzz
+                                                              +(d4(i,j,k,+HydroViscous::CoeffIdx::Kappa) +d4(i,j,k-1,+HydroViscous::CoeffIdx::Kappa))*dTdz);
 
             }
         }
@@ -2359,20 +2389,24 @@ void HydroState::calc_neutral_viscous_fluxes(const Box& box, Array<FArrayBox,
 }
 
 #ifdef AMREX_USE_EB
-void HydroState::calc_neutral_viscous_fluxes_eb(const Box& box, Array<FArrayBox,
-                                                AMREX_SPACEDIM> &fluxes,
-                                                const Box& pbox,
-                                                const FArrayBox &prim,
-                                                EB_OPTIONAL(const EBCellFlagFab& flag,)
-                                                const Real* dx) const
+void HydroState::calc_viscous_fluxes_eb(const Box& box, Array<FArrayBox,
+                                        AMREX_SPACEDIM> &fluxes,
+                                        const Box& pbox,
+                                        const FArrayBox &prim,
+                                        #ifdef AMREX_USE_EB
+                                        const EBCellFlagFab& flag,
+                                        #endif
+                                        const Real* dx) const
 {
     BL_PROFILE("HydroState::calc_neutral_viscous_fluxes_eb");
-    FArrayBox diff(pbox, Viscous::NUM_NEUTRAL_DIFF_COEFFS);
-    calc_neutral_diffusion_terms(pbox,
-                                 prim,
-                                 diff
-                                 EB_OPTIONAL(,flag)
-                                 );
+    FArrayBox diff(pbox, +HydroViscous::CoeffIdx::NUM);
+    calc_diffusion_terms(pbox,
+                         prim,
+                         diff
+                     #ifdef AMREX_USE_EB
+                         ,flag
+                     #endif
+                         );
 
     const Dim3 lo = amrex::lbound(box);
     const Dim3 hi = amrex::ubound(box);
@@ -2395,25 +2429,6 @@ void HydroState::calc_neutral_viscous_fluxes_eb(const Box& box, Array<FArrayBox,
 
     Real tauxx, tauxy, tauxz, dTdx, muf;
 
-    int iTemp = Viscous::NeutralTemp;
-    int iMu = Viscous::NeutralMu;
-    int iKappa = Viscous::NeutralKappa;
-
-    Vector<int> prim_vel_id = get_prim_vector_idx();
-
-    int Xvel = prim_vel_id[0] + 0;
-    int Yvel = prim_vel_id[0] + 1;
-    int Zvel = prim_vel_id[0] + 2;
-
-    Vector<int> cons_vel_id = get_cons_vector_idx();
-
-    int Xmom = cons_vel_id[0] + 0;
-    int Ymom = cons_vel_id[0] + 1;
-    int Zmom = cons_vel_id[0] + 2;
-
-    Vector<int> nrg_id = get_nrg_idx();
-    int Eden = nrg_id[0];
-
 
     // X - direction
     Array4<Real> const& fluxX = fluxes[0].array();
@@ -2430,11 +2445,11 @@ void HydroState::calc_neutral_viscous_fluxes_eb(const Box& box, Array<FArrayBox,
                 if (covered || other_covered || !connected)
                     continue;
 
-                dTdx = (d4(i,j,k,iTemp) - d4(i-1,j,k,iTemp))*dxinv[0];
+                dTdx = (d4(i,j,k,+HydroViscous::CoeffIdx::Temp) - d4(i-1,j,k,+HydroViscous::CoeffIdx::Temp))*dxinv[0];
 
-                dudx = (p4(i,j,k,Xvel) - p4(i-1,j,k,Xvel))*dxinv[0];
-                dvdx = (p4(i,j,k,Yvel) - p4(i-1,j,k,Yvel))*dxinv[0];
-                dwdx = (p4(i,j,k,Zvel) - p4(i-1,j,k,Zvel))*dxinv[0];
+                dudx = (p4(i,j,k,+HydroDef::PrimIdx::Xvel) - p4(i-1,j,k,+HydroDef::PrimIdx::Xvel))*dxinv[0];
+                dvdx = (p4(i,j,k,+HydroDef::PrimIdx::Yvel) - p4(i-1,j,k,+HydroDef::PrimIdx::Yvel))*dxinv[0];
+                dwdx = (p4(i,j,k,+HydroDef::PrimIdx::Zvel) - p4(i-1,j,k,+HydroDef::PrimIdx::Zvel))*dxinv[0];
 
 #if AMREX_SPACEDIM >= 2
 
@@ -2444,8 +2459,8 @@ void HydroState::calc_neutral_viscous_fluxes_eb(const Box& box, Array<FArrayBox,
                 const int jlom = j - (int)f4(i-1,j,k).isConnected(0,-1,0);
                 whi = weights[jhip-jhim];
                 wlo = weights[jlop-jlom];
-                dudy = (0.5*dxinv[1]) * ((p4(i  ,jhip,k,Xvel)-p4(i  ,jhim,k,Xvel))*whi+(p4(i-1,jlop,k,Xvel)-p4(i-1,jlom,k,Xvel))*wlo);
-                dvdy = (0.50*dxinv[1]) * ((p4(i  ,jhip,k,Yvel)-p4(i  ,jhim,k,Yvel))*whi+(p4(i-1,jlop,k,Yvel)-p4(i-1,jlom,k,Yvel))*wlo);
+                dudy = (0.5*dxinv[1]) * ((p4(i  ,jhip,k,+HydroDef::PrimIdx::Xvel)-p4(i  ,jhim,k,+HydroDef::PrimIdx::Xvel))*whi+(p4(i-1,jlop,k,+HydroDef::PrimIdx::Xvel)-p4(i-1,jlom,k,+HydroDef::PrimIdx::Xvel))*wlo);
+                dvdy = (0.50*dxinv[1]) * ((p4(i  ,jhip,k,+HydroDef::PrimIdx::Yvel)-p4(i  ,jhim,k,+HydroDef::PrimIdx::Yvel))*whi+(p4(i-1,jlop,k,+HydroDef::PrimIdx::Yvel)-p4(i-1,jlom,k,+HydroDef::PrimIdx::Yvel))*wlo);
 
 #endif
 #if AMREX_SPACEDIM == 3
@@ -2456,24 +2471,24 @@ void HydroState::calc_neutral_viscous_fluxes_eb(const Box& box, Array<FArrayBox,
                 const int klom = k - (int)f4(i-1,j,k).isConnected(0,0,-1);
                 whi = weights[khip-khim];
                 wlo = weights[klop-klom];
-                dudz = (0.5*dxinv[2]) * ((p4(i  ,j,khip,Xvel)-p4(i  ,j,khim,Xvel))*whi + (p4(i-1,j,klop,Xvel)-p4(i-1,j,klom,Xvel))*wlo);
-                dwdz = (0.5*dxinv[2]) * ((p4(i  ,j,khip,Zvel)-p4(i  ,j,khim,Zvel))*whi + (p4(i-1,j,klop,Zvel)-p4(i-1,j,klom,Zvel))*wlo);
+                dudz = (0.5*dxinv[2]) * ((p4(i  ,j,khip,+HydroDef::PrimIdx::Xvel)-p4(i  ,j,khim,+HydroDef::PrimIdx::Xvel))*whi + (p4(i-1,j,klop,+HydroDef::PrimIdx::Xvel)-p4(i-1,j,klom,+HydroDef::PrimIdx::Xvel))*wlo);
+                dwdz = (0.5*dxinv[2]) * ((p4(i  ,j,khip,+HydroDef::PrimIdx::Zvel)-p4(i  ,j,khim,+HydroDef::PrimIdx::Zvel))*whi + (p4(i-1,j,klop,+HydroDef::PrimIdx::Zvel)-p4(i-1,j,klom,+HydroDef::PrimIdx::Zvel))*wlo);
 
 #endif
                 divu = dudx + dvdy + dwdz;
 
-                muf = 0.5*(d4(i,j,k,iMu)+d4(i-1,j,k,iMu));
+                muf = 0.5*(d4(i,j,k,+HydroViscous::CoeffIdx::Mu)+d4(i-1,j,k,+HydroViscous::CoeffIdx::Mu));
                 tauxx = muf*(2*dudx-two_thirds*divu);
                 tauxy = muf*(dudy+dvdx);
                 tauxz = muf*(dudz+dwdx);
 
-                fluxX(i,j,k,Xmom) -= tauxx;
-                fluxX(i,j,k,Ymom) -= tauxy;
-                fluxX(i,j,k,Zmom) -= tauxz;
-                fluxX(i,j,k,Eden) -= 0.5*((p4(i,j,k,Xvel) +  p4(i-1,j,k,Xvel))*tauxx
-                                          +(p4(i,j,k,Yvel) + p4(i-1,j,k,Yvel))*tauxy
-                                          +(p4(i,j,k,Zvel) + p4(i-1,j,k,Zvel))*tauxz
-                                          +(d4(i,j,k,iKappa)+d4(i-1,j,k,iKappa))*dTdx);
+                fluxX(i,j,k,+HydroDef::ConsIdx::Xmom) -= tauxx;
+                fluxX(i,j,k,+HydroDef::ConsIdx::Ymom) -= tauxy;
+                fluxX(i,j,k,+HydroDef::ConsIdx::Zmom) -= tauxz;
+                fluxX(i,j,k,+HydroDef::ConsIdx::Eden) -= 0.5*((p4(i,j,k,+HydroDef::PrimIdx::Xvel) +  p4(i-1,j,k,+HydroDef::PrimIdx::Xvel))*tauxx
+                                                              +(p4(i,j,k,+HydroDef::PrimIdx::Yvel) + p4(i-1,j,k,+HydroDef::PrimIdx::Yvel))*tauxy
+                                                              +(p4(i,j,k,+HydroDef::PrimIdx::Zvel) + p4(i-1,j,k,+HydroDef::PrimIdx::Zvel))*tauxz
+                                                              +(d4(i,j,k,+HydroViscous::CoeffIdx::Kappa)+d4(i-1,j,k,+HydroViscous::CoeffIdx::Kappa))*dTdx);
             }
         }
     }
@@ -2496,10 +2511,10 @@ void HydroState::calc_neutral_viscous_fluxes_eb(const Box& box, Array<FArrayBox,
                 if (covered || other_covered || !connected)
                     continue;
 
-                dTdy = (d4(i,j,k,iTemp)-d4(i,j-1,k,iTemp))*dxinv[1];
-                dudy = (p4(i,j,k,Xvel)-p4(i,j-1,k,Xvel))*dxinv[1];
-                dvdy = (p4(i,j,k,Yvel)-p4(i,j-1,k,Yvel))*dxinv[1];
-                dwdy = (p4(i,j,k,Zvel)-p4(i,j-1,k,Zvel))*dxinv[1];
+                dTdy = (d4(i,j,k,+HydroViscous::CoeffIdx::Temp)-d4(i,j-1,k,+HydroViscous::CoeffIdx::Temp))*dxinv[1];
+                dudy = (p4(i,j,k,+HydroDef::PrimIdx::Xvel)-p4(i,j-1,k,+HydroDef::PrimIdx::Xvel))*dxinv[1];
+                dvdy = (p4(i,j,k,+HydroDef::PrimIdx::Yvel)-p4(i,j-1,k,+HydroDef::PrimIdx::Yvel))*dxinv[1];
+                dwdy = (p4(i,j,k,+HydroDef::PrimIdx::Zvel)-p4(i,j-1,k,+HydroDef::PrimIdx::Zvel))*dxinv[1];
 
                 const int ihip = i + (int)f4(i,j,  k).isConnected( 1,0,0);
                 const int ihim = i - (int)f4(i,j,  k).isConnected(-1,0,0);
@@ -2508,8 +2523,8 @@ void HydroState::calc_neutral_viscous_fluxes_eb(const Box& box, Array<FArrayBox,
                 whi = weights[ihip-ihim];
                 wlo = weights[ilop-ilom];
 
-                dudx = (0.5*dxinv[0]) * ((p4(ihip,j  ,k,Xvel)-p4(ihim,j  ,k,Xvel))*whi + (p4(ilop,j-1,k,Xvel)-p4(ilom,j-1,k,Xvel))*wlo);
-                dvdx = (0.5*dxinv[0]) * ((p4(ihip,j  ,k,Yvel)-p4(ihim,j  ,k,Yvel))*whi + (p4(ilop,j-1,k,Yvel)-p4(ilom,j-1,k,Yvel))*wlo);
+                dudx = (0.5*dxinv[0]) * ((p4(ihip,j  ,k,+HydroDef::PrimIdx::Xvel)-p4(ihim,j  ,k,+HydroDef::PrimIdx::Xvel))*whi + (p4(ilop,j-1,k,+HydroDef::PrimIdx::Xvel)-p4(ilom,j-1,k,+HydroDef::PrimIdx::Xvel))*wlo);
+                dvdx = (0.5*dxinv[0]) * ((p4(ihip,j  ,k,+HydroDef::PrimIdx::Yvel)-p4(ihim,j  ,k,+HydroDef::PrimIdx::Yvel))*whi + (p4(ilop,j-1,k,+HydroDef::PrimIdx::Yvel)-p4(ilom,j-1,k,+HydroDef::PrimIdx::Yvel))*wlo);
 
 #if AMREX_SPACEDIM == 3
 
@@ -2520,23 +2535,23 @@ void HydroState::calc_neutral_viscous_fluxes_eb(const Box& box, Array<FArrayBox,
                 whi = weights[khip-khim];
                 wlo = weights[klop-klom];
 
-                dvdz = (0.5*dxinv[2]) * ((p4(i,j  ,khip,Yvel)-p4(i,j  ,khim,Yvel))*whi + (p4(i,j-1,klop,Yvel)-p4(i,j-1,klom,Yvel))*wlo);
-                dwdz = (0.5*dxinv[2]) * ((p4(i,j  ,khip,Zvel)-p4(i,j  ,khim,Zvel))*whi + (p4(i,j-1,klop,Zvel)-p4(i,j-1,klom,Zvel))*wlo);
+                dvdz = (0.5*dxinv[2]) * ((p4(i,j  ,khip,+HydroDef::PrimIdx::Yvel)-p4(i,j  ,khim,+HydroDef::PrimIdx::Yvel))*whi + (p4(i,j-1,klop,+HydroDef::PrimIdx::Yvel)-p4(i,j-1,klom,+HydroDef::PrimIdx::Yvel))*wlo);
+                dwdz = (0.5*dxinv[2]) * ((p4(i,j  ,khip,+HydroDef::PrimIdx::Zvel)-p4(i,j  ,khim,+HydroDef::PrimIdx::Zvel))*whi + (p4(i,j-1,klop,+HydroDef::PrimIdx::Zvel)-p4(i,j-1,klom,+HydroDef::PrimIdx::Zvel))*wlo);
 
 #endif
                 divu = dudx + dvdy + dwdz;
-                muf = 0.5*(d4(i,j,k,iMu)+d4(i,j-1,k,iMu));
+                muf = 0.5*(d4(i,j,k,+HydroViscous::CoeffIdx::Mu)+d4(i,j-1,k,+HydroViscous::CoeffIdx::Mu));
                 tauyy = muf*(2*dvdy-two_thirds*divu);
                 tauxy = muf*(dudy+dvdx);
                 tauyz = muf*(dwdy+dvdz);
 
-                fluxY(i,j,k,Xmom) -= tauxy;
-                fluxY(i,j,k,Ymom) -= tauyy;
-                fluxY(i,j,k,Zmom) -= tauyz;
-                fluxY(i,j,k,Eden) -= 0.5*((p4(i,j,k,Xvel)+p4(i,j-1,k,Xvel))*tauxy
-                                          +(p4(i,j,k,Yvel)+p4(i,j-1,k,Yvel))*tauyy
-                                          +(p4(i,j,k,Zvel)+p4(i,j-1,k,Zvel))*tauyz
-                                          +(d4(i,j,k,iKappa) + d4(i,j-1,k,iKappa))*dTdy);
+                fluxY(i,j,k,+HydroDef::ConsIdx::Xmom) -= tauxy;
+                fluxY(i,j,k,+HydroDef::ConsIdx::Ymom) -= tauyy;
+                fluxY(i,j,k,+HydroDef::ConsIdx::Zmom) -= tauyz;
+                fluxY(i,j,k,+HydroDef::ConsIdx::Eden) -= 0.5*((p4(i,j,k,+HydroDef::PrimIdx::Xvel)+p4(i,j-1,k,+HydroDef::PrimIdx::Xvel))*tauxy
+                                                              +(p4(i,j,k,+HydroDef::PrimIdx::Yvel)+p4(i,j-1,k,+HydroDef::PrimIdx::Yvel))*tauyy
+                                                              +(p4(i,j,k,+HydroDef::PrimIdx::Zvel)+p4(i,j-1,k,+HydroDef::PrimIdx::Zvel))*tauyz
+                                                              +(d4(i,j,k,+HydroViscous::CoeffIdx::Kappa) + d4(i,j-1,k,+HydroViscous::CoeffIdx::Kappa))*dTdy);
 
             }
         }
@@ -2560,10 +2575,10 @@ void HydroState::calc_neutral_viscous_fluxes_eb(const Box& box, Array<FArrayBox,
                 if (covered || other_covered || !connected)
                     continue;
 
-                dTdz = (d4(i,j,k,iTemp)-d4(i,j,k-1,iTemp))*dxinv[2];
-                dudz = (p4(i,j,k,Xvel)-p4(i,j,k-1,Xvel))*dxinv[2];
-                dvdz = (p4(i,j,k,Yvel)-p4(i,j,k-1,Yvel))*dxinv[2];
-                dwdz = (p4(i,j,k,Zvel)-p4(i,j,k-1,Zvel))*dxinv[2];
+                dTdz = (d4(i,j,k,+HydroViscous::CoeffIdx::Temp)-d4(i,j,k-1,+HydroViscous::CoeffIdx::Temp))*dxinv[2];
+                dudz = (p4(i,j,k,+HydroDef::PrimIdx::Xvel)-p4(i,j,k-1,+HydroDef::PrimIdx::Xvel))*dxinv[2];
+                dvdz = (p4(i,j,k,+HydroDef::PrimIdx::Yvel)-p4(i,j,k-1,+HydroDef::PrimIdx::Yvel))*dxinv[2];
+                dwdz = (p4(i,j,k,+HydroDef::PrimIdx::Zvel)-p4(i,j,k-1,+HydroDef::PrimIdx::Zvel))*dxinv[2];
 
                 const int ihip = i + (int)f4(i,j,k  ).isConnected( 1,0,0);
                 const int ihim = i - (int)f4(i,j,k  ).isConnected(-1,0,0);
@@ -2572,8 +2587,8 @@ void HydroState::calc_neutral_viscous_fluxes_eb(const Box& box, Array<FArrayBox,
                 whi = weights[ihip-ihim];
                 wlo = weights[ilop-ilom];
 
-                dudx = (0.5*dxinv[0]) * ((p4(ihip,j,k  ,Xvel)-p4(ihim,j,k  ,Xvel))*whi + (p4(ilop,j,k-1,Xvel)-p4(ilom,j,k-1,Xvel))*wlo);
-                dwdx = (0.5*dxinv[0]) * ((p4(ihip,j,k  ,Zvel)-p4(ihim,j,k  ,Zvel))*whi + (p4(ilop,j,k-1,Zvel)-p4(ilom,j,k-1,Zvel))*wlo);
+                dudx = (0.5*dxinv[0]) * ((p4(ihip,j,k  ,+HydroDef::PrimIdx::Xvel)-p4(ihim,j,k  ,+HydroDef::PrimIdx::Xvel))*whi + (p4(ilop,j,k-1,+HydroDef::PrimIdx::Xvel)-p4(ilom,j,k-1,+HydroDef::PrimIdx::Xvel))*wlo);
+                dwdx = (0.5*dxinv[0]) * ((p4(ihip,j,k  ,+HydroDef::PrimIdx::Zvel)-p4(ihim,j,k  ,+HydroDef::PrimIdx::Zvel))*whi + (p4(ilop,j,k-1,+HydroDef::PrimIdx::Zvel)-p4(ilom,j,k-1,+HydroDef::PrimIdx::Zvel))*wlo);
 
                 const int jhip = j + (int)f4(i,j,k  ).isConnected(0 ,1,0);
                 const int jhim = j - (int)f4(i,j,k  ).isConnected(0,-1,0);
@@ -2582,22 +2597,22 @@ void HydroState::calc_neutral_viscous_fluxes_eb(const Box& box, Array<FArrayBox,
                 whi = weights[jhip-jhim];
                 wlo = weights[jlop-jlom];
 
-                dvdy = (0.5*dxinv[1]) * ((p4(i,jhip,k  ,Yvel)-p4(i,jhim,k  ,Yvel))*whi + (p4(i,jlop,k-1,Yvel)-p4(i,jlom,k-1,Yvel))*wlo);
-                dwdy = (0.5*dxinv[1]) * ((p4(i,jhip,k  ,Zvel)-p4(i,jhim,k  ,Zvel))*whi + (p4(i,jlop,k-1,Zvel)-p4(i,jlom,k-1,Zvel))*wlo);
+                dvdy = (0.5*dxinv[1]) * ((p4(i,jhip,k  ,+HydroDef::PrimIdx::Yvel)-p4(i,jhim,k  ,+HydroDef::PrimIdx::Yvel))*whi + (p4(i,jlop,k-1,+HydroDef::PrimIdx::Yvel)-p4(i,jlom,k-1,+HydroDef::PrimIdx::Yvel))*wlo);
+                dwdy = (0.5*dxinv[1]) * ((p4(i,jhip,k  ,+HydroDef::PrimIdx::Zvel)-p4(i,jhim,k  ,+HydroDef::PrimIdx::Zvel))*whi + (p4(i,jlop,k-1,+HydroDef::PrimIdx::Zvel)-p4(i,jlom,k-1,+HydroDef::PrimIdx::Zvel))*wlo);
 
                 divu = dudx + dvdy + dwdz;
-                muf = 0.5*(d4(i,j,k,iMu)+d4(i,j,k-1,iMu));
+                muf = 0.5*(d4(i,j,k,+HydroViscous::CoeffIdx::Mu)+d4(i,j,k-1,+HydroViscous::CoeffIdx::Mu));
                 tauxz = muf*(dudz+dwdx);
                 tauyz = muf*(dvdz+dwdy);
                 tauzz = muf*(2.*dwdz-two_thirds*divu);
 
-                fluxZ(i,j,k,Xmom) -= tauxz;
-                fluxZ(i,j,k,Ymom) -= tauyz;
-                fluxZ(i,j,k,Zmom) -= tauzz;
-                fluxZ(i,j,k,Eden) -= 0.5*((p4(i,j,k,Xvel)+p4(i,j,k-1,Xvel))*tauxz
-                                          +(p4(i,j,k,Yvel)+p4(i,j,k-1,Yvel))*tauyz
-                                          +(p4(i,j,k,Zvel)+p4(i,j,k-1,Zvel))*tauzz
-                                          +(d4(i,j,k,iKappa) +d4(i,j,k-1,iKappa))*dTdz);
+                fluxZ(i,j,k,+HydroDef::ConsIdx::Xmom) -= tauxz;
+                fluxZ(i,j,k,+HydroDef::ConsIdx::Ymom) -= tauyz;
+                fluxZ(i,j,k,+HydroDef::ConsIdx::Zmom) -= tauzz;
+                fluxZ(i,j,k,+HydroDef::ConsIdx::Eden) -= 0.5*((p4(i,j,k,+HydroDef::PrimIdx::Xvel)+p4(i,j,k-1,+HydroDef::PrimIdx::Xvel))*tauxz
+                                                              +(p4(i,j,k,+HydroDef::PrimIdx::Yvel)+p4(i,j,k-1,+HydroDef::PrimIdx::Yvel))*tauyz
+                                                              +(p4(i,j,k,+HydroDef::PrimIdx::Zvel)+p4(i,j,k-1,+HydroDef::PrimIdx::Zvel))*tauzz
+                                                              +(d4(i,j,k,+HydroViscous::CoeffIdx::Kappa) +d4(i,j,k-1,+HydroViscous::CoeffIdx::Kappa))*dTdz);
 
             }
         }
@@ -2607,31 +2622,91 @@ void HydroState::calc_neutral_viscous_fluxes_eb(const Box& box, Array<FArrayBox,
 
 }
 
+
+void HydroState::calc_wall_fluxes(const Box& box,
+                                  const FArrayBox &prim,
+                                  Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
+                                  const EBCellFlagFab& flag,
+                                  const CutFab &bc_idx,
+                                  const FArrayBox& bcent,
+                                  const FArrayBox &bnorm,
+                                  const Array<const FArrayBox*, AMREX_SPACEDIM> &afrac,
+                                  const Real *dx,
+                                  const Real dt) const
+{
+    BL_PROFILE("HydroState::calc_wall_fluxes");
+
+    const Dim3 lo = amrex::lbound(box);
+    const Dim3 hi = amrex::ubound(box);
+
+    Array4<const Real> const& p4 = prim.array();
+    Array4<const Real> const& bcent4 = bcent.array();
+    Array4<const Real> const& bnorm4 = bnorm.array();
+
+    Array<Array4<Real>,AMREX_SPACEDIM> flux4;
+    Array<Array4<const Real>,AMREX_SPACEDIM> afrac4;
+
+    Array<Array<Real,+HydroDef::ConsIdx::NUM>,AMREX_SPACEDIM> wall_flux;
+
+    Array4<const EBCellFlag> const& flag4 = flag.array();
+    for (int d=0; d<AMREX_SPACEDIM; ++d) {
+        flux4[d] = fluxes[d].array();
+        afrac4[d] = afrac[d]->array();
+
+        // zero out the flux accumulator
+        fluxes[d].setVal(0.0);
+    }
+
+    const Array4<const Real>& bc_idx4 = bc_idx.array();
+
+    Array<Real,+HydroDef::FluxIdx::NUM> cell_state;
+
+    Array<Array<Real,3>,3> wall_coord = {{{0,0,0},{0,0,0},{0,0,0}}};
+    Array<Real,AMREX_SPACEDIM> wall_centre;
+
+    for (int k = lo.z-AMREX_D_PICK(0,0,2); k <= hi.z+AMREX_D_PICK(0,0,2); ++k) {
+        for (int j = lo.y-AMREX_D_PICK(0,2,2); j <= hi.y+AMREX_D_PICK(0,2,2); ++j) {
+            AMREX_PRAGMA_SIMD
+                    for (int i = lo.x-2; i <= hi.x+2; ++i) {
+
+                const EBCellFlag &cflag = flag4(i,j,k);
+
+                if (cflag.isSingleValued()) {
+
+
+                    // grab a vector of the local state
+                    load_state_for_flux(p4, i, j, k, cell_state);
+
+                    for (int d=0; d<AMREX_SPACEDIM; ++d) {
+
+                        // get the wall normal
+                        wall_coord[0][d] = bnorm4(i,j,k,d);
+
+                        // get the centre of the wall
+                        wall_centre[d] = bcent4(i,j,k,d);
+                    }
+
+                    // get a local coordinate system with x- aligned with the wall normal
+                    expand_coord(wall_coord);
+
+                    // the boundary condition
+                    const int ebi = (int)nearbyint(bc_idx4(i,j,k));
+                    const HydroBoundaryEB& bc = *eb_bcs[ebi];
+
+                    // calculate the wall flux
+                    bc.solve(wall_coord, wall_centre, cell_state, p4, i, j, k, dx, wall_flux);
+
+                    // load the flux into the fab
+                    for (int d=0; d<AMREX_SPACEDIM; ++d) {
+                        for (int n=0; n<+HydroDef::ConsIdx::NUM; ++n) {
+                            flux4[d](i,j,k,n) += wall_flux[d][n];
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return;
+}
+
 #endif
-
-// ====================================================================================
-void HydroState::calc_ion_diffusion_terms(const Box& box,const Vector<FArrayBox>& prim,
-                                          State& EMstate,Array4<const Real> const& prim_EM4,
-                                          State& ELEstate,Array4<const Real> const& prim_ELE4,
-                                          FArrayBox& diff
-                                          #ifdef AMREX_USE_EB
-                                          ,const EBCellFlagFab& flag
-                                          #endif
-                                          ) const {
-
-    BL_PROFILE("HydroState::calc_ion_diffusion_terms");
-    return;
-}
-
-void HydroState::calc_ion_viscous_fluxes(const Box& box,
-                                         Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
-                                         const Box& pbox, const Vector<FArrayBox>& prim,
-                                         #ifdef AMREX_USE_EB
-                                         const EBCellFlagFab& flag,
-                                         #endif
-                                         const Real* dx) const {
-
-    BL_PROFILE("HydroState::calc_ion_viscous_fluxes");
-    return;
-}
-

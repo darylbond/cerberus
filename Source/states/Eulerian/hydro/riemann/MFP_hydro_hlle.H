@@ -15,9 +15,6 @@ public:
                        Array<Real,+HydroDef::ConsIdx::NUM> &F,
                        Real* shk) const override;
 
-    virtual int get_flux_size() const override {return +HydroDef::ConsIdx::NUM;}
-
-    static bool valid_state(const int idx);
     virtual std::string get_tag() const override {return tag;}
     static std::string tag;
     static bool registered;

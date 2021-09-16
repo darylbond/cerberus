@@ -2,6 +2,8 @@
 #define FLUIDSTATE_H
 #include "forward.hpp"
 
+class HydroState;
+
 #include "MFP_eulerian.H"
 #include "MFP_bc.H"
 #include "MFP.H"
@@ -9,17 +11,19 @@
 #include "MFP_reconstruction.H"
 #include "MFP_hydro_riemann.H"
 #include "MFP_hydro_viscous.H"
+#include "MFP_hydro_bc.H"
+#include "MFP_hydro_shockdetector.H"
 
 
 class HydroState : public EulerianState
 {
 public:
     HydroState();
-    HydroState(Reconstruction R, HydroRiemannSolver F, HydroViscous V)
-        : reconstructor(R), flux_solver(F), viscous(V) {}
+    HydroState(const sol::table& def);
     ~HydroState();
 
-    static HydroState Build(const sol::table& def);
+    static bool registered;
+    static std::string tag;
 
     static Vector<std::string> cons_names;
     static Vector<std::string> prim_names;
@@ -32,12 +36,14 @@ public:
     bool mass_const, charge_const, gamma_const;
     Array<Real,2> mass, charge, gamma;
 
-    const Reconstruction reconstructor;
-    const HydroRiemannSolver flux_solver;
-    const HydroViscous viscous;
+    std::unique_ptr<HydroRiemannSolver> flux_solver;
+    std::unique_ptr<HydroShockDetector> shock_detector;
+    std::unique_ptr<HydroViscous> viscous;
 
-
-    virtual bool is_viscous() const override {return viscous.get_type() > -1;}
+#ifdef AMREX_USE_EB
+    Vector<std::unique_ptr<HydroBoundaryEB>> eb_bcs;
+    virtual void set_eb_bc(const sol::table &bc_def) override;
+#endif
 
     virtual int get_num_grow() override {return num_grow;}
     virtual void set_num_grow(int n) override {num_grow = std::max(n, num_grow);}
@@ -55,43 +61,16 @@ public:
                              #endif
                                  ) const override;
 
-    int viscous;
     void set_viscosity();
 
     Real init_from_number_density(std::map<std::string, Real> data);
     void set_udf();
 
     void set_flux();
+    void set_shock_detector();
 
     virtual void variable_setup(Vector<int> periodic) override;
     virtual void init_data(MFP* mfp) override;
-
-#ifdef AMREX_USE_EB
-    virtual void set_eb_bc(const sol::table &bc_def) override;
-
-    // Slip Wall EB
-    void slip_wall_eb();
-
-    // No-Slip Wall EB
-    struct NoSlipWallData {
-        Array<Real,3> wall_velocity;
-        Real wall_temp;
-    };
-
-    Vector<NoSlipWallData> no_slip_wall_eb_data;
-    void no_slip_wall_eb(int idx);
-
-    // Defined Wall EB
-    Vector<Array<Real, +HydroDef::PrimIdx::NUM>> defined_wall_eb_data;
-    void defined_wall_eb(int idx);
-
-
-    // Wall EB
-    void wall_eb(int eb_idx);
-
-
-
-#endif
     virtual void init_from_lua() override;
 
     Real get_density_from_cons(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const;
@@ -174,13 +153,14 @@ public:
                               #ifdef AMREX_USE_EB
                                   const EBCellFlagFab& flag,
                               #endif
-                                  const Real time, const bool do_all) const override;
+                                  const Real time, const bool do_all = false) const override;
 
 
-    void load_state_for_flux(Array4<const Real> &face,
-                             int i, int j, int k, Vector<Real> &S) const;
+    void load_state_for_flux(const Array4<const Real> &face,
+                             int i, int j, int k, Array<Real, +HydroDef::FluxIdx::NUM> &S) const;
 
     virtual void calc_fluxes(const Box& box,
+                             FArrayBox &cons,
                              Array<FArrayBox, AMREX_SPACEDIM> &r_lo,
                              Array<FArrayBox, AMREX_SPACEDIM> &r_hi,
                              Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
@@ -199,6 +179,44 @@ public:
                                #endif
                                    const Real *dx,
                                    const Real dt) const override;
+
+    void calc_diffusion_terms(const Box& box,
+                              const FArrayBox& prim,
+                              FArrayBox& diff
+                          #ifdef AMREX_USE_EB
+                              ,const EBCellFlagFab& flag
+                          #endif
+                              ) const;
+
+    void calc_viscous_fluxes(const Box& box, Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
+                             const Box& pbox,
+                             const FArrayBox &prim,
+                         #ifdef AMREX_USE_EB
+                             const EBCellFlagFab& flag,
+                         #endif
+                             const Real* dx) const;
+
+#ifdef AMREX_USE_EB
+
+    void calc_viscous_fluxes_eb(const Box& box, Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
+                                const Box& pbox,
+                                const FArrayBox &prim,
+                            #ifdef AMREX_USE_EB
+                                const EBCellFlagFab& flag,
+                            #endif
+                                const Real* dx) const;
+
+    void calc_wall_fluxes(const Box& box,
+                          const FArrayBox &prim,
+                          Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
+                          const EBCellFlagFab& flag,
+                          const CutFab &bc_idx,
+                          const FArrayBox& bcent,
+                          const FArrayBox &bnorm,
+                          const Array<const FArrayBox*, AMREX_SPACEDIM> &afrac,
+                          const Real *dx,
+                          const Real dt) const;
+#endif
 
     static HydroState& get_state(const int idx) {return static_cast<HydroState&>(MFP::get_state(idx));}
 

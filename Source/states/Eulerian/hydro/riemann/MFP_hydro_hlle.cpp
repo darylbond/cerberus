@@ -14,7 +14,7 @@ HydroHLLE::HydroHLLE(const int i)
     idx = i;
 }
 
-virtual void HydroHLLE::solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
+void HydroHLLE::solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
                                 Array<Real,+HydroDef::FluxIdx::NUM> &R,
                                 Array<Real,+HydroDef::ConsIdx::NUM> &F,
                                 Real* shk) const
@@ -102,13 +102,4 @@ virtual void HydroHLLE::solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
         F[+HydroDef::ConsIdx::Eden]   = uR*(nrgR + pR);
         F[+HydroDef::ConsIdx::Tracer] = tR*uR;
     }
-}
-
-bool HydroHLLE::valid_state(const int idx)
-{
-
-    if (MFP::get_state(idx).get_type() != State::StateType::Hydro) {
-        return false;
-    }
-    return true;
 }

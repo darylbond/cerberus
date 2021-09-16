@@ -14,9 +14,9 @@ public:
   Reconstruction();
   virtual ~Reconstruction();
 
-  virtual Real get_slope(Vector<Real>& stencil);
-  virtual void get_face_values(Vector<Real>& stencil, Real& lo, Real& hi);
-  virtual int get_num_grow() {return 0;}
+  virtual Real get_slope(Vector<Real>& stencil) const;
+  virtual void get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) const;
+  virtual int get_num_grow() const {return 0;}
 
   virtual std::string get_tag() const {return "";}
 
@@ -43,7 +43,7 @@ class NullReconstruction : public Reconstruction
 public:
   NullReconstruction();
   virtual std::string get_tag() const override {return tag;}
-  virtual int get_num_grow() override {return num_grow;}
+  virtual int get_num_grow() const override {return num_grow;}
   static std::string tag;
   static bool registered;
 };
@@ -54,8 +54,8 @@ class ConstantReconstruction : public Reconstruction
 {
 public:
   ConstantReconstruction();
-  virtual void get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) override;
-  virtual int get_num_grow() override {return num_grow;}
+  virtual void get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) const override;
+  virtual int get_num_grow() const override {return num_grow;}
 
   virtual std::string get_tag() const override {return tag;}
   static std::string tag;
@@ -68,9 +68,9 @@ class MinModReconstruction : public Reconstruction
 {
 public:
   MinModReconstruction();
-  virtual Real get_slope(Vector<Real>& stencil) override;
-  virtual void get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) override;
-  virtual int get_num_grow() override {return num_grow;}
+  virtual Real get_slope(Vector<Real>& stencil) const override;
+  virtual void get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) const override;
+  virtual int get_num_grow() const override {return num_grow;}
 
   virtual std::string get_tag() const override {return tag;}
   static std::string tag;
@@ -83,9 +83,9 @@ class VanLeerReconstruction : public Reconstruction
 {
 public:
   VanLeerReconstruction();
-  virtual Real get_slope(Vector<Real>& stencil) override;
-  virtual void get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) override;
-  virtual int get_num_grow() override {return num_grow;}
+  virtual Real get_slope(Vector<Real>& stencil) const override;
+  virtual void get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) const override;
+  virtual int get_num_grow() const override {return num_grow;}
 
   virtual std::string get_tag() const override {return tag;}
   static std::string tag;
@@ -98,9 +98,9 @@ class MCReconstruction : public Reconstruction
 {
 public:
   MCReconstruction();
-  virtual Real get_slope(Vector<Real>& stencil) override;
-  virtual void get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) override;
-  virtual int get_num_grow() override {return num_grow;}
+  virtual Real get_slope(Vector<Real>& stencil) const override;
+  virtual void get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) const override;
+  virtual int get_num_grow() const override {return num_grow;}
 
   virtual std::string get_tag() const override {return tag;}
   static std::string tag;
@@ -113,9 +113,9 @@ class CentredReconstruction : public Reconstruction
 {
 public:
   CentredReconstruction();
-  virtual Real get_slope(Vector<Real>& stencil) override;
-  virtual void get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) override;
-  virtual int get_num_grow() override {return num_grow;}
+  virtual Real get_slope(Vector<Real>& stencil) const override;
+  virtual void get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) const override;
+  virtual int get_num_grow() const override {return num_grow;}
 
   virtual std::string get_tag() const override {return tag;}
   static std::string tag;
@@ -128,9 +128,9 @@ class SixthOrderReconstruction : public Reconstruction
 {
 public:
   SixthOrderReconstruction();
-  virtual Real get_slope(Vector<Real>& stencil) override;
-  virtual void get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) override;
-  virtual int get_num_grow() override {return num_grow;}
+  virtual Real get_slope(Vector<Real>& stencil) const override;
+  virtual void get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) const override;
+  virtual int get_num_grow() const override {return num_grow;}
 
   virtual std::string get_tag() const override {return tag;}
   static std::string tag;
@@ -143,10 +143,10 @@ class WENOReconstruction : public Reconstruction
 {
 public:
   WENOReconstruction();
-  Real WENOSYMBO(Vector<Real>& stencil, int upwind);
-  virtual Real get_slope(Vector<Real>& stencil) override;
-  virtual void get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) override;
-  virtual int get_num_grow() override {return num_grow;}
+  Real WENOSYMBO(Vector<Real>& stencil, int upwind) const;
+  virtual Real get_slope(Vector<Real>& stencil) const override;
+  virtual void get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) const override;
+  virtual int get_num_grow() const override {return num_grow;}
 
   virtual std::string get_tag() const override {return tag;}
   static std::string tag;

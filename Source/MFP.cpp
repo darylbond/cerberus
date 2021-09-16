@@ -502,6 +502,7 @@ void MFP::advance_one_step(Real time, Real dt, int iteration, int ncycle, bool C
             EulerianState &istate = EulerianState::get_state(idx);
 
             istate.calc_fluxes(box,
+                               *conserved[idx],
                                R_lo[idx],
                                R_hi[idx],
                                fluxes[idx],
@@ -544,7 +545,7 @@ void MFP::advance_one_step(Real time, Real dt, int iteration, int ncycle, bool C
 
         //---
 #if AMREX_SPACEDIM > 1
-        if (do_CTU) {
+        if (CTU) {
             for (int idx=0; idx<n_eulerian; ++idx) {
 
 
@@ -555,6 +556,7 @@ void MFP::advance_one_step(Real time, Real dt, int iteration, int ncycle, bool C
 
                 // recalculate the fluxes
                 istate.calc_fluxes(box,
+                                   *conserved[idx],
                                    R_lo[idx],
                                    R_hi[idx],
                                    fluxes[idx],
@@ -578,7 +580,6 @@ void MFP::advance_one_step(Real time, Real dt, int iteration, int ncycle, bool C
             // now calculate any viscous fluxes
 
             const Box pbox = amrex::grow(box, istate.num_grow + num_grow_eb);
-            FArrayBox& prim = primitives[idx];
 
             istate.calc_viscous_fluxes(grow(box,num_grow_eb),
                                        fluxes[idx],
@@ -588,10 +589,6 @@ void MFP::advance_one_step(Real time, Real dt, int iteration, int ncycle, bool C
                            #endif
                                        dx);
 
-            // shock tracking
-            if (gd.Shock_Idx > 0 && istate.shock_idx > -1) {
-                (*mf_shock)[mfi].copy(shock[idx], 0, istate.shock_idx);
-            }
 
             // given all of the fluxes calculate the update to the cell centred values
             const int as_crse = (fr_as_crse[idx] != nullptr);
@@ -608,18 +605,18 @@ void MFP::advance_one_step(Real time, Real dt, int iteration, int ncycle, bool C
 
             if (active[idx] != FabType::regular) {
 
-                const FArrayBox &bcent = (*getEBData(idx).bndrycent)[mfi];
-                const FArrayBox &bnorm = (*getEBData(idx).bndrynorm)[mfi];
+                const FArrayBox &bcent = (*istate.eb_data.bndrycent)[mfi];
+                const FArrayBox &bnorm = (*istate.eb_data.bndrynorm)[mfi];
 
-                CutFab& bc_idx = getEBData(idx).bndryidx[mfi];
+                CutFab& bc_idx = istate.eb_data.bndryidx[mfi];
 
-                afrac = {AMREX_D_DECL(&(*getEBData(idx).areafrac[0])[mfi], &(*getEBData(idx).areafrac[1])[mfi], &(*m_getEBData(idx).areafrac[2])[mfi])};
+                afrac = {AMREX_D_DECL(&(*istate.eb_data.areafrac[0])[mfi], &(*istate.eb_data.areafrac[1])[mfi], &(*istate.eb_data.areafrac[2])[mfi])};
 
 
                 // calculate the flux through cut cell faces
 
                 istate.calc_wall_fluxes(box,
-                                        primitives,
+                                        primitives[idx],
                                         wall_fluxes[idx],
                                         *fab_flags[idx],
                                         bc_idx,
@@ -645,35 +642,35 @@ void MFP::advance_one_step(Real time, Real dt, int iteration, int ncycle, bool C
                 IArrayBox fab_rrflag_as_crse(Box::TheUnitBox());
                 const IArrayBox* p_rrflag_as_crse = (fr_as_crse[idx]) ? fr_as_crse[idx]->getCrseFlag(mfi) : &fab_rrflag_as_crse;
 
-                fcent = {AMREX_D_DECL(&(*getEBData(idx).facecent[0])[mfi], &(*getEBData(idx).facecent[1])[mfi], &(*m_getEBData(idx).facecent[2])[mfi])};
+                fcent = {AMREX_D_DECL(&(*istate.eb_data.facecent[0])[mfi], &(*istate.eb_data.facecent[1])[mfi], &(*m_istate.eb_data.facecent[2])[mfi])};
 
-                istate.eb_div->calc_eb_divergence(box,
-                                                  *conserved[idx],
-                                                  fluxes[idx],
-                                                  wall_fluxes[idx],
-                                                  dU,
-                                                  *fab_flags[idx],
-                                                  *fab_vfrac[idx],
-                                                  afrac,
-                                                  fcent,
-                                                  as_crse,
-                                                  as_fine,
-                                                  p_rrflag_as_crse,
-                                                  level_mask[mfi],
-                                                  p_drho_as_crse,
-                                                  dm_as_fine,
-                                                  dx,
-                                                  dt);
+                istate.calc_eb_divergence(box,
+                                          *conserved[idx],
+                                          fluxes[idx],
+                                          wall_fluxes[idx],
+                                          dU,
+                                          *fab_flags[idx],
+                                          *fab_vfrac[idx],
+                                          afrac,
+                                          fcent,
+                                          as_crse,
+                                          as_fine,
+                                          p_rrflag_as_crse,
+                                          level_mask[mfi],
+                                          p_drho_as_crse,
+                                          dm_as_fine,
+                                          dx,
+                                          dt);
 
-                istate.eb_div->merge_cells(box,
-                                           *conserved[idx],
-                                           dU,
-                                           *fab_flags[idx],
-                                           *fab_vfrac[idx],
-                                           afrac,
-                                           as_fine,
-                                           dm_as_fine,
-                                           level_mask[mfi]);
+                istate.merge_cells(box,
+                                   *conserved[idx],
+                                   dU,
+                                   *fab_flags[idx],
+                                   *fab_vfrac[idx],
+                                   afrac,
+                                   as_fine,
+                                   dm_as_fine,
+                                   level_mask[mfi]);
 
 
                 if (as_crse) {

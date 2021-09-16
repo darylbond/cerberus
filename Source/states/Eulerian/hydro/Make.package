@@ -1,8 +1,8 @@
 CEXE_headers += MFP_hydro_defs.H
 CEXE_headers += MFP_hydro.H
 CEXE_sources += MFP_hydro.cpp
-CEXE_sources += MFP_hydro_bc.cpp
 
+include $(TOP)/Source/states/Eulerian/hydro/bc/Make.package
 include $(TOP)/Source/states/Eulerian/hydro/riemann/Make.package
 include $(TOP)/Source/states/Eulerian/hydro/viscous/Make.package
 

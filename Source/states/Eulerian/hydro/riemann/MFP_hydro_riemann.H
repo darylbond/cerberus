@@ -24,7 +24,7 @@ public:
     virtual void solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
                        Array<Real,+HydroDef::FluxIdx::NUM> &R,
                        Array<Real,+HydroDef::ConsIdx::NUM> &F,
-                       Real* shk) {}
+                       Real* shk) const {}
 
     virtual std::string get_tag() const {return "";}
     virtual bool requires_shock_detector() const {return false;}
@@ -35,7 +35,7 @@ std::unique_ptr<HydroRiemannSolver> HydroRiemannSolverBuilder(const sol::table& 
 {
     int global_idx = def["global_idx"];
 
-    if ((def["flux"] == D::tag) && (D::valid_state(global_idx))) {
+    if (def["flux"] == D::tag) {
         return std::unique_ptr<D>(new D(global_idx));
     } else {
         return nullptr;

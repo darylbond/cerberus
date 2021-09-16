@@ -14,7 +14,26 @@ Reconstruction::~Reconstruction()
     // do nothing
 }
 
+Real Reconstruction::get_slope(Vector<Real>& stencil) const
+{
+    return 0;
+}
+
+void Reconstruction::get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) const
+{
+    // do nothing
+}
+
+ClassFactory<Reconstruction>& GetReconstructionFactory()
+{
+    static ClassFactory<Reconstruction> F;
+    return F;
+}
+
 //================================================================================
+
+std::string NullReconstruction::tag = "null";
+bool NullReconstruction::registered = GetReconstructionFactory().Register(NullReconstruction::tag, ReconstructionBuilder<NullReconstruction>);
 
 NullReconstruction::NullReconstruction()
 {
@@ -24,13 +43,16 @@ NullReconstruction::NullReconstruction()
 
 //================================================================================
 
+std::string ConstantReconstruction::tag = "constant";
+bool ConstantReconstruction::registered = GetReconstructionFactory().Register(ConstantReconstruction::tag, ReconstructionBuilder<ConstantReconstruction>);
+
 ConstantReconstruction::ConstantReconstruction()
 {
     stencil_length = 1;
     num_grow = 1;
 }
 
-void ConstantReconstruction::get_face_values(Vector<Real>& stencil, Real& lo, Real& hi)
+void ConstantReconstruction::get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) const
 {
     BL_PROFILE("ConstantReconstruction::get_face_values");
     lo = stencil[0];
@@ -40,13 +62,16 @@ void ConstantReconstruction::get_face_values(Vector<Real>& stencil, Real& lo, Re
 
 //================================================================================
 
+std::string MinModReconstruction::tag = "minmod";
+bool MinModReconstruction::registered = GetReconstructionFactory().Register(MinModReconstruction::tag, ReconstructionBuilder<MinModReconstruction>);
+
 MinModReconstruction::MinModReconstruction()
 {
     stencil_length = 3;
     num_grow = 2;
 }
 
-Real MinModReconstruction::get_slope(Vector<Real>& stencil)
+Real MinModReconstruction::get_slope(Vector<Real>& stencil) const
 {
     BL_PROFILE("MinModReconstruction::get_slope");
     Real a = stencil[1] - stencil[0];
@@ -63,7 +88,7 @@ Real MinModReconstruction::get_slope(Vector<Real>& stencil)
     return g;
 }
 
-void MinModReconstruction::get_face_values(Vector<Real>& stencil, Real& lo, Real& hi)
+void MinModReconstruction::get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) const
 {
     BL_PROFILE("MinModReconstruction::get_face_values");
     Real g = get_slope(stencil);
@@ -74,13 +99,16 @@ void MinModReconstruction::get_face_values(Vector<Real>& stencil, Real& lo, Real
 
 //================================================================================
 
+std::string VanLeerReconstruction::tag = "vanLeer";
+bool VanLeerReconstruction::registered = GetReconstructionFactory().Register(VanLeerReconstruction::tag, ReconstructionBuilder<VanLeerReconstruction>);
+
 VanLeerReconstruction::VanLeerReconstruction()
 {
     stencil_length = 3;
     num_grow = 2;
 }
 
-Real VanLeerReconstruction::get_slope(Vector<Real>& stencil)
+Real VanLeerReconstruction::get_slope(Vector<Real>& stencil) const
 {
     BL_PROFILE("VanLeerReconstruction::get_slope");
     Real a = stencil[1] - stencil[0];
@@ -95,7 +123,7 @@ Real VanLeerReconstruction::get_slope(Vector<Real>& stencil)
     return g;
 }
 
-void VanLeerReconstruction::get_face_values(Vector<Real>& stencil, Real& lo, Real& hi)
+void VanLeerReconstruction::get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) const
 {
     BL_PROFILE("VanLeerReconstruction::get_face_values");
     Real g = get_slope(stencil);
@@ -106,13 +134,16 @@ void VanLeerReconstruction::get_face_values(Vector<Real>& stencil, Real& lo, Rea
 
 //================================================================================
 
+std::string MCReconstruction::tag = "MC";
+bool MCReconstruction::registered = GetReconstructionFactory().Register(MCReconstruction::tag, ReconstructionBuilder<MCReconstruction>);
+
 MCReconstruction::MCReconstruction()
 {
     stencil_length = 3;
     num_grow = 2;
 }
 
-Real MCReconstruction::get_slope(Vector<Real>& stencil)
+Real MCReconstruction::get_slope(Vector<Real>& stencil) const
 {
     BL_PROFILE("MCReconstruction::get_slope");
     Real x1 = stencil[0];
@@ -140,7 +171,7 @@ Real MCReconstruction::get_slope(Vector<Real>& stencil)
     return s;
 }
 
-void MCReconstruction::get_face_values(Vector<Real>& stencil, Real& lo, Real& hi)
+void MCReconstruction::get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) const
 {
     BL_PROFILE("MCReconstruction::get_face_values");
     Real g = get_slope(stencil);
@@ -151,19 +182,22 @@ void MCReconstruction::get_face_values(Vector<Real>& stencil, Real& lo, Real& hi
 
 //================================================================================
 
+std::string CentredReconstruction::tag = "centre";
+bool CentredReconstruction::registered = GetReconstructionFactory().Register(CentredReconstruction::tag, ReconstructionBuilder<CentredReconstruction>);
+
 CentredReconstruction::CentredReconstruction()
 {
     stencil_length = 3;
     num_grow = 2;
 }
 
-Real CentredReconstruction::get_slope(Vector<Real>& stencil)
+Real CentredReconstruction::get_slope(Vector<Real>& stencil) const
 {
     BL_PROFILE("CentredReconstruction::get_slope");
     return 0.5*(stencil[2] - stencil[0]);
 }
 
-void CentredReconstruction::get_face_values(Vector<Real>& stencil, Real& lo, Real& hi)
+void CentredReconstruction::get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) const
 {
     BL_PROFILE("CentredReconstruction::get_face_values");
     Real g =get_slope(stencil);
@@ -174,13 +208,16 @@ void CentredReconstruction::get_face_values(Vector<Real>& stencil, Real& lo, Rea
 
 //================================================================================
 
+std::string SixthOrderReconstruction::tag = "O6";
+bool SixthOrderReconstruction::registered = GetReconstructionFactory().Register(SixthOrderReconstruction::tag, ReconstructionBuilder<SixthOrderReconstruction>);
+
 SixthOrderReconstruction::SixthOrderReconstruction()
 {
     stencil_length = 7;
     num_grow = 4;
 }
 
-Real SixthOrderReconstruction::get_slope(Vector<Real>& stencil)
+Real SixthOrderReconstruction::get_slope(Vector<Real>& stencil) const
 {
     BL_PROFILE("SixthOrderReconstruction::get_slope");
     // just use an approximation based on the cell edge values
@@ -189,7 +226,7 @@ Real SixthOrderReconstruction::get_slope(Vector<Real>& stencil)
     return hi - lo;
 }
 
-void SixthOrderReconstruction::get_face_values(Vector<Real>& stencil, Real& lo, Real& hi)
+void SixthOrderReconstruction::get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) const
 {
     BL_PROFILE("SixthOrderReconstruction::get_face_values");
     hi = (37.0/60.0)*(stencil[3] + stencil[4]) - (2.0/15.0)*(stencil[2] + stencil[5]) + (1.0/60.0)*(stencil[1] + stencil[6]);
@@ -200,13 +237,16 @@ void SixthOrderReconstruction::get_face_values(Vector<Real>& stencil, Real& lo, 
 
 // M.P. Martin et al. Journal of Computational Physics 220 (2006) 270-289
 
+std::string WENOReconstruction::tag = "WENO";
+bool WENOReconstruction::registered = GetReconstructionFactory().Register(WENOReconstruction::tag, ReconstructionBuilder<WENOReconstruction>);
+
 WENOReconstruction::WENOReconstruction()
 {
     stencil_length = 7;
     num_grow = 4;
 }
 
-Real WENOReconstruction::get_slope(Vector<Real>& stencil)
+Real WENOReconstruction::get_slope(Vector<Real>& stencil) const
 {
     BL_PROFILE("WENOReconstruction::get_slope");
     // just use an approximation based on the cell edge values
@@ -215,7 +255,7 @@ Real WENOReconstruction::get_slope(Vector<Real>& stencil)
     return hi - lo;
 }
 
-Real WENOReconstruction::WENOSYMBO(Vector<Real>& stencil, int upwind)
+Real WENOReconstruction::WENOSYMBO(Vector<Real>& stencil, int upwind) const
 // i     : centre of stencil
 // upwind: direction of upwinding (1 = -->, -1 = <--)
 {
@@ -284,7 +324,7 @@ Real WENOReconstruction::WENOSYMBO(Vector<Real>& stencil, int upwind)
     return face_value;
 }
 
-void WENOReconstruction::get_face_values(Vector<Real>& stencil, Real& lo, Real& hi)
+void WENOReconstruction::get_face_values(Vector<Real>& stencil, Real& lo, Real& hi) const
 {
     BL_PROFILE("WENOReconstruction::get_face_values");
     hi = WENOSYMBO(stencil,  1);

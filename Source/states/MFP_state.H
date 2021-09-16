@@ -70,7 +70,7 @@ public:
     virtual int get_num_grow() {return 0;}
     virtual void set_num_grow(int n) {return;}
 
-    virtual Vector<std::string> get_plot_output_names() const = 0;
+    virtual Vector<std::string> get_plot_output_names() const {return {};}
     virtual void get_plot_output(const Box& box,
                                  const FArrayBox& src,
                                  std::map<std::string,FArrayBox>& out,
@@ -80,19 +80,20 @@ public:
                              #endif
                                  ) const {return;}
 
-    virtual void init_from_lua() {return;}
-    virtual void post_init_from_lua() {return;}
-    virtual void variable_setup(Vector<int> periodic) {return;}
-    virtual void init_data(MFP* mfp) {return;}
+    virtual void init_from_lua() {}
+    virtual void post_init_from_lua() {}
+    virtual void variable_setup(Vector<int> periodic) {}
+    virtual void init_data(MFP* mfp) {}
 
-    virtual Real get_allowed_time_step(MFP* mfp) const = 0;
+    virtual Real get_allowed_time_step(MFP* mfp) const {return 0.0;}
 
 
     Vector<BoundaryInfo> get_bc_limits(const Box& box,
                                        const Geometry &geom) const;
 
 #ifdef AMREX_USE_EB
-    virtual void set_eb_bc(const sol::table &bc_def) {return;}
+
+    virtual void set_eb_bc(const sol::table &bc_def) {}
 
     void update_eb_vfrac(const Geometry &geom,
                          FArrayBox& vfrac) const;
@@ -112,5 +113,18 @@ public:
     virtual std::string str() const;
 
 };
+
+template <typename D>
+std::unique_ptr<State> StateBuilder(const sol::table& def)
+{
+    std::string type = def["type"];
+    if (type == D::tag) {
+        return std::unique_ptr<D>(new D(def));
+    } else {
+        return nullptr;
+    }
+}
+
+ClassFactory<State>& GetStateFactory();
 
 #endif // MFP_GENERIC_H

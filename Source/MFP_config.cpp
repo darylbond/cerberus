@@ -4,6 +4,7 @@
 #include "MFP_read_geom.h"
 #include "MFP_utility.H"
 
+#include "MFP_state.H"
 #include "MFP_hydro.H"
 
 void MFP::set_lua_script(const std::string &script)
@@ -91,8 +92,13 @@ void MFP::read_config()
     // what states do we have?
     sol::table names = lua.script("return get_sorted_keys(states)");
 
+    ClassFactory<State> sfact = GetStateFactory();
+
     // get a list of all the tags
     Vector<std::string> state_tags;
+    for (const auto& S : sfact.getRegistered()) {
+        state_tags.push_back(S.first);
+    }
 
 
     int global_idx = 0;
@@ -106,28 +112,27 @@ void MFP::read_config()
 
         std::string state_type = state_def["type"].get<std::string>();
 
-        std::unique_ptr<State> istate;
-
-        if (state_type == "hydro") {
-            istate = std::make_unique(HydroState::Build(state_def));
-        }
+        std::unique_ptr<State> istate = sfact.Build(state_type, state_def);
 
         if (!istate)
             Abort("Failed to read state "+name+", must be one of "+vec2str(state_tags));
 
-        switch (istate->get_classification()) {
+        states.push_back(std::move(istate));
+        state_names.push_back(name);
+        state_index[name] = global_idx;
+
+        State& S = get_state(name);
+
+        switch (S.get_classification()) {
         case State::StateClassification::Eulerian:
             eulerian_states.push_back(global_idx);
+            break;
         case State::StateClassification::Lagrangian:
             lagrangian_states.push_back(global_idx);
+            break;
         default:
             Abort("How did we get here?");
         }
-
-        states.push_back(std::move(istate));
-
-        state_names.push_back(name);
-        state_index[name] = global_idx;
 
 
 
@@ -255,7 +260,7 @@ void MFP::read_config()
 #endif
 
     // what source term collections have been specified
-//    sol::table ode_systems = lua["sources"];
+    //    sol::table ode_systems = lua["sources"];
 
     // update anything in the states that requires source terms to be defined
     for (auto &istate : states) {
@@ -272,9 +277,9 @@ void MFP::read_config()
 
     // first get all the variables we want in our output
     for (const auto& key_value_pair : plot_vars ) {
-         sol::object value = key_value_pair.second;
-         std::string name = value.as<std::string>();
-         plot_variables[name] = {0, AMREX_D_DECL(0,0,0)};
+        sol::object value = key_value_pair.second;
+        std::string name = value.as<std::string>();
+        plot_variables[name] = {0, AMREX_D_DECL(0,0,0)};
     }
 
     // now check if we have any request for gradients
@@ -319,16 +324,16 @@ void MFP::read_config()
         }
     }
 
-//    for (const auto& var : plot_variables) {
-//        Print() << var.first << " : " << var.second[0] << std::endl;
-//    }
+    //    for (const auto& var : plot_variables) {
+    //        Print() << var.first << " : " << var.second[0] << std::endl;
+    //    }
 
     const sol::table plot_funcs = plot["functions"];
     // need to get sorted function names to ensure consistency across processors
     const sol::table func_names = lua.script("return get_sorted_keys(plot['functions'])");
     for (const auto& key_value_pair : func_names ) {
-         const std::string name = key_value_pair.second.as<std::string>();
-         plot_functions.push_back(std::make_pair(name, get_udf(plot_funcs[name])));
+        const std::string name = key_value_pair.second.as<std::string>();
+        plot_functions.push_back(std::make_pair(name, get_udf(plot_funcs[name])));
     }
 }
 

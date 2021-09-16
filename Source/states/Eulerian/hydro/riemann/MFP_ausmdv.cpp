@@ -1,44 +1,44 @@
 #include "MFP_ausmdv.H"
 #include "MFP_utility.H"
+#include "MFP.H"
 
 //================================================================================
 
 std::string HydroAUSMDV::tag = "AUSMDV";
-bool HydroAUSMDV::registered = GetRiemannSolverFactory().Register(HydroAUSMDV::tag, RiemannSolverBuilder<HydroAUSMDV>);
+bool HydroAUSMDV::registered = GetHydroRiemannSolverFactory().Register(HydroAUSMDV::tag, HydroRiemannSolverBuilder<HydroAUSMDV>);
 
 
 HydroAUSMDV::HydroAUSMDV(){}
 HydroAUSMDV::HydroAUSMDV(const int i)
 {
     idx = i;
-    istate = GD::get_state_ptr(i);
 }
 
-virtual void HydroAUSMDV::solve(Array<Real,+HydroState::FluxIdx::NUM> &L,
-                                Array<Real,+HydroState::FluxIdx::NUM> &R,
-                                Array<Real,+HydroState::ConsIdx::NUM> &F,
+void HydroAUSMDV::solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
+                                Array<Real,+HydroDef::FluxIdx::NUM> &R,
+                                Array<Real,+HydroDef::ConsIdx::NUM> &F,
                                 Real* shk) const
 {
     BL_PROFILE("HydroAUSMDV::solve");
 
     // get the data out of the passed in arrays
-    Real apL = L[+HydroState::FluxIdx::Alpha];
-    Real gamL = L[+HydroState::FluxIdx::Gamma];
-    Real rL = L[+HydroState::FluxIdx::Density];
-    Real uL = L[+HydroState::FluxIdx::Xvel];
-    Real vL = L[+HydroState::FluxIdx::Yvel];
-    Real wL = L[+HydroState::FluxIdx::Zvel];
-    Real pL = L[+HydroState::FluxIdx::Prs];
+    Real apL = L[+HydroDef::FluxIdx::Alpha];
+    Real gamL = L[+HydroDef::FluxIdx::Gamma];
+    Real rL = L[+HydroDef::FluxIdx::Density];
+    Real uL = L[+HydroDef::FluxIdx::Xvel];
+    Real vL = L[+HydroDef::FluxIdx::Yvel];
+    Real wL = L[+HydroDef::FluxIdx::Zvel];
+    Real pL = L[+HydroDef::FluxIdx::Prs];
     Real trL = apL*rL;
 
     // get the data out of the passed in arrays
-    Real apR = R[+HydroState::FluxIdx::Alpha];
-    Real gamR = R[+HydroState::FluxIdx::Gamma];
-    Real rR = R[+HydroState::FluxIdx::Density];
-    Real uR = R[+HydroState::FluxIdx::Xvel];
-    Real vR = R[+HydroState::FluxIdx::Yvel];
-    Real wR = R[+HydroState::FluxIdx::Zvel];
-    Real pR = R[+HydroState::FluxIdx::Prs];
+    Real apR = R[+HydroDef::FluxIdx::Alpha];
+    Real gamR = R[+HydroDef::FluxIdx::Gamma];
+    Real rR = R[+HydroDef::FluxIdx::Density];
+    Real uR = R[+HydroDef::FluxIdx::Xvel];
+    Real vR = R[+HydroDef::FluxIdx::Yvel];
+    Real wR = R[+HydroDef::FluxIdx::Zvel];
+    Real pR = R[+HydroDef::FluxIdx::Prs];
     Real trR = apR*rR;
 
     // constants
@@ -109,19 +109,19 @@ virtual void HydroAUSMDV::solve(Array<Real,+HydroState::FluxIdx::NUM> &L,
     Real ru2_half = (0.5 + s) * ru2_AUSMV + (0.5 - s) * ru2_AUSMD;
     //
     // Assemble components of the flux vector.
-    F[+HydroState::ConsIdx::Density] = ru_half;
-    F[+HydroState::ConsIdx::Tracer] = tr_half;
-    F[+HydroState::ConsIdx::Xmom] = ru2_half+p_half;
+    F[+HydroDef::ConsIdx::Density] = ru_half;
+    F[+HydroDef::ConsIdx::Tracer] = tr_half;
+    F[+HydroDef::ConsIdx::Xmom] = ru2_half+p_half;
     if (ru_half >= 0.0) {
         // Wind is blowing from the left.
-        F[+HydroState::ConsIdx::Ymom] = ru_half*vL;
-        F[+HydroState::ConsIdx::Zmom] = ru_half*wL;
-        F[+HydroState::ConsIdx::Eden] = ru_half*HL;
+        F[+HydroDef::ConsIdx::Ymom] = ru_half*vL;
+        F[+HydroDef::ConsIdx::Zmom] = ru_half*wL;
+        F[+HydroDef::ConsIdx::Eden] = ru_half*HL;
     } else {
         // Wind is blowing from the right.
-        F[+HydroState::ConsIdx::Ymom] = ru_half*vR;
-        F[+HydroState::ConsIdx::Zmom] = ru_half*wR;
-        F[+HydroState::ConsIdx::Eden] = ru_half*HR;
+        F[+HydroDef::ConsIdx::Ymom] = ru_half*vR;
+        F[+HydroDef::ConsIdx::Zmom] = ru_half*wR;
+        F[+HydroDef::ConsIdx::Eden] = ru_half*HR;
     }
     //
     // Apply entropy fix (section 3.5 in Wada and Liou's paper)
@@ -137,19 +137,11 @@ virtual void HydroAUSMDV::solve(Array<Real,+HydroState::FluxIdx::NUM> &L,
     }
     //
     if (d_ua != 0.0) {
-        F[+HydroState::ConsIdx::Density] -= d_ua*(rR - rL);
-        F[+HydroState::ConsIdx::Tracer]  -= d_ua*(trR - trL);
-        F[+HydroState::ConsIdx::Xmom]    -= d_ua*(rR*uR - rL*uL);
-        F[+HydroState::ConsIdx::Ymom]    -= d_ua*(rR*vR - rL*vL);
-        F[+HydroState::ConsIdx::Zmom]    -= d_ua*(rR*wR - rL*wL);
-        F[+HydroState::ConsIdx::Eden]    -= d_ua*(rR*HR - rL*HL);
+        F[+HydroDef::ConsIdx::Density] -= d_ua*(rR - rL);
+        F[+HydroDef::ConsIdx::Tracer]  -= d_ua*(trR - trL);
+        F[+HydroDef::ConsIdx::Xmom]    -= d_ua*(rR*uR - rL*uL);
+        F[+HydroDef::ConsIdx::Ymom]    -= d_ua*(rR*vR - rL*vL);
+        F[+HydroDef::ConsIdx::Zmom]    -= d_ua*(rR*wR - rL*wL);
+        F[+HydroDef::ConsIdx::Eden]    -= d_ua*(rR*HR - rL*HL);
     } // end of entropy fix (d_ua != 0)
-}
-
-bool HydroAUSMDV::valid_state(const int idx)
-{
-    if (MFP::get_state(idx).get_type() != State::StateType::Hydro) {
-        return false;
-    }
-    return true;
 }

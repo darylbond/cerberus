@@ -12,6 +12,7 @@ struct HydroDef
         Zmom,
         Eden,
         Tracer,
+        Shock,
         NUM,
     };
 
@@ -32,6 +33,7 @@ struct HydroDef
         Yvel,
         Zvel,
         Prs,
+        Temp,
         Alpha,
         Gamma,
         NUM

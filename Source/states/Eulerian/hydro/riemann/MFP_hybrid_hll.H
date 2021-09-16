@@ -23,13 +23,9 @@ public:
 
     virtual bool requires_shock_detector() const {return true;}
 
-    static bool valid_state(const int idx);
     virtual std::string get_tag() const override {return tag;}
     static std::string tag;
     static bool registered;
-
-private:
-    Vector<Real> F_hlle, F_hllc;
 };
 
 #endif // HYDROHYBRIDHLL_H

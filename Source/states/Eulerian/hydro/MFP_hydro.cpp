@@ -3,6 +3,7 @@
 #include "MFP.H"
 #include "MFP_diagnostics.H"
 #include "MFP_transforms.H"
+#include "MFP_hydro_refine.H"
 
 #include "Eigen"
 
@@ -62,120 +63,6 @@ HydroState::HydroState(const sol::table& def)
 }
 
 HydroState::~HydroState(){}
-
-//HydroState HydroState::Build(const sol::table& def)
-//{
-
-//    std::string name = def.get<std::string>("name");
-//    int global_idx = def.get<int>("global_idx");
-
-//    //
-//    // Reconstruction
-//    //
-
-//    ClassFactory<Reconstruction> rfact = GetReconstructionFactory();
-
-//    std::string rec = def["reconstruction"].get_or<std::string>("null");
-
-//    def["reconstruction"] = rec; // consistency when using default option "null"
-
-//    std::unique_ptr<Reconstruction> R = rfact.Build(rec, def);
-
-//    if (!R)
-//        Abort("Invalid reconstruction option '"+rec+"'. Options are "+vec2str(rfact.getKeys()));
-
-
-//    //
-//    // Flux
-//    //
-
-//    ClassFactory<HydroRiemannSolver> ffact = GetHydroRiemannSolverFactory();
-
-//    std::string flux_name = def["flux"].get_or<std::string>("null");
-
-//    def["flux"] = flux_name; // consistency when using default option "null"
-
-//    std::unique_ptr<HydroRiemannSolver> F = ffact.Build(flux_name, def);
-
-//    if (!F)
-//        Abort("Invalid flux option '"+flux_name+"'. Options are "+vec2str(ffact.getKeys()));
-
-//    //
-//    // Viscosity
-//    //
-
-//    ClassFactory<HydroViscous> vfact = GetViscousFactory();
-
-//    std::string visc = def["viscosity"]["type"].get_or<std::string>("");
-
-//    std::unique_ptr<HydroViscous> V = vfact.Build(visc, def);
-
-//    if (!visc.empty() && !V)
-//        Abort("Invalid viscosity option '"+visc+"'. Options are "+vec2str(vfact.getKeys()));
-
-//    //
-//    // Embedded boundaries
-//    //
-
-//#ifdef AMREX_USE_EB
-//    Vector<HydroBoundaryEB> EB;
-
-
-
-//    // get a sorted list of keys so that we have consistent tagging of boundaries
-//    sol::table eb_keys = MFP::lua.script("return get_sorted_keys(embedded_boundaries)");
-//    sol::table eb_list = MFP::lua["embedded_boundaries"];
-
-//    for (const auto& eb_key : eb_keys) {
-//        //        const sol::object &eb_name = eb_item.first;
-//        const sol::table &eb_desc = eb_list[eb_key.second.as<std::string>()];
-
-//        // get the names of the states that this geometry is interacting with
-//        // and the type of boundary condition that state uses to interact with
-//        // the embedded boundary
-
-//        const sol::table &bcs = eb_desc["bcs"];
-//        for (const auto& bc : bcs) {
-//            std::string state_name = bc.first.as<std::string>();
-//            const sol::table &bc_def = bc.second;
-//            if (state_name == name) {
-
-//                std::string bc_type = bc_def.get<std::string>("type");
-
-//                if (bc_type == HydroSlipWall::tag) {
-//                    EB.push_back(HydroSlipWall(F.get()));
-//                } else if (bc_type == HydroNoSlipWall::tag) {
-//                    if (!V) {
-//                        Abort("Requested EB bc of type '" + bc_type + "' without defining 'viscosity' for state '" + name + "'");
-//                    }
-//                    EB.push_back(HydroNoSlipWall(F.get(), V.get(), bc_def));
-//                } else if (bc_type == DirichletWall::tag) {
-//                    EB.push_back(DirichletWall(F.get(), prim_names, prim_vector_idx, bc_def));
-//                } else {
-//                    Abort("Requested EB bc of type '" + bc_type + "' which is not compatible with state '" + name + "'");
-//                }
-
-//            }
-//        }
-//    }
-
-//#endif
-
-
-//    HydroState H(*R,
-//                 *F,
-//                 *V,
-//             #ifdef AMREX_USE_EB
-//                 EB
-//             #endif
-//                 );
-
-//    H.name = def.get<std::string>("name");
-//    H.global_idx = def.get<int>("global_idx");
-
-//    return H;
-
-//}
 
 #ifdef AMREX_USE_EB
 void HydroState::set_eb_bc(const sol::table &bc_def)
@@ -346,6 +233,25 @@ void HydroState::set_shock_detector()
         Abort("Invalid shock_detector option '"+sd_name+"'. Options are "+vec2str(sdfact.getKeys()));
 }
 
+void HydroState::set_refinement()
+{
+
+    ClassFactory<Refinement> rfact = GetHydroRefinementFactory();
+
+    sol::table r_def = MFP::lua["states"][name]["refinement"].get_or(sol::table());
+
+    if (!r_def.valid()) return;
+
+    r_def["global_idx"] = global_idx;
+
+    std::string r_name = r_def["name"].get_or<std::string>("");
+
+    refine = rfact.Build(r_name, r_def);
+
+    if (!r_name.empty() && !refine)
+        Abort("Invalid refinement option '"+r_name+"'. Options are "+vec2str(rfact.getKeys()));
+}
+
 void HydroState::init_from_lua()
 {
     BL_PROFILE("HydroState::init_from_lua");
@@ -439,6 +345,12 @@ void HydroState::init_from_lua()
     // shock detector
     //
     set_shock_detector();
+
+    //
+    // refinement
+    //
+
+    set_refinement();
 
 }
 

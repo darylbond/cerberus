@@ -144,7 +144,7 @@ void MFP::initData()
 
     // initialise cost state
     MultiFab& C_new = get_new_data(Cost_Idx);
-    C_new.setVal(1.0);
+    C_new.setVal(0.0);
 
 }
 
@@ -160,21 +160,17 @@ void MFP::post_timestep(int iteration)
     if (level < parent->finestLevel()) {
         MFP& fine_level = getLevel(level + 1);
 
-
-        for (const auto& state : states) {
-            int idx = state->data_idx;
-            State& fine_state = fine_level.get_state(state->global_idx);
-            if (idx >= 0) {
-                MultiFab& S_crse = get_new_data(idx);
+        for (int data_idx=0; data_idx<eulerian_states.size(); ++data_idx) {
+            EulerianState& fine_state = EulerianState::get_state(data_idx);
+            if (fine_state.reflux) {
+                MultiFab& S_crse = get_new_data(data_idx);
 #ifdef AMREX_USE_EB
-                MultiFab& S_fine = fine_level.get_new_data(idx);
-                fine_level.flux_reg[idx].Reflux(S_crse, state->eb_data.volfrac, S_fine,
-                                                fine_state.eb_data.volfrac);
+                MultiFab& S_fine = fine_level.get_new_data(data_idx);
+                fine_level.flux_reg[data_idx].Reflux(S_crse, fine_state.eb_data.volfrac, S_fine,
+                                                     fine_state.eb_data.volfrac);
 #else
-                fine_level.flux_reg[idx].Reflux(S_crse, 0);
+                fine_level.flux_reg[data_idx].Reflux(S_crse, 0);
 #endif
-
-
             }
         }
     }
@@ -273,17 +269,12 @@ void MFP::post_restart()
 
     build_eb();
 
-//#ifdef AMREX_PARTICLES
-//    std::string restart_chkfile;
-//    ParmParse pp("amr");
-//    pp.query("restart", restart_chkfile);
-//    ParticlePostRestart(restart_chkfile);
-//#endif
-}
-
-void MFP::errorEst(TagBoxArray& tags, int, int, Real time, int, int)
-{
-    BL_PROFILE("MFP::errorEst()");
+    //#ifdef AMREX_PARTICLES
+    //    std::string restart_chkfile;
+    //    ParmParse pp("amr");
+    //    pp.query("restart", restart_chkfile);
+    //    ParticlePostRestart(restart_chkfile);
+    //#endif
 }
 
 

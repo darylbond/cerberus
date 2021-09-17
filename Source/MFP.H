@@ -127,6 +127,9 @@ public:
 
     static void read_params();
 
+    int get_level() {return level;}
+    Real get_cum_time() {return parent->cumTime();}
+
     // Define data descriptors.
     static DescriptorList& get_desc_lst () noexcept { return desc_lst; }
     static void variableSetUp();

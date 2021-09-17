@@ -34,8 +34,8 @@ void plot_FAB_1d(const FArrayBox& src,
                  std::string title);
 
 void plot_FAB_1d(const FArrayBox& src,
-                 bool block,
-                 std::string title);
+                 std::string title,
+                 bool block);
 
 struct PlotData2D {
         Vector<float> data;

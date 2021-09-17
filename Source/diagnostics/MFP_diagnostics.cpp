@@ -146,6 +146,7 @@ void plot_FAB_1d(const Box& box, const FArrayBox& src, const Vector<int> N, std:
 
         plt::subplot(npr,npc,n+1);
         plt::plot(xticks,data);
+        plt::xlim(lo.x, hi.x);
         plt::title(std::to_string(N[n]));
 
     }

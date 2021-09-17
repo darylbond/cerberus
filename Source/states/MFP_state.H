@@ -7,6 +7,7 @@
 #include "MFP_optional_func.H"
 #include "MFP_utility.H"
 #include "MFP_factory.H"
+#include "MFP_refine.H"
 
 class State;
 class MFP;
@@ -66,6 +67,8 @@ public:
 #endif
 
     BoundaryState boundary_conditions;
+
+    std::unique_ptr<Refinement> refine;
 
     virtual StateClassification get_classification() const {return StateClassification::Null;}
     virtual StateType get_type() const {return StateType::Null;}

@@ -6,6 +6,9 @@ CEXE_sources += MFP_optional_func.cpp
 CEXE_headers += MFP_transforms.H
 CEXE_sources += MFP_transforms.cpp
 
+CEXE_headers += MFP_refine.H
+CEXE_sources += MFP_refine.cpp
+
 include $(TOP)/Source/modules/eb/Make.package
 include $(TOP)/Source/modules/boundary/Make.package
 

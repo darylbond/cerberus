@@ -68,6 +68,7 @@ public:
 
     void set_flux();
     void set_shock_detector();
+    void set_refinement();
 
     virtual void variable_setup(Vector<int> periodic) override;
     virtual void init_data(MFP* mfp) override;

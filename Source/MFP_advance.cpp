@@ -1,5 +1,6 @@
 #include "MFP.H"
 #include "MFP_eulerian.H"
+#include "MFP_diagnostics.H"
 
 Real MFP::advance(Real time, Real dt, int iteration, int ncycle)
 {
@@ -42,7 +43,6 @@ void MFP::advance_one_step(Real time, Real dt, int iteration, int ncycle, bool C
     constexpr int num_grow_eb = 0;
 #endif
 
-    const size_t n_states = states.size();
     const size_t n_eulerian = eulerian_states.size();
 
     // get the maximum wave speed from the time step and cell spacing
@@ -184,7 +184,8 @@ void MFP::advance_one_step(Real time, Real dt, int iteration, int ncycle, bool C
                        #endif
                                    );
 
-            //            plot_FAB_2d(prim, 0, "prim 0", false, true);
+//            plot_FAB_1d(prim, "prim-"+num2str(level), true);
+//                        plot_FAB_2d(prim, 0, "prim 0", false, true);
 
 
             // fill in any cells that need special boundary values
@@ -571,6 +572,8 @@ void MFP::advance_one_step(Real time, Real dt, int iteration, int ncycle, bool C
 
 
             s2.linComb(s1, box, 0, update[idx][mfi], box, 0, 1.0, 1.0, box, 0, s1.nComp());
+
+//            plot_FAB_1d(s2, "cons-"+num2str(level), true);
 
         }
 

@@ -1,3 +1,5 @@
+#include <AMReX_ParmParse.H>
+
 #include "MFP.H"
 #include "MFP_state.H"
 #include "MFP_eb_sdf.H"
@@ -73,6 +75,8 @@ void MFP::read_config()
 
     if (time_integrator == "euler") {
         time_integration_scheme = TimeIntegrator::Euler;
+    } else if (time_integrator == "CTU") {
+        time_integration_scheme = TimeIntegrator::CTU;
     } else {
         Abort("Time integration scheme "+time_integrator+" is not recognised, try ['euler', ...]");
     }

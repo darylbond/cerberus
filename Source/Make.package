@@ -6,6 +6,8 @@ CEXE_sources += MFP.cpp
 CEXE_sources += MFP_io.cpp
 CEXE_sources += MFP_setup.cpp
 CEXE_sources += MFP_config.cpp
+CEXE_sources += MFP_advance.cpp
+CEXE_sources += MFP_timestep.cpp
 
 CEXE_headers += MFP_utility.H
 

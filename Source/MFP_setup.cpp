@@ -1,6 +1,7 @@
 #include "MFP.H"
 #include "MFP_state.H"
 #include "MFP_bc.H"
+#include <AMReX_ParmParse.H>
 
 void MFP::variableSetUp()
 {
@@ -65,7 +66,6 @@ void MFP::build_eb() {
     const Vector<int> ngrow = {m_eb_basic_grow_cells,m_eb_volume_grow_cells,m_eb_full_grow_cells};
 
     for (const auto& state : states) {
-        int idx = state->global_idx;
 
         state->eb_data.ebfactory = makeEBFabFactory (state->eb2_index,
                                                      geom,

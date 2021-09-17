@@ -35,8 +35,11 @@ public:
     virtual int get_num_cons() const {return 0;}
     virtual const Vector<std::string>& get_cons_names() const = 0;
 
-    virtual void set_reconstruction();
     virtual void set_reflux();
+    virtual void set_reconstruction();
+    virtual int get_num_grow() const = 0;
+    virtual void set_num_grow(int n) = 0;
+
 
     virtual void init_from_lua() override;
 
@@ -453,7 +456,10 @@ public:
                          const Real *dx,
                          const Real dt) const;
 
-    static EulerianState& get_state(const int idx) {return static_cast<EulerianState&>(MFP::get_state(idx));}
+    virtual void write_info(nlohmann::json& js) const override;
+
+    static EulerianState& get_state_global(const int idx) {return static_cast<EulerianState&>(MFP::get_state(idx));}
+    static EulerianState& get_state(const int idx) {return static_cast<EulerianState&>(MFP::get_state(MFP::eulerian_states[idx]));}
 
 };
 

@@ -45,7 +45,7 @@ public:
     virtual void set_eb_bc(const sol::table &bc_def) override;
 #endif
 
-    virtual int get_num_grow() override {return num_grow;}
+    virtual int get_num_grow() const override {return num_grow;}
     virtual void set_num_grow(int n) override {num_grow = std::max(n, num_grow);}
 
     virtual int get_num_cons() const override {return +HydroDef::ConsIdx::NUM;}
@@ -218,7 +218,9 @@ public:
                           const Real dt) const;
 #endif
 
-    static HydroState& get_state(const int idx) {return static_cast<HydroState&>(MFP::get_state(idx));}
+    virtual void write_info(nlohmann::json& js) const override;
+
+    static HydroState& get_state_global(const int idx) {return static_cast<HydroState&>(MFP::get_state(idx));}
 
 };
 

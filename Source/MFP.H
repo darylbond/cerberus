@@ -38,9 +38,11 @@ public:
         return {"HyperCLaw-V1.1"};
     }
 
+#ifdef AMREX_USE_EB
     bool check_covered_stencil(Array4<const EBCellFlag> const& flag,
                                int i, int j, int k, int d,
                                int stencil_length);
+#endif
 
     void calc_slope(const Box& box,
                     const FArrayBox& src,
@@ -138,7 +140,6 @@ public:
     static State& get_state(const int idx) { return *states[idx]; }
     static State& get_state(const std::string& name);
 
-    static int get_num_fluid_states();
     void build_eb();
     void avgDown();
 

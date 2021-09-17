@@ -65,7 +65,7 @@ public:
 
     virtual Real get_allowed_time_step(MFP* mfp) const override;
 
-    static FieldState& get_state(const int idx) {return static_cast<FieldState&>(MFP::get_state(idx));}
+    static FieldState& get_state_global(const int idx) {return static_cast<FieldState&>(MFP::get_state(idx));}
 
 };
 

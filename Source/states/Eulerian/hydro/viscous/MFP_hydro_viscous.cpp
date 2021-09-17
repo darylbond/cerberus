@@ -32,7 +32,7 @@ std::string HydroViscous::str() const
 Real HydroViscous::get_min_dt(MFP *mfp) const
 {
         BL_PROFILE("get_max_speed");
-        const HydroState& istate = HydroState::get_state(idx);
+        const HydroState& istate = HydroState::get_state_global(idx);
 
         MultiFab& data = mfp->get_new_data(istate.data_idx);
 
@@ -129,7 +129,7 @@ Sutherland::Sutherland(const int global_idx, const sol::table& def)
 void Sutherland::get_coeffs(const Array<Real, +HydroDef::PrimIdx::NUM> &Q, Real &T, Real &mu, Real &kappa) const
 {
     BL_PROFILE("Sutherland::get_neutral_coeffs");
-    const HydroState& istate = HydroState::get_state(idx);
+    const HydroState& istate = HydroState::get_state_global(idx);
 
     T = istate.get_temperature_from_prim(Q);
     Real alpha = istate.get_alpha_from_prim(Q);
@@ -144,7 +144,7 @@ void Sutherland::get_coeffs(const Array<Real, +HydroDef::PrimIdx::NUM> &Q, Real 
 
 Real Sutherland::calc_dt(Array<Real,+HydroDef::ConsIdx::NUM>& U, const Real dx2) const
 {
-    const HydroState& istate = HydroState::get_state(idx);
+    const HydroState& istate = HydroState::get_state_global(idx);
 
     const Real rho = U[+HydroDef::ConsIdx::Density];
     const Real T = istate.get_temperature_from_cons(U);
@@ -195,7 +195,7 @@ PowerLaw::PowerLaw(const int global_idx, const sol::table& def)
 void PowerLaw::get_coeffs(const Array<Real,+HydroDef::PrimIdx::NUM>& Q, Real &T, Real &mu, Real &kappa) const
 {
     BL_PROFILE("PowerLaw::get_neutral_coeffs");
-    const HydroState& istate = HydroState::get_state(idx);
+    const HydroState& istate = HydroState::get_state_global(idx);
 
     T = istate.get_temperature_from_prim(Q);
     Real alpha = istate.get_alpha_from_prim(Q);
@@ -211,7 +211,7 @@ void PowerLaw::get_coeffs(const Array<Real,+HydroDef::PrimIdx::NUM>& Q, Real &T,
 Real PowerLaw::calc_dt(Array<Real,+HydroDef::ConsIdx::NUM>& U, const Real dx2) const
 {
 
-    const HydroState& istate = HydroState::get_state(idx);
+    const HydroState& istate = HydroState::get_state_global(idx);
 
     const Real rho = U[+HydroDef::ConsIdx::Density];
     const Real T = istate.get_temperature_from_cons(U);
@@ -248,7 +248,7 @@ UserDefinedViscosity::UserDefinedViscosity(const int global_idx, const sol::tabl
 void UserDefinedViscosity::get_coeffs(const Array<Real,+HydroDef::PrimIdx::NUM>& Q, Real &T, Real &mu, Real &kappa) const
 {
     BL_PROFILE("UserDefinedViscosity::get_neutral_coeffs");
-    const HydroState& istate = HydroState::get_state(idx);
+    const HydroState& istate = HydroState::get_state_global(idx);
 
     T = istate.get_temperature_from_prim(Q);
     Real alpha = istate.get_alpha_from_prim(Q);
@@ -263,7 +263,7 @@ void UserDefinedViscosity::get_coeffs(const Array<Real,+HydroDef::PrimIdx::NUM>&
 Real UserDefinedViscosity::calc_dt(Array<Real,+HydroDef::ConsIdx::NUM>& U, const Real dx2) const
 {
 
-    const HydroState& istate = HydroState::get_state(idx);
+    const HydroState& istate = HydroState::get_state_global(idx);
 
     const Real rho = U[+HydroDef::ConsIdx::Density];
     const Real gamma = istate.get_gamma(U);

@@ -15,7 +15,7 @@ FieldRH::FieldRH(const int i)
 {
     idx = i;
 
-    FieldState& istate = FieldState::get_state(idx);
+    FieldState& istate = FieldState::get_state_global(idx);
 
     c0 = MFP::lightspeed;
     ch = istate.div_speed;

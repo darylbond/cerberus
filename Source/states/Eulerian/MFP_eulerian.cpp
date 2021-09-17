@@ -1,7 +1,11 @@
 #include "MFP_eulerian.H"
 #include "MFP.H"
 
-EulerianState::EulerianState(){}
+EulerianState::EulerianState()
+{
+    num_grow = 0;
+}
+
 EulerianState::~EulerianState(){}
 
 void EulerianState::set_reconstruction()
@@ -24,7 +28,8 @@ void EulerianState::set_reconstruction()
     if (!reconstructor)
         Abort("Invalid reconstruction option '"+rec+"'. Options are "+vec2str(rfact.getKeys()));
 
-    set_num_grow(reconstructor->get_num_grow());
+    int ng = reconstructor->get_num_grow();
+    set_num_grow(ng);
 
     return;
 
@@ -431,3 +436,13 @@ void EulerianState::calc_divergence(const Box& box,
     return;
 }
 
+void EulerianState::write_info(nlohmann::json &js) const
+{
+
+    State::write_info(js);
+
+    // write out stuff that is common to all states
+
+    js["num_grow"] = num_grow;
+
+}

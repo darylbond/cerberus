@@ -52,10 +52,11 @@ Vector<set_bc> HydroState::bc_set = {
 std::string HydroState::tag = "hydro";
 bool HydroState::registered = GetStateFactory().Register(HydroState::tag, StateBuilder<HydroState>);
 
-HydroState::HydroState() {}
+HydroState::HydroState(){}
 
 HydroState::HydroState(const sol::table& def)
 {
+    num_grow = 0;
     name = def.get<std::string>("name");
     global_idx = def.get<int>("global_idx");
 }
@@ -434,12 +435,10 @@ void HydroState::init_from_lua()
     //
     set_flux();
 
-
     //
-    // shock detector threshold
+    // shock detector
     //
     set_shock_detector();
-
 
 }
 
@@ -1008,7 +1007,7 @@ Real HydroState::get_allowed_time_step(MFP* mfp) const
 
     Array<Real,+HydroDef::ConsIdx::NUM> U;
 
-    Real max_speed = std::numeric_limits<Real>::max();
+    Real max_speed = std::numeric_limits<Real>::min();
 
     for (MFIter mfi(data); mfi.isValid(); ++mfi) {
         const Box& box = mfi.tilebox();
@@ -1058,9 +1057,9 @@ Real HydroState::get_allowed_time_step(MFP* mfp) const
     }
 
     // check for any viscous time step limitation
-    //    if (viscous) {
-    //        dt = std::min(dt, viscous->get_min_dt(mfp));
-    //    }
+    if (viscous) {
+        dt = std::min(dt, viscous->get_min_dt(mfp));
+    }
 
     return dt;
 }
@@ -1995,10 +1994,15 @@ void HydroState::calc_fluxes(const Box& box,
                     transform_global2local(R, d, flux_vector_idx);
 
 
-                    Real shk = shock_detector->solve(L, R);
+                    Real shk = 0.0;
 
-                    cons4(i-index[0],j-index[1],k-index[2],+HydroDef::ConsIdx::Shock) = std::max(cons4(i-index[0],j-index[1],k-index[2],+HydroDef::ConsIdx::Shock), shk);
-                    cons4(i,j,k,+HydroDef::ConsIdx::Shock) = std::max(cons4(i,j,k,+HydroDef::ConsIdx::Shock), shk);
+                    if (shock_detector) {
+                        shk = shock_detector->solve(L, R);
+                        cons4(i-index[0],j-index[1],k-index[2],+HydroDef::ConsIdx::Shock) = std::max(cons4(i-index[0],j-index[1],k-index[2],+HydroDef::ConsIdx::Shock), shk);
+                        cons4(i,j,k,+HydroDef::ConsIdx::Shock) = std::max(cons4(i,j,k,+HydroDef::ConsIdx::Shock), shk);
+                    }
+
+
 
                     flux_solver->solve(L, R, F, &shk);
 
@@ -2710,3 +2714,32 @@ void HydroState::calc_wall_fluxes(const Box& box,
 }
 
 #endif
+
+void HydroState::write_info(nlohmann::json &js) const
+{
+
+    EulerianState::write_info(js);
+
+    // write out stuff that is common to all states
+
+    js["type"] = tag;
+    js["type_idx"] = +get_type();
+
+    js["mass"] = mass;
+    js["charge"] = charge;
+    js["gamma"] = gamma;
+
+    if (viscous) {
+
+        auto& grp = js["viscosity"];
+
+        grp["type"] = viscous->get_tag();
+
+        const auto coeffs = viscous->get_refs();
+
+        for (const auto& cf : coeffs) {
+            grp[cf.first] = cf.second;
+        }
+    }
+
+}

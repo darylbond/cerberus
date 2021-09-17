@@ -11,6 +11,7 @@
 
 #include "MFP.H"
 #include "MFP_state.H"
+#include "MFP_eulerian.H"
 #include "MFP_utility.H"
 #include "MFP_diagnostics.H"
 #include "json.hpp"
@@ -25,6 +26,7 @@ std::string MFP::getVersion()
     return CERBERUS_GIT_NAME + std::string("_") + CERBERUS_GIT_VERSION;
 }
 
+#ifdef AMREX_USE_EB
 bool MFP::check_covered_stencil(Array4<const EBCellFlag> const& flag, int i, int j, int k, int d, int stencil_length)
 {
     BL_PROFILE("State::check_covered_stencil");
@@ -41,6 +43,7 @@ bool MFP::check_covered_stencil(Array4<const EBCellFlag> const& flag, int i, int
     }
     return false;
 }
+#endif
 
 void MFP::calc_slope(const Box& box,
                      const FArrayBox& src,
@@ -149,22 +152,20 @@ void MFP::getPlotData(MultiFab &plot_data,
 
     // get all the data
     Vector<MultiFab> U(states.size());
-    for (const auto& state : states) {
-        const int idx = state->data_idx;
 
-        if (idx < 0) continue;
+    for (int data_idx=0; data_idx<eulerian_states.size(); ++data_idx) {
 
-        State &istate = *state;
+        EulerianState &istate = EulerianState::get_state(data_idx);
 
         // get a full array of data at this level
-        int ns = desc_lst[idx].nComp();
+        int ns = desc_lst[data_idx].nComp();
         int ng = istate.get_num_grow();
-        U[idx].define(grids, dmap, ns, ng, MFInfo(),Factory());
+        U[data_idx].define(grids, dmap, ns, ng, MFInfo(),Factory());
 
 #ifdef AMREX_USE_EB
         EB2::IndexSpace::push(const_cast<EB2::IndexSpace*>(istate.eb2_index));
 #endif
-        FillPatch(*this, U[idx], ng, time, idx, 0, ns, 0);
+        FillPatch(*this, U[data_idx], ng, time, data_idx, 0, ns, 0);
     }
 
 
@@ -194,12 +195,9 @@ void MFP::getPlotData(MultiFab &plot_data,
             dat_arrays["cost"].copy(cost[mfi]);
         }
 
-        for (const auto& state : states) {
-            const int idx = state->data_idx;
+        for (int data_idx=0; data_idx<eulerian_states.size(); ++data_idx) {
+            EulerianState &istate = EulerianState::get_state(data_idx);
 
-            if (idx < 0) continue;
-
-            State &istate = *state;
             const Box box = grow(orig_box,istate.get_num_grow());
 
 #ifdef AMREX_USE_EB
@@ -209,7 +207,7 @@ void MFP::getPlotData(MultiFab &plot_data,
 
             // raw values
             istate.get_plot_output(box,
-                                   U[idx][mfi],
+                                   U[data_idx][mfi],
                                    dat_arrays,
                                    updated
                        #ifdef AMREX_USE_EB

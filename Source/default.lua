@@ -39,8 +39,6 @@ effective_zero = 1e-14
 
 time_integration_scheme = 'euler'
 
-do_CTU = 1 -- use corner-transport-upwinding
-
 do_face_sources = 1 -- apply source terms to reconstructed face values
 
 force_dt = 0 -- force specific time step

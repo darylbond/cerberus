@@ -27,7 +27,9 @@ public:
     int global_idx;
     int data_idx;
 
+#ifdef AMREX_USE_EB
     EBData eb_data;
+#endif
 
     enum class StateClassification {
         Null = -1,
@@ -67,8 +69,6 @@ public:
 
     virtual StateClassification get_classification() const {return StateClassification::Null;}
     virtual StateType get_type() const {return StateType::Null;}
-    virtual int get_num_grow() {return 0;}
-    virtual void set_num_grow(int n) {return;}
 
     virtual Vector<std::string> get_plot_output_names() const {return {};}
     virtual void get_plot_output(const Box& box,

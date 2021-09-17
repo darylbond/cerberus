@@ -15,7 +15,7 @@
 #include <AMReX_Vector.H>
 
 #include "MFP.H"
-#include "MFP_state.H"
+#include "MFP_eulerian.H"
 
 #ifdef PPROF
 #include <gperftools/profiler.h>
@@ -92,8 +92,10 @@ int main(int argc, char* argv[]) {
         Amr amr(getLevelBld());
 
         int n_grow = 4;
-        for (const auto & istate : MFP::states) {
-            n_grow = std::max(n_grow, istate->get_num_grow()+3);
+
+        for (int data_idx=0; data_idx<MFP::eulerian_states.size(); ++data_idx) {
+            EulerianState &istate = EulerianState::get_state(data_idx);
+            n_grow = std::max(n_grow, istate.get_num_grow()+3);
         }
 
 #ifdef AMREX_USE_EB

@@ -28,7 +28,7 @@ public:
     virtual std::string str() const;
 
     Real get_min_dt(MFP *mfp) const;
-    virtual Real calc_dt(Array<Real,+HydroDef::ConsIdx::NUM>& U, const Real dx2) const {return 0.0;}
+    virtual Real calc_stability_condition(Array<Real,+HydroDef::ConsIdx::NUM>& U) const {return 0.0;}
 
     int idx;
     bool active;
@@ -74,7 +74,7 @@ public:
         return {{"mu_0", mu_0},{"T0", T0}, {"S",S}, {"Pr",Prandtl}};
     }
 
-    virtual Real calc_dt(Array<Real,+HydroDef::ConsIdx::NUM>& U, const Real dx2) const override;
+    virtual Real calc_stability_condition(Array<Real,+HydroDef::ConsIdx::NUM>& U) const override;
     virtual void get_coeffs(const Array<Real, +HydroDef::PrimIdx::NUM> &Q, Real &T, Real &mu, Real &kappa) const override;
 
     static bool registered;
@@ -104,7 +104,7 @@ public:
         return {{"mu_0", mu_0},{"T0", T0}, {"n",n}, {"Pr",Prandtl}};
     }
 
-    virtual Real calc_dt(Array<Real,+HydroDef::ConsIdx::NUM>& U, const Real dx2) const override;
+    virtual Real calc_stability_condition(Array<Real,+HydroDef::ConsIdx::NUM>& U) const override;
     virtual void get_coeffs(const Array<Real,+HydroDef::PrimIdx::NUM>& Q, Real &T, Real &mu, Real &kappa) const override;
 
     static bool registered;
@@ -134,7 +134,7 @@ public:
         return {{"mu_0", mu_0}, {"Pr",Prandtl}};
     }
 
-    virtual Real calc_dt(Array<Real,+HydroDef::ConsIdx::NUM>& U, const Real dx2) const override;
+    virtual Real calc_stability_condition(Array<Real,+HydroDef::ConsIdx::NUM>& U) const override;
     virtual void get_coeffs(const Array<Real,+HydroDef::PrimIdx::NUM>& Q, Real &T, Real &mu, Real &kappa) const override;
 
     static bool registered;

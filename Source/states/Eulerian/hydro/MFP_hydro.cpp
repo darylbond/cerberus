@@ -787,7 +787,9 @@ Vector<std::string> HydroState::get_plot_output_names() const
     out.push_back("charge");
     out.push_back("mass");
     out.push_back("gamma");
+#ifdef AMREX_USE_EB
     out.push_back("vfrac");
+#endif
     return out;
 }
 
@@ -881,6 +883,11 @@ void HydroState::get_plot_output(const Box& box,
 
                 for (int n=0; n<+HydroDef::ConsIdx::NUM; ++n) {
                     S[n] = src4(i,j,k,n);
+
+                    if (std::isnan(S[n])) {
+                        Abort();
+                    }
+
                 }
 
                 if (load_charge) out4[charge_name](i,j,k) = get_charge(S);

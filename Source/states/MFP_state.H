@@ -68,7 +68,9 @@ public:
 
     BoundaryState boundary_conditions;
 
+
     std::unique_ptr<Refinement> refine;
+    void get_refinement_tags(MFP* mfp, TagBoxArray& tags);
 
     virtual StateClassification get_classification() const {return StateClassification::Null;}
     virtual StateType get_type() const {return StateType::Null;}

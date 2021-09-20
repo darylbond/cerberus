@@ -31,59 +31,65 @@ std::string HydroViscous::str() const
 
 Real HydroViscous::get_min_dt(MFP *mfp) const
 {
-        BL_PROFILE("get_max_speed");
-        const HydroState& istate = HydroState::get_state_global(idx);
+    BL_PROFILE("get_max_speed");
+    const HydroState& istate = HydroState::get_state_global(idx);
 
-        MultiFab& data = mfp->get_new_data(istate.data_idx);
+    MultiFab& data = mfp->get_new_data(istate.data_idx);
 
-        Real min_dt = std::numeric_limits<Real>::max();
 
-        const Real* dx = mfp->Geom().InvCellSize();
-        const Real dx2 = AMREX_D_TERM(dx[0]*dx[0],+dx[1]*dx[1],+dx[2]*dx[2]);
 
-        Array<Real,+HydroDef::ConsIdx::NUM> U;
+    Array<Real,+HydroDef::ConsIdx::NUM> U;
 
-        for (MFIter mfi(data); mfi.isValid(); ++mfi) {
-            const Box& box = mfi.tilebox();
-            const Dim3 lo = amrex::lbound(box);
-            const Dim3 hi = amrex::ubound(box);
+    Real max_speed = 0;
 
-    #ifdef AMREX_USE_EB
-            // get the EB data required for later calls
-            const FArrayBox& vfrac = istate.eb_data.volfrac[mfi];
+    for (MFIter mfi(data); mfi.isValid(); ++mfi) {
+        const Box& box = mfi.tilebox();
+        const Dim3 lo = amrex::lbound(box);
+        const Dim3 hi = amrex::ubound(box);
 
-            if (vfrac.getType() == FabType::covered) continue;
+#ifdef AMREX_USE_EB
+        // get the EB data required for later calls
+        const FArrayBox& vfrac = istate.eb_data.volfrac[mfi];
 
-            Array4<const Real> const& vf4 = vfrac.array();
-    #endif
+        if (vfrac.getType() == FabType::covered) continue;
 
-            Array4<Real const> const dat = data.const_array(mfi);
+        Array4<const Real> const& vf4 = vfrac.array();
+#endif
 
-            for     (int k = lo.z; k <= hi.z; ++k) {
-                for   (int j = lo.y; j <= hi.y; ++j) {
-    AMREX_PRAGMA_SIMD
-                    for (int i = lo.x; i <= hi.x; ++i) {
+        Array4<Real const> const dat = data.const_array(mfi);
 
-    #ifdef AMREX_USE_EB
-                        if (vf4(i,j,k) == 0.0) {
-                            continue;
-                        }
-    #endif
+        for     (int k = lo.z; k <= hi.z; ++k) {
+            for   (int j = lo.y; j <= hi.y; ++j) {
+                AMREX_PRAGMA_SIMD
+                        for (int i = lo.x; i <= hi.x; ++i) {
 
-                        for (int n=0; n<+HydroDef::ConsIdx::NUM; ++n) {
-                            U[n] = dat(i,j,k,n);
-                        }
-
-                        const Real dt_ = calc_dt(U, dx2);
-
-                        min_dt = amrex::min(min_dt, dt_);
+#ifdef AMREX_USE_EB
+                    if (vf4(i,j,k) == 0.0) {
+                        continue;
                     }
+#endif
+
+                    for (int n=0; n<+HydroDef::ConsIdx::NUM; ++n) {
+                        U[n] = dat(i,j,k,n);
+                    }
+
+                    max_speed = amrex::max(max_speed, calc_stability_condition(U));
+
                 }
             }
         }
-
-        return min_dt;
     }
+
+    Real min_dt = std::numeric_limits<Real>::max();
+
+    const Real* dx = mfp->Geom().CellSize();
+
+    for (int d=0; d<AMREX_SPACEDIM; ++d) {
+        min_dt = std::min(min_dt, dx[d]*dx[d]/max_speed);
+    }
+
+    return min_dt;
+}
 
 
 ClassFactory<HydroViscous>& GetHydroViscousFactory() {
@@ -142,7 +148,7 @@ void Sutherland::get_coeffs(const Array<Real, +HydroDef::PrimIdx::NUM> &Q, Real 
     return;
 }
 
-Real Sutherland::calc_dt(Array<Real,+HydroDef::ConsIdx::NUM>& U, const Real dx2) const
+Real Sutherland::calc_stability_condition(Array<Real,+HydroDef::ConsIdx::NUM>& U) const
 {
     const HydroState& istate = HydroState::get_state_global(idx);
 
@@ -154,7 +160,7 @@ Real Sutherland::calc_dt(Array<Real,+HydroDef::ConsIdx::NUM>& U, const Real dx2)
     const Real T_ = T/T0;
     const Real mu = mu_0*T_*sqrt(T_)*(T0+S)/(T+S);
 
-    return dx2*(4*mu*gamma/(Prandtl*rho));
+    return (4*mu*gamma/(Prandtl*rho));
 }
 
 // ====================================================================================
@@ -208,7 +214,7 @@ void PowerLaw::get_coeffs(const Array<Real,+HydroDef::PrimIdx::NUM>& Q, Real &T,
     return;
 }
 
-Real PowerLaw::calc_dt(Array<Real,+HydroDef::ConsIdx::NUM>& U, const Real dx2) const
+Real PowerLaw::calc_stability_condition(Array<Real,+HydroDef::ConsIdx::NUM>& U) const
 {
 
     const HydroState& istate = HydroState::get_state_global(idx);
@@ -219,7 +225,7 @@ Real PowerLaw::calc_dt(Array<Real,+HydroDef::ConsIdx::NUM>& U, const Real dx2) c
 
     const Real mu = mu_0*pow(T/T0,n);
 
-    return dx2*(4*mu*gamma/(Prandtl*rho));
+    return (4*mu*gamma/(Prandtl*rho));
 }
 
 // ====================================================================================
@@ -260,7 +266,7 @@ void UserDefinedViscosity::get_coeffs(const Array<Real,+HydroDef::PrimIdx::NUM>&
     return;
 }
 
-Real UserDefinedViscosity::calc_dt(Array<Real,+HydroDef::ConsIdx::NUM>& U, const Real dx2) const
+Real UserDefinedViscosity::calc_stability_condition(Array<Real,+HydroDef::ConsIdx::NUM>& U) const
 {
 
     const HydroState& istate = HydroState::get_state_global(idx);
@@ -269,7 +275,7 @@ Real UserDefinedViscosity::calc_dt(Array<Real,+HydroDef::ConsIdx::NUM>& U, const
     const Real gamma = istate.get_gamma(U);
     const Real mu = mu_0;
 
-    return dx2*(4*mu*gamma/(Prandtl*rho));
+    return (4*mu*gamma/(Prandtl*rho));
 }
 
 

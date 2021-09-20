@@ -40,6 +40,8 @@ public:
     std::unique_ptr<HydroShockDetector> shock_detector;
     std::unique_ptr<HydroViscous> viscous;
 
+    virtual bool is_viscous() const {return viscous != nullptr;}
+
 #ifdef AMREX_USE_EB
     Vector<std::unique_ptr<HydroBoundaryEB>> eb_bcs;
     virtual void set_eb_bc(const sol::table &bc_def) override;
@@ -189,34 +191,35 @@ public:
                           #endif
                               ) const;
 
-    void calc_viscous_fluxes(const Box& box, Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
-                             const Box& pbox,
-                             const FArrayBox &prim,
-                         #ifdef AMREX_USE_EB
-                             const EBCellFlagFab& flag,
-                         #endif
-                             const Real* dx) const;
+    virtual void calc_viscous_fluxes(const Box& box,
+                                     Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
+                                     const Box& pbox,
+                                     const FArrayBox &prim,
+                                 #ifdef AMREX_USE_EB
+                                     const EBCellFlagFab& flag,
+                                 #endif
+                                     const Real* dx) const override;
 
 #ifdef AMREX_USE_EB
 
-    void calc_viscous_fluxes_eb(const Box& box, Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
-                                const Box& pbox,
-                                const FArrayBox &prim,
-                            #ifdef AMREX_USE_EB
-                                const EBCellFlagFab& flag,
-                            #endif
-                                const Real* dx) const;
+    virtual void calc_viscous_fluxes_eb(const Box& box, Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
+                                        const Box& pbox,
+                                        const FArrayBox &prim,
+                                    #ifdef AMREX_USE_EB
+                                        const EBCellFlagFab& flag,
+                                    #endif
+                                        const Real* dx) const override;
 
-    void calc_wall_fluxes(const Box& box,
-                          const FArrayBox &prim,
-                          Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
-                          const EBCellFlagFab& flag,
-                          const CutFab &bc_idx,
-                          const FArrayBox& bcent,
-                          const FArrayBox &bnorm,
-                          const Array<const FArrayBox*, AMREX_SPACEDIM> &afrac,
-                          const Real *dx,
-                          const Real dt) const;
+    virtual void calc_wall_fluxes(const Box& box,
+                                  const FArrayBox &prim,
+                                  Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
+                                  const EBCellFlagFab& flag,
+                                  const CutFab &bc_idx,
+                                  const FArrayBox& bcent,
+                                  const FArrayBox &bnorm,
+                                  const Array<const FArrayBox*, AMREX_SPACEDIM> &afrac,
+                                  const Real *dx,
+                                  const Real dt) const override;
 #endif
 
     virtual void write_info(nlohmann::json& js) const override;

@@ -291,7 +291,12 @@ void MFP::getPlotData(MultiFab &plot_data,
                 }
             }
         }
+
     }
+
+//    for (int i=0; i<plot_data.nComp(); ++i) {
+//        plot_FAB_2d(plot_data, i, 0, plot_names[i], false, true);
+//    }
 
     return;
 }

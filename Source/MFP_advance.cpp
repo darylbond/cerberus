@@ -422,17 +422,20 @@ void MFP::advance_one_step(Real time, Real dt, int iteration, int ncycle, bool C
 
             EulerianState &istate = EulerianState::get_state(idx);
 
-            // now calculate any viscous fluxes
+            if (istate.is_viscous()) {
 
-            const Box pbox = amrex::grow(box, istate.num_grow + num_grow_eb);
+                // now calculate any viscous fluxes
 
-            istate.calc_viscous_fluxes(grow(box,num_grow_eb),
-                                       fluxes[idx],
-                                       pbox, primitives,
-                           #ifdef AMREX_USE_EB
-                                       *fab_flags[idx],
-                           #endif
-                                       dx);
+                const Box pbox = amrex::grow(box, istate.num_grow + num_grow_eb);
+
+                istate.calc_viscous_fluxes(grow(box,num_grow_eb),
+                                           fluxes[idx],
+                                           pbox, primitives[idx],
+                               #ifdef AMREX_USE_EB
+                                           *fab_flags[idx],
+                               #endif
+                                           dx);
+            }
 
 
             // given all of the fluxes calculate the update to the cell centred values

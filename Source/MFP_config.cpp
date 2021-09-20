@@ -311,11 +311,6 @@ void MFP::read_config()
             for (auto& name : state->get_plot_output_names()) {
                 plot_variables[name+"-"+state->name][0] = 0;
             }
-
-#ifdef AMREX_USE_EB
-
-            plot_variables["vfrac-"+state->name][0] = 0;
-#endif
         }
         plot_variables.erase("all");
     }
@@ -328,9 +323,9 @@ void MFP::read_config()
         }
     }
 
-    //    for (const auto& var : plot_variables) {
-    //        Print() << var.first << " : " << var.second[0] << std::endl;
-    //    }
+//    for (const auto& var : plot_variables) {
+//        Print() << var.first << " : " << var.second[0] << std::endl;
+//    }
 
     const sol::table plot_funcs = plot["functions"];
     // need to get sorted function names to ensure consistency across processors

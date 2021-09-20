@@ -12,13 +12,7 @@ void MFP::errorEst(TagBoxArray& tags, int, int, Real time, int, int) {
     const Real* prob_lo = geom.ProbLo();
 
     for (const auto& istate : states) {
-        istate->refine->get_tags(this, tags);
-
-#ifdef AMREX_USE_EB
-        if (refine_cutcells) {
-            istate->refine->tag_cut_cells(this, tags);
-        }
-#endif
+        istate->get_refinement_tags(this, tags);
     }
 
     if (!refine_boxes.empty()) {

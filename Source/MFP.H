@@ -16,8 +16,10 @@
 
 #include "MFP_eb_structs.H"
 #include "MFP_optional_func.H"
+#include "MFP_source.H"
 
 class State;
+class Source;
 
 using namespace amrex;
 
@@ -129,6 +131,7 @@ public:
 
     int get_level() {return level;}
     Real get_cum_time() {return parent->cumTime();}
+    Real get_dt() {return parent->dtLevel(level);}
 
     // Define data descriptors.
     static DescriptorList& get_desc_lst () noexcept { return desc_lst; }
@@ -142,6 +145,10 @@ public:
     static State* get_state_ptr(const int idx) {return states[idx].get();}
     static State& get_state(const int idx) { return *states[idx]; }
     static State& get_state(const std::string& name);
+
+    static Source* get_source_ptr(const int idx) {return sources[idx].get();}
+    static Source& get_source(const int idx) { return *sources[idx]; }
+    static Source& get_source(const std::string& name);
 
     void build_eb();
     void avgDown();
@@ -188,6 +195,10 @@ public:
     static Vector<size_t> eulerian_states;
     static Vector<size_t> lagrangian_states;
 
+    static Vector<std::unique_ptr<Source>> sources;
+    static Vector<std::string> source_names;
+    static std::map<std::string, int> source_index;
+
     static std::map<std::string,Array<int,AMREX_SPACEDIM+1>> plot_variables;
     static Vector<std::pair<std::string,Optional3D1VFunction>> plot_functions;
 
@@ -211,6 +222,8 @@ public:
 
 #ifdef AMREX_USE_EB
     static Vector<DataEB> eb_def;
+    static Vector<Vector<std::unique_ptr<EBData>>> eb_data;
+    EBData& get_eb_data(const int idx) { return *eb_data[level][idx]; }
 #endif
 
 

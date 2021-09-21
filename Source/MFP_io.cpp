@@ -182,6 +182,7 @@ void MFP::getPlotData(MultiFab &plot_data,
 
     MultiFab& cost = get_new_data(Cost_Idx);
 
+
     for (MFIter mfi(cost); mfi.isValid(); ++mfi) {
         const Box& orig_box = mfi.tilebox();
 
@@ -201,8 +202,9 @@ void MFP::getPlotData(MultiFab &plot_data,
             const Box box = grow(orig_box,istate.get_num_grow());
 
 #ifdef AMREX_USE_EB
-            const EBCellFlagFab& flag = istate.eb_data.flags[mfi];
-            const FArrayBox& vfrac = istate.eb_data.volfrac[mfi];
+            EBData& eb = get_eb_data(istate.global_idx);
+//            const EBCellFlagFab& flag = eb.flags[mfi];
+            const FArrayBox& vfrac = eb.volfrac[mfi];
 #endif
 
             // raw values

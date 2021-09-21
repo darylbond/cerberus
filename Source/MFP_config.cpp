@@ -7,7 +7,8 @@
 #include "MFP_utility.H"
 
 #include "MFP_state.H"
-#include "MFP_hydro.H"
+#include "MFP_source.H"
+
 
 void MFP::set_lua_script(const std::string &script)
 {
@@ -94,7 +95,7 @@ void MFP::read_config()
     //
 
     // what states do we have?
-    sol::table names = lua.script("return get_sorted_keys(states)");
+    sol::table state_def_names = lua.script("return get_sorted_keys(states)");
 
     ClassFactory<State> sfact = GetStateFactory();
 
@@ -106,7 +107,7 @@ void MFP::read_config()
 
 
     int global_idx = 0;
-    for (auto& item : names) {
+    for (auto& item : state_def_names) {
         std::string name = item.second.as<std::string>();
 
         sol::table state_def = lua["states"][name];
@@ -263,8 +264,47 @@ void MFP::read_config()
     }
 #endif
 
-    // what source term collections have been specified
-    //    sol::table ode_systems = lua["sources"];
+
+    //
+    // generate source terms
+    //
+
+    // what sources do we have?
+    sol::table src_def_names = lua.script("return get_sorted_keys(sources)");
+
+    ClassFactory<Source> src_fact = GetSourceFactory();
+
+    // get a list of all the tags
+    Vector<std::string> src_tags;
+    for (const auto& S : src_fact.getRegistered()) {
+        src_tags.push_back(S.first);
+    }
+
+
+    int src_idx = 0;
+    for (auto& item : src_def_names) {
+        std::string src_name = item.second.as<std::string>();
+
+        sol::table src_def = lua["sources"][src_name];
+
+        src_def["name"] = src_name;
+        src_def["src_idx"] = src_idx;
+
+        std::string src_type = src_def["type"].get<std::string>();
+
+        std::unique_ptr<Source> isrc = src_fact.Build(src_type, src_def);
+
+        if (!isrc)
+            Abort("Failed to read source "+src_name+", must be one of "+vec2str(src_tags));
+
+        sources.push_back(std::move(isrc));
+        source_names.push_back(src_name);
+        source_index[src_name] = src_idx;
+
+        src_idx++;
+    }
+
+
 
     // update anything in the states that requires source terms to be defined
     for (auto &istate : states) {

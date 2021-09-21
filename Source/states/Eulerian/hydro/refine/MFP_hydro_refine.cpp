@@ -59,8 +59,9 @@ void HydroGradientRefinement::get_tags(MFP* mfp, TagBoxArray& tags) const
         mfp->FillPatch(*mfp, U, num_grow, time, istate.data_idx, 0, +HydroDef::ConsIdx::NUM);
 
 #ifdef AMREX_USE_EB
-        auto const& flags = istate.eb_data.flags;
-        auto const& volfrac = istate.eb_data.volfrac;
+        EBData& eb = mfp->get_eb_data(idx);
+        auto const& flags = eb.flags;
+        auto const& volfrac = eb.volfrac;
 #endif
 
         FArrayBox Q;
@@ -74,8 +75,9 @@ void HydroGradientRefinement::get_tags(MFP* mfp, TagBoxArray& tags) const
             const Box& bx = mfi.tilebox();
 
 #ifdef AMREX_USE_EB
-            const FArrayBox& vfrac = volfrac[mfi];
             const EBCellFlagFab& flag = flags[mfi];
+            const FArrayBox& vfrac = volfrac[mfi];
+
             FabType flag_type = flag.getType(bx);
 #else
             FabType flag_type = FabType::regular;

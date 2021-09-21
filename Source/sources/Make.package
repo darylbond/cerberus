@@ -1,0 +1,8 @@
+CEXE_headers += MFP_source.H
+CEXE_sources += MFP_source.cpp
+
+CEXE_headers += MFP_plasma5.H
+CEXE_sources += MFP_plasma5.cpp
+
+INCLUDE_LOCATIONS += $(TOP)/Source/sources
+VPATH_LOCATIONS   += $(TOP)/Source/sources

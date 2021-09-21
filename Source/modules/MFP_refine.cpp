@@ -12,7 +12,7 @@ void Refinement::tag_cut_cells (MFP* mfp, TagBoxArray& tags)
 
     const char   tagval = TagBox::SET;
 
-    auto const& flags = istate.eb_data.flags;
+    auto const& flags = mfp->get_eb_data(idx).flags;
 
     const auto &cost = mfp->get_new_data(mfp->Cost_Idx);
 

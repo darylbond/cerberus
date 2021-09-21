@@ -42,6 +42,10 @@ Real HydroViscous::get_min_dt(MFP *mfp) const
 
     Real max_speed = 0;
 
+#ifdef AMREX_USE_EB
+    EBData& eb = mfp->get_eb_data(idx);
+#endif
+
     for (MFIter mfi(data); mfi.isValid(); ++mfi) {
         const Box& box = mfi.tilebox();
         const Dim3 lo = amrex::lbound(box);
@@ -49,7 +53,8 @@ Real HydroViscous::get_min_dt(MFP *mfp) const
 
 #ifdef AMREX_USE_EB
         // get the EB data required for later calls
-        const FArrayBox& vfrac = istate.eb_data.volfrac[mfi];
+
+        const FArrayBox& vfrac = eb.volfrac[mfi];
 
         if (vfrac.getType() == FabType::covered) continue;
 

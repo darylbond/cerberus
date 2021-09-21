@@ -65,9 +65,13 @@ void MFP::build_eb() {
     // get the information for each embedded boundary
     const Vector<int> ngrow = {m_eb_basic_grow_cells,m_eb_volume_grow_cells,m_eb_full_grow_cells};
 
+    eb_data.resize(level+1);
+
     for (const auto& state : states) {
 
-        state->eb_data.ebfactory = makeEBFabFactory (state->eb2_index,
+        std::unique_ptr<EBData> eb(new EBData);
+
+        eb->ebfactory = makeEBFabFactory (state->eb2_index,
                                                      geom,
                                                      grids,
                                                      dmap,
@@ -75,26 +79,26 @@ void MFP::build_eb() {
                                                      EBSupport::full);
 
 
-        const auto& flags_orig = state->eb_data.ebfactory->getMultiEBCellFlagFab();
-        state->eb_data.flags.define(grids, dmap, 1, flags_orig.n_grow);
-        state->eb_data.flags.copy(flags_orig,0,0,1,flags_orig.n_grow,flags_orig.n_grow,geom.periodicity());
+        const auto& flags_orig = eb->ebfactory->getMultiEBCellFlagFab();
+        eb->flags.define(grids, dmap, 1, flags_orig.n_grow);
+        eb->flags.copy(flags_orig,0,0,1,flags_orig.n_grow,flags_orig.n_grow,geom.periodicity());
 
-        const auto& vfrac_original = state->eb_data.ebfactory->getVolFrac();
-        state->eb_data.volfrac.define(grids, dmap, 1, vfrac_original.n_grow);
-        state->eb_data.volfrac.copy(vfrac_original,0,0,1,vfrac_original.n_grow,vfrac_original.n_grow,geom.periodicity());
+        const auto& vfrac_original = eb->ebfactory->getVolFrac();
+        eb->volfrac.define(grids, dmap, 1, vfrac_original.n_grow);
+        eb->volfrac.copy(vfrac_original,0,0,1,vfrac_original.n_grow,vfrac_original.n_grow,geom.periodicity());
 
-        state->eb_data.bndrycent = &(state->eb_data.ebfactory->getBndryCent());
-        state->eb_data.bndrynorm = &(state->eb_data.ebfactory->getBndryNormal());
-        state->eb_data.areafrac = state->eb_data.ebfactory->getAreaFrac();
-        state->eb_data.facecent = state->eb_data.ebfactory->getFaceCent();
+        eb->bndrycent = &(eb->ebfactory->getBndryCent());
+        eb->bndrynorm = &(eb->ebfactory->getBndryNormal());
+        eb->areafrac = eb->ebfactory->getAreaFrac();
+        eb->facecent = eb->ebfactory->getFaceCent();
 
         // different boundary conditions
-        state->eb_data.bndryidx.define(grids, dmap, 1, m_eb_basic_grow_cells, flags_orig);
-        state->eb_data.bndryidx.setVal(-1.0);
+        eb->bndryidx.define(grids, dmap, 1, m_eb_basic_grow_cells, flags_orig);
+        eb->bndryidx.setVal(-1.0);
 
         // update ghost cells
-        auto& flags = state->eb_data.flags;
-        auto& vfrac = state->eb_data.volfrac;
+        auto& flags = eb->flags;
+        auto& vfrac = eb->volfrac;
 
         for (MFIter mfi(vfrac); mfi.isValid(); ++mfi){
 
@@ -107,6 +111,8 @@ void MFP::build_eb() {
             //            plot_FAB_2d(flags[mfi], "flags after", false);
             //            plot_FAB_2d(vfrac[mfi], 0, "vfrac after", false,true);
         }
+
+        eb_data[level].push_back(std::move(eb));
     }
 
 
@@ -125,10 +131,9 @@ void MFP::build_eb() {
         const FabArray<EBCellFlagFab>& bc_flags = bc_ebfactory->getMultiEBCellFlagFab();
 
         for (const auto& si : eb.states) {
-            State& state = get_state(si.first);
-            EBData& eb_data = state.eb_data;
-            MultiCutFab& bndryidx = eb_data.bndryidx;
-            const FabArray<EBCellFlagFab>& state_flags = eb_data.flags;
+            EBData& ebd = get_eb_data(si.first);
+            MultiCutFab& bndryidx = ebd.bndryidx;
+            const FabArray<EBCellFlagFab>& state_flags = ebd.flags;
 
             // fill in all entries of the bndryidx with the appropriate index
             for (MFIter mfi(bc_flags); mfi.isValid(); ++mfi){

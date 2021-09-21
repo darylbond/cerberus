@@ -40,6 +40,7 @@ public:
     std::unique_ptr<HydroShockDetector> shock_detector;
     std::unique_ptr<HydroViscous> viscous;
 
+    virtual StateType get_type() const override {return StateType::Hydro;}
     virtual bool is_viscous() const {return viscous != nullptr;}
 
 #ifdef AMREX_USE_EB

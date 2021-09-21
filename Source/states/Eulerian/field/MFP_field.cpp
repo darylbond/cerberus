@@ -689,7 +689,7 @@ void FieldState::update_boundary_cells(const Box& box,
         }
     }
 }
-
+#ifdef AMREX_USE_EB
 bool check_covered_stencil(Array4<const EBCellFlag> const& flag, int i, int j, int k, int d, int stencil_length)
 {
     BL_PROFILE("State::check_covered_stencil");
@@ -706,6 +706,7 @@ bool check_covered_stencil(Array4<const EBCellFlag> const& flag, int i, int j, i
     }
     return false;
 }
+#endif
 
 void FieldState::calc_reconstruction(const Box& box,
                                      FArrayBox &prim,

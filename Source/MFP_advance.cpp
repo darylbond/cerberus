@@ -1,5 +1,6 @@
 #include "MFP.H"
 #include "MFP_eulerian.H"
+#include "MFP_source.H"
 #include "MFP_diagnostics.H"
 
 Real MFP::advance(Real time, Real dt, int iteration, int ncycle)
@@ -35,7 +36,13 @@ Real MFP::advance(Real time, Real dt, int iteration, int ncycle)
 void MFP::advance_one_step(Real time, Real dt, int iteration, int ncycle, bool CTU)
 {
 
-    BL_PROFILE("MFP::advance_euler");
+    BL_PROFILE("MFP::advance_one_step");
+
+    for (const auto& isrc : sources) {
+        isrc->solve(this, dt/2.0);
+    }
+
+
 
 #ifdef AMREX_USE_EB
     constexpr int num_grow_eb = 2;
@@ -142,9 +149,10 @@ void MFP::advance_one_step(Real time, Real dt, int iteration, int ncycle, bool C
             conserved[data_idx] = &local_new[data_idx][mfi];
 
 #ifdef AMREX_USE_EB
+            EBData& eb = get_eb_data(istate.global_idx);
             // get the EB data required for later calls
-            const EBCellFlagFab& flag = istate.eb_data.flags[mfi]; fab_flags[data_idx] = &flag;
-            const FArrayBox& vfrac = istate.eb_data.volfrac[mfi]; fab_vfrac[data_idx] = &vfrac;
+            const EBCellFlagFab& flag = eb.flags[mfi]; fab_flags[data_idx] = &flag;
+            const FArrayBox& vfrac = eb.volfrac[mfi]; fab_vfrac[data_idx] = &vfrac;
 
             //            plot_FAB_2d(flag, "flag", false);
             //            plot_FAB_2d(vfrac, 0, "vfrac", false, true);
@@ -453,16 +461,18 @@ void MFP::advance_one_step(Real time, Real dt, int iteration, int ncycle, bool C
 
 #ifdef AMREX_USE_EB
 
+            EBData& eb = get_eb_data(istate.global_idx);
+
             Array<const FArrayBox*,AMREX_SPACEDIM> afrac, fcent;
 
             if (active[idx] != FabType::regular) {
 
-                const FArrayBox &bcent = (*istate.eb_data.bndrycent)[mfi];
-                const FArrayBox &bnorm = (*istate.eb_data.bndrynorm)[mfi];
+                const FArrayBox &bcent = (*eb.bndrycent)[mfi];
+                const FArrayBox &bnorm = (*eb.bndrynorm)[mfi];
 
-                CutFab& bc_idx = istate.eb_data.bndryidx[mfi];
+                CutFab& bc_idx = eb.bndryidx[mfi];
 
-                afrac = {AMREX_D_DECL(&(*istate.eb_data.areafrac[0])[mfi], &(*istate.eb_data.areafrac[1])[mfi], &(*istate.eb_data.areafrac[2])[mfi])};
+                afrac = {AMREX_D_DECL(&(*eb.areafrac[0])[mfi], &(*eb.areafrac[1])[mfi], &(*eb.areafrac[2])[mfi])};
 
 
                 // calculate the flux through cut cell faces
@@ -494,7 +504,7 @@ void MFP::advance_one_step(Real time, Real dt, int iteration, int ncycle, bool C
                 IArrayBox fab_rrflag_as_crse(Box::TheUnitBox());
                 const IArrayBox* p_rrflag_as_crse = (fr_as_crse[idx]) ? fr_as_crse[idx]->getCrseFlag(mfi) : &fab_rrflag_as_crse;
 
-                fcent = {AMREX_D_DECL(&(*istate.eb_data.facecent[0])[mfi], &(*istate.eb_data.facecent[1])[mfi], &(*m_istate.eb_data.facecent[2])[mfi])};
+                fcent = {AMREX_D_DECL(&(*eb.facecent[0])[mfi], &(*eb.facecent[1])[mfi], &(*eb.facecent[2])[mfi])};
 
                 istate.calc_eb_divergence(box,
                                           *conserved[idx],
@@ -586,6 +596,10 @@ void MFP::advance_one_step(Real time, Real dt, int iteration, int ncycle, bool C
 
         wt = (ParallelDescriptor::second() - wt) / box.d_numPts();
         cost[mfi].plus(wt, box);
+    }
+
+    for (const auto& isrc : sources) {
+        isrc->solve(this, dt/2.0);
     }
 
     return;

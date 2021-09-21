@@ -50,8 +50,9 @@ void FieldGradientRefinement::get_tags(MFP* mfp, TagBoxArray& tags) const
         mfp->FillPatch(*mfp, U, num_grow, time, istate.data_idx, 0, +FieldDef::ConsIdx::NUM);
 
 #ifdef AMREX_USE_EB
-        auto const& flags = istate.eb_data.flags;
-        auto const& volfrac = istate.eb_data.volfrac;
+        EBData& eb = mfp->get_eb_data(idx);
+        auto const& flags = eb.flags;
+        auto const& volfrac = eb.volfrac;
 #endif
 
         FArrayBox Q;

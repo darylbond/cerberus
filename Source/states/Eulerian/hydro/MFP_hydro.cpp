@@ -429,7 +429,7 @@ void HydroState::init_data(MFP* mfp)
         Array4<Real> const& S4 = S_data.array();
 
 #ifdef AMREX_USE_EB
-        Array4<const EBCellFlag> const& flag4 = eb_data.flags.array(mfi);
+        Array4<const EBCellFlag> const& flag4 = mfp->get_eb_data(global_idx).flags.array(mfi);
 #endif
 
         Real x, y, z;
@@ -677,6 +677,7 @@ void HydroState::prim2cons(const Array<Real, +HydroDef::PrimIdx::NUM> &Q, Array<
     U[+HydroDef::ConsIdx::Zmom] = mz;
     U[+HydroDef::ConsIdx::Eden] = ed;
     U[+HydroDef::ConsIdx::Tracer] = tr;
+    U[+HydroDef::ConsIdx::Shock] = 0.0;
 
 }
 
@@ -936,7 +937,7 @@ Real HydroState::get_allowed_time_step(MFP* mfp) const
 
 #ifdef AMREX_USE_EB
         // get the EB data required for later calls
-        const FArrayBox& vfrac = eb_data.volfrac[mfi];
+        const FArrayBox& vfrac = mfp->get_eb_data(global_idx).volfrac[mfi];
 
         if (vfrac.getType() == FabType::covered) continue;
 

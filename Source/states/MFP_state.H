@@ -28,10 +28,6 @@ public:
     int global_idx;
     int data_idx;
 
-#ifdef AMREX_USE_EB
-    EBData eb_data;
-#endif
-
     enum class StateClassification {
         Null = -1,
         Eulerian,
@@ -48,17 +44,7 @@ public:
         NUM
     };
 
-    enum class AssociatedType {
-        isNull = -1,
-        Neutral,
-        Ion,
-        Electron,
-        Field,
-        MHD,
-    };
-
-    Vector<std::pair<int,int>> associated_sources; // (system idx, src idx)
-    std::map<AssociatedType,Vector<int>> associated_state; // (AssociatedType, {state idx, ...})
+    Vector<int> associated_sources;
 
 #ifdef AMREX_USE_EB
     bool eb_all_regular;

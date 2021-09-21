@@ -43,9 +43,14 @@ std::map<std::string, int> MFP::state_index;
 Vector<size_t> MFP::eulerian_states;
 Vector<size_t> MFP::lagrangian_states;
 
+Vector<std::unique_ptr<Source>> MFP::sources;
+Vector<std::string> MFP::source_names;
+std::map<std::string, int> MFP::source_index;
+
 
 #ifdef AMREX_USE_EB
 Vector<DataEB> MFP::eb_def;
+Vector<Vector<std::unique_ptr<EBData>>> MFP::eb_data;
 #endif
 
 Real MFP::x_ref = 1.0;
@@ -166,8 +171,9 @@ void MFP::post_timestep(int iteration)
                 MultiFab& S_crse = get_new_data(data_idx);
 #ifdef AMREX_USE_EB
                 MultiFab& S_fine = fine_level.get_new_data(data_idx);
-                fine_level.flux_reg[data_idx].Reflux(S_crse, fine_state.eb_data.volfrac, S_fine,
-                                                     fine_state.eb_data.volfrac);
+                EBData& eb = get_eb_data(fine_state.global_idx);
+                fine_level.flux_reg[data_idx].Reflux(S_crse, eb.volfrac, S_fine,
+                                                     eb.volfrac);
 #else
                 fine_level.flux_reg[data_idx].Reflux(S_crse, 0);
 #endif
@@ -199,9 +205,8 @@ void MFP::avgDown()
         MultiFab volume(S_fine.boxArray(), S_fine.DistributionMap(), 1, 0);
         volume.setVal(1.0);
 
-        State& fine_state = fine_lev.get_state(global_idx);
-
-        amrex::EB_average_down(S_fine, S_crse, volume, fine_state.eb_data.volfrac, 0,
+        EBData& eb = get_eb_data(global_idx);
+        amrex::EB_average_down(S_fine, S_crse, volume, eb.volfrac, 0,
                                S_fine.nComp(), fine_ratio);
 #else
         amrex::average_down(S_fine, S_crse, 0, S_fine.nComp(), fine_ratio);
@@ -283,4 +288,11 @@ State& MFP::get_state(const std::string& name) {
         Abort("Attempting to reference a state that doesn't exist");
     }
     return *states[state_index[name]];
+}
+
+Source& MFP::get_source(const std::string& name) {
+    if ( source_index.find(name) == source_index.end() ) {
+        Abort("Attempting to reference a source that doesn't exist");
+    }
+    return *sources[source_index[name]];
 }

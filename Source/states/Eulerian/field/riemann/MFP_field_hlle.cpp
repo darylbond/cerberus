@@ -6,7 +6,7 @@
 //================================================================================
 
 std::string FieldHLLE::tag = "HLLE";
-bool FieldHLLE::registered = GetRiemannSolverFactory().Register(FieldHLLE::tag, RiemannSolverBuilder<FieldHLLE>);
+bool FieldHLLE::registered = GetFieldRiemannSolverFactory().Register(FieldHLLE::tag, FieldRiemannSolverBuilder<FieldHLLE>);
 
 FieldHLLE::FieldHLLE(){}
 FieldHLLE::FieldHLLE(const int i)
@@ -22,35 +22,35 @@ FieldHLLE::FieldHLLE(const int i)
     Real cc = ch2/c2;
 }
 
-void FieldHLLE::solve(Array<Real,+FieldState::ConsIdx::NUM> &L,
-                      Array<Real,+FieldState::ConsIdx::NUM> &R,
-                      Array<Real,+FieldState::ConsIdx::NUM> &F) const
+void FieldHLLE::solve(Array<Real,+FieldDef::ConsIdx::NUM> &L,
+                      Array<Real,+FieldDef::ConsIdx::NUM> &R,
+                      Array<Real,+FieldDef::ConsIdx::NUM> &F) const
 {
     BL_PROFILE("FieldHLLE::solve");
 
-    Array<Real, +FieldState::ConsIdx::NUM> FL, FR;
+    Array<Real, +FieldDef::ConsIdx::NUM> FL, FR;
 
-    FL[+FieldState::ConsIdx::Bx]   =   L[+FieldState::ConsIdx::psi];
-    FL[+FieldState::ConsIdx::By]   = - L[+FieldState::ConsIdx::Dz]/L[+FieldState::ConsIdx::ep];
-    FL[+FieldState::ConsIdx::Bz]   =   L[+FieldState::ConsIdx::Dy]/L[+FieldState::ConsIdx::ep];
-    FL[+FieldState::ConsIdx::Dx]   =   L[+FieldState::ConsIdx::phi];
-    FL[+FieldState::ConsIdx::Dy]   =   L[+FieldState::ConsIdx::Bz]/L[+FieldState::ConsIdx::mu];
-    FL[+FieldState::ConsIdx::Dz]   = - L[+FieldState::ConsIdx::By]/L[+FieldState::ConsIdx::mu];
-    FL[+FieldState::ConsIdx::psi] =   L[+FieldState::ConsIdx::Bx]*cc;
-    FL[+FieldState::ConsIdx::phi] =   L[+FieldState::ConsIdx::Dx]*cc;
+    FL[+FieldDef::ConsIdx::Bx]   =   L[+FieldDef::ConsIdx::psi];
+    FL[+FieldDef::ConsIdx::By]   = - L[+FieldDef::ConsIdx::Dz]/L[+FieldDef::ConsIdx::ep];
+    FL[+FieldDef::ConsIdx::Bz]   =   L[+FieldDef::ConsIdx::Dy]/L[+FieldDef::ConsIdx::ep];
+    FL[+FieldDef::ConsIdx::Dx]   =   L[+FieldDef::ConsIdx::phi];
+    FL[+FieldDef::ConsIdx::Dy]   =   L[+FieldDef::ConsIdx::Bz]/L[+FieldDef::ConsIdx::mu];
+    FL[+FieldDef::ConsIdx::Dz]   = - L[+FieldDef::ConsIdx::By]/L[+FieldDef::ConsIdx::mu];
+    FL[+FieldDef::ConsIdx::psi] =   L[+FieldDef::ConsIdx::Bx]*cc;
+    FL[+FieldDef::ConsIdx::phi] =   L[+FieldDef::ConsIdx::Dx]*cc;
 
-    FR[+FieldState::ConsIdx::Bx]   =   R[+FieldState::ConsIdx:: psi];
-    FR[+FieldState::ConsIdx::By]   = - R[+FieldState::ConsIdx:: Dz]/R[+FieldState::ConsIdx::ep];
-    FR[+FieldState::ConsIdx::Bz]   =   R[+FieldState::ConsIdx:: Dy]/R[+FieldState::ConsIdx::ep];
-    FR[+FieldState::ConsIdx::Dx]   =   R[+FieldState::ConsIdx:: phi];
-    FR[+FieldState::ConsIdx::Dy]   =   R[+FieldState::ConsIdx:: Bz]/R[+FieldState::ConsIdx::mu];
-    FR[+FieldState::ConsIdx::Dz]   = - R[+FieldState::ConsIdx:: By]/R[+FieldState::ConsIdx::mu];
-    FR[+FieldState::ConsIdx::psi] =   R[+FieldState::ConsIdx::Bx]*cc;
-    FR[+FieldState::ConsIdx::phi] =   R[+FieldState::ConsIdx::Dx]*cc;
+    FR[+FieldDef::ConsIdx::Bx]   =   R[+FieldDef::ConsIdx:: psi];
+    FR[+FieldDef::ConsIdx::By]   = - R[+FieldDef::ConsIdx:: Dz]/R[+FieldDef::ConsIdx::ep];
+    FR[+FieldDef::ConsIdx::Bz]   =   R[+FieldDef::ConsIdx:: Dy]/R[+FieldDef::ConsIdx::ep];
+    FR[+FieldDef::ConsIdx::Dx]   =   R[+FieldDef::ConsIdx:: phi];
+    FR[+FieldDef::ConsIdx::Dy]   =   R[+FieldDef::ConsIdx:: Bz]/R[+FieldDef::ConsIdx::mu];
+    FR[+FieldDef::ConsIdx::Dz]   = - R[+FieldDef::ConsIdx:: By]/R[+FieldDef::ConsIdx::mu];
+    FR[+FieldDef::ConsIdx::psi] =   R[+FieldDef::ConsIdx::Bx]*cc;
+    FR[+FieldDef::ConsIdx::phi] =   R[+FieldDef::ConsIdx::Dx]*cc;
 
     Real speed = c0; // UPDATE THIS TO ACCOMMODATE DIV SPEED
 
-    for (int n=0; n<+FieldState::ConsIdx::NUM; ++n) {
+    for (int n=0; n<+FieldDef::ConsIdx::NUM; ++n) {
         F[n] = 0.5*(FL[n]*c0 + FR[n]*c0 + (L[n] - R[n])*speed);
     }
 

@@ -10,9 +10,9 @@ public:
     FieldHLLE();
     FieldHLLE(const int i);
 
-    virtual void solve(Array<Real,+FieldState::ConsIdx::NUM> &L,
-                       Array<Real,+FieldState::ConsIdx::NUM> &R,
-                       Array<Real,+FieldState::ConsIdx::NUM> &F) const override;
+    virtual void solve(Array<Real,+FieldDef::ConsIdx::NUM> &L,
+                       Array<Real,+FieldDef::ConsIdx::NUM> &R,
+                       Array<Real,+FieldDef::ConsIdx::NUM> &F) const override;
 
     static bool valid_state(const int idx);
     virtual const std::string& get_tag() const override {return tag;}

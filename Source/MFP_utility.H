@@ -12,6 +12,7 @@
 #include <cassert>
 #include <AMReX_REAL.H>
 #include <AMReX_Vector.H>
+#include <AMReX_Array.H>
 #include <AMReX_Utility.H>
 
 // === PI ===
@@ -104,9 +105,9 @@ std::string arr2str(const std::array<T, N> &in, const std::string &left = "[",
 
 // === ARRAY TO VECTOR ===
 template <typename T, size_t N>
-std::vector<T> arr2vec(const std::array<T, N> &in) {
+amrex::Vector<T> arr2vec(const amrex::Array<T, N> &in) {
 
-    std::vector<T> vec(N);
+    amrex::Vector<T> vec(N);
     for (size_t i = 0; i < N; ++i) {
         vec[i] = in[i];
     }

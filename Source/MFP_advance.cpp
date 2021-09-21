@@ -346,6 +346,10 @@ void MFP::advance_one_step(Real time, Real dt, int iteration, int ncycle, bool C
 
             EulerianState &istate = EulerianState::get_state(idx);
 
+//            plot_FAB_2d(*fab_flags[idx], "flag", false);
+//            plot_FAB_2d(R_lo[idx][0], 0, box, istate.get_cons_names()[0]+"-R_lo", false, false);
+//            plot_FAB_2d(R_hi[idx][0], 0, box, istate.get_cons_names()[0]+"-R_hi", false, true);
+
             istate.calc_fluxes(box,
                                *conserved[idx],
                                R_lo[idx],

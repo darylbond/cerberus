@@ -1,18 +1,18 @@
-#include "MFP_hydro_refine.H"
-#include "MFP_hydro.H"
+#include "MFP_field_refine.H"
+#include "MFP_field.H"
 #include <AMReX_AmrLevel.H>
 
-ClassFactory<Refinement>& GetHydroRefinementFactory() {
+ClassFactory<Refinement>& GetFieldRefinementFactory() {
     static ClassFactory<Refinement> F;
     return F;
 }
 
-std::string HydroGradientRefinement::tag = "hydro_gradient";
-bool HydroGradientRefinement::registered = GetHydroRefinementFactory().Register(HydroGradientRefinement::tag, HydroRefinementBuilder<HydroGradientRefinement>);
+std::string FieldGradientRefinement::tag = "field_gradient";
+bool FieldGradientRefinement::registered = GetFieldRefinementFactory().Register(FieldGradientRefinement::tag, FieldRefinementBuilder<FieldGradientRefinement>);
 
 
-HydroGradientRefinement::HydroGradientRefinement(){}
-HydroGradientRefinement::HydroGradientRefinement(const int global_idx, const sol::table &def)
+FieldGradientRefinement::FieldGradientRefinement(){}
+FieldGradientRefinement::FieldGradientRefinement(const int global_idx, const sol::table &def)
 {
 
     idx = global_idx;
@@ -20,18 +20,9 @@ HydroGradientRefinement::HydroGradientRefinement(const int global_idx, const sol
     max_level = def.get_or("max_level", -1);
     min_value = def.get_or("min_value", -1);
 
-    // primitive variables
-    for (int i = 0; i<HydroState::prim_names.size(); ++i) {
-        std::string comp = HydroState::prim_names[i];
-
-        if (def[comp].valid()) {
-            prim.push_back(std::make_pair(i,def[comp]));
-        }
-    }
-
     // conserved variables
-    for (int i = 0; i<HydroState::cons_names.size(); ++i) {
-        std::string comp = HydroState::cons_names[i];
+    for (int i = 0; i<FieldState::cons_names.size(); ++i) {
+        std::string comp = FieldState::cons_names[i];
 
         if (def[comp].valid()) {
             cons.push_back(std::make_pair(i,def[comp]));
@@ -39,16 +30,16 @@ HydroGradientRefinement::HydroGradientRefinement(const int global_idx, const sol
     }
 }
 
-void HydroGradientRefinement::get_tags(MFP* mfp, TagBoxArray& tags) const
+void FieldGradientRefinement::get_tags(MFP* mfp, TagBoxArray& tags) const
 {
 
     if ((mfp->get_level() < max_level) || (max_level < 0)) {
 
-        HydroState& istate = HydroState::get_state_global(idx);
+        FieldState& istate = FieldState::get_state_global(idx);
 
         // grab the conservative state
         const int num_grow = 1;
-        MultiFab U(mfp->boxArray(), mfp->DistributionMap(), +HydroDef::ConsIdx::NUM, num_grow, MFInfo(),mfp->Factory());
+        MultiFab U(mfp->boxArray(), mfp->DistributionMap(), +FieldDef::ConsIdx::NUM, num_grow, MFInfo(),mfp->Factory());
 
 #ifdef AMREX_USE_EB
         EB2::IndexSpace::push(const_cast<EB2::IndexSpace*>(istate.eb2_index));
@@ -56,7 +47,7 @@ void HydroGradientRefinement::get_tags(MFP* mfp, TagBoxArray& tags) const
 
         const Real time = mfp->get_cum_time();
 
-        mfp->FillPatch(*mfp, U, num_grow, time, istate.data_idx, 0, +HydroDef::ConsIdx::NUM);
+        mfp->FillPatch(*mfp, U, num_grow, time, istate.data_idx, 0, +FieldDef::ConsIdx::NUM);
 
 #ifdef AMREX_USE_EB
         auto const& flags = istate.eb_data.flags;
@@ -97,49 +88,12 @@ void HydroGradientRefinement::get_tags(MFP* mfp, TagBoxArray& tags) const
                                    refine_grad);
 
                 }
-
-
-                // only calculate the primitives if we need them
-                if (!prim.empty()) {
-
-                    Box pbx = grow(bx, 1);
-
-                    Q.resize(pbx, +HydroDef::PrimIdx::NUM);
-
-                    // get primitives
-                    istate.calc_primitives(pbx,
-                                           U[mfi],
-                                           Q,
-                                           dx,
-                                           time,
-                                           prob_lo
-                       #ifdef AMREX_USE_EB
-                                           ,vfrac
-                       #endif
-                                           );
-
-
-                    // now go through the list of things to check for high gradients
-                    for (const auto& info : cons) {
-                        const int& icomp = info.first; // index
-                        const Real& refine_grad = info.second; // threshold value
-
-                        tag_refinement(bx, Q,
-               #ifdef AMREX_USE_EB
-                                       flags[mfi],
-               #endif
-                                       tags[mfi],
-                                       icomp,
-                                       refine_grad);
-
-                    }
-                }
             }
         }
     }
 }
 
-Real HydroGradientRefinement::refine_criteria(Array<Real,3> S, Real low_val) const
+Real FieldGradientRefinement::refine_criteria(Array<Real,3> S, Real low_val) const
 {
     Real a = S[2] - 2*S[1] + S[0];
     Real b = std::abs(S[2] - S[1]) + std::abs(S[1] - S[0]) + 0.01*(S[2] + 2*S[1] + S[0]);
@@ -150,7 +104,7 @@ Real HydroGradientRefinement::refine_criteria(Array<Real,3> S, Real low_val) con
     }
 }
 
-void HydroGradientRefinement::tag_refinement(const Box& box,
+void FieldGradientRefinement::tag_refinement(const Box& box,
                                              const FArrayBox& src,
                                              #ifdef AMREX_USE_EB
                                              const EBCellFlagFab& flags,
@@ -159,7 +113,7 @@ void HydroGradientRefinement::tag_refinement(const Box& box,
                                              const int n,
                                              const Real threshold) const
 {
-    BL_PROFILE("HydroGradientRefinement::tag_refinement");
+    BL_PROFILE("FieldGradientRefinement::tag_refinement");
     const Dim3 lo = amrex::lbound(box);
     const Dim3 hi = amrex::ubound(box);
 

@@ -1,5 +1,5 @@
-#ifndef HYDRO_REFINE_H
-#define HYDRO_REFINE_H
+#ifndef FIELD_REFINE_H
+#define FIELD_REFINE_H
 
 #include <AMReX_Box.H>
 #include <AMReX_FArrayBox.H>
@@ -16,15 +16,15 @@
 #endif
 
 #include "MFP_refine.H"
-#include "MFP_hydro_defs.H"
+#include "MFP_field_defs.H"
 
 
 
-class HydroGradientRefinement : public Refinement
+class FieldGradientRefinement : public Refinement
 {
 public:
-    HydroGradientRefinement();
-    HydroGradientRefinement(const int global_idx, const sol::table &def);
+    FieldGradientRefinement();
+    FieldGradientRefinement(const int global_idx, const sol::table &def);
 
     virtual void get_tags(MFP* mfp, TagBoxArray& tags) const override;
 
@@ -39,8 +39,8 @@ public:
                         const int n,
                         const Real threshold) const;
 
-    // the index,threshold pairs for conserved and primitive variables
-    Vector<std::pair<int,Real>> cons, prim;
+    // the index,threshold pairs variables
+    Vector<std::pair<int,Real>> cons;
     int max_level;
     Real min_value;
 
@@ -49,7 +49,7 @@ public:
 };
 
 template <typename D>
-std::unique_ptr<Refinement> HydroRefinementBuilder(const sol::table& def)
+std::unique_ptr<Refinement> FieldRefinementBuilder(const sol::table& def)
 {
     std::unique_ptr<Refinement> refine;
 
@@ -66,6 +66,6 @@ std::unique_ptr<Refinement> HydroRefinementBuilder(const sol::table& def)
     }
 }
 
-ClassFactory<Refinement>& GetHydroRefinementFactory();
+ClassFactory<Refinement>& GetFieldRefinementFactory();
 
 #endif // HYDRO_REFINE_H

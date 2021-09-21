@@ -150,15 +150,6 @@ public:
                          const Real time,
                          const bool do_all) const override;
 
-    virtual void update_face_prim(const Box& box, const Geometry& geom,
-                                  Array<FArrayBox, AMREX_SPACEDIM> &r_lo,
-                                  Array<FArrayBox, AMREX_SPACEDIM> &r_hi,
-                              #ifdef AMREX_USE_EB
-                                  const EBCellFlagFab& flag,
-                              #endif
-                                  const Real time, const bool do_all = false) const override;
-
-
     void load_state_for_flux(const Array4<const Real> &face,
                              int i, int j, int k, Array<Real, +HydroDef::FluxIdx::NUM> &S) const;
 
@@ -208,7 +199,7 @@ public:
                                     #ifdef AMREX_USE_EB
                                         const EBCellFlagFab& flag,
                                     #endif
-                                        const Real* dx) const override;
+                                        const Real* dx) const;
 
     virtual void calc_wall_fluxes(const Box& box,
                                   const FArrayBox &prim,

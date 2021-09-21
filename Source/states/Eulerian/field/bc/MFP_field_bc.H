@@ -2,7 +2,6 @@
 #define MFP_FIELD_BC_H
 #ifdef AMREX_USE_EB
 
-#include "MFP_state.H"
 #include "MFP_field_riemann.H"
 #include "MFP_optional_func.H"
 #include "sol.hpp"
@@ -13,7 +12,7 @@ public:
     FieldBoundaryEB();
     ~FieldBoundaryEB();
 
-    enum EBType {
+    enum class EBType {
         Dirichlet = 0,
         PerfectConductor,
         ScalarPotential,
@@ -24,8 +23,14 @@ public:
     };
 
     virtual const EBType get_type() const = 0;
+    virtual const bool has_charge() const {return false;}
     virtual const bool time_varying() const {return false;}
     virtual std::map<EBType, Vector<Real>> get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const { return {};}
+
+    virtual void solve(Array<Array<Real,3>,3> &wall_coord,
+                       Array<Real,+FieldDef::ConsIdx::NUM> &state,
+                       Array<Array<Real,+FieldDef::ConsIdx::NUM>,AMREX_SPACEDIM> &F,
+                       const Real* dx) const {}
 
     FieldRiemannSolver* flux_solver = nullptr;
 
@@ -34,25 +39,48 @@ public:
 
 //-----------------------------------------------------------------------------
 
+class DefinedWall : public FieldBoundaryEB
+{
+public:
+    DefinedWall();
+    DefinedWall(FieldRiemannSolver* flux, const sol::table &bc_def);
+    ~DefinedWall();
+
+
+
+    void solve(Array<Array<Real,3>,3> &wall_coord,
+               Array<Real,+FieldDef::ConsIdx::NUM> &state,
+               Array<Array<Real,+FieldDef::ConsIdx::NUM>,AMREX_SPACEDIM> &F,
+               const Real* dx) const override;
+
+    virtual const EBType get_type() const override {return type;}
+
+    Vector<std::pair<int, Real>> wall_value;
+
+    EBType type = EBType::Dirichlet;
+    static std::string tag;
+
+};
+
+
+//-----------------------------------------------------------------------------
+
 class ConductingWall : public FieldBoundaryEB
 {
 public:
     ConductingWall();
-    ConductingWall(const State &istate, const sol::table &bc_def);
+    ConductingWall(FieldRiemannSolver* flux, const sol::table &bc_def);
     ~ConductingWall();
 
 
 
     void solve(Array<Array<Real,3>,3> &wall_coord,
-                       Vector<Real> &state,
-                       Vector<Real> &normal_slope,
-                       Array<Vector<Real>,AMREX_SPACEDIM> &F,
-                       const Real* dx) const;
+                Array<Real,+FieldDef::ConsIdx::NUM> &state,
+                Array<Array<Real,+FieldDef::ConsIdx::NUM>,AMREX_SPACEDIM> &F,
+                const Real* dx) const override;
 
-    virtual const bool has_charge() const {return true;}
+    virtual const bool has_charge() const override {return true;}
     virtual const EBType get_type() const override {return type;}
-
-    Vector<int> vector_idx;
 
     bool B1_defined, B2_defined;
     Real wall_B1, wall_B2;
@@ -74,9 +102,9 @@ public:
     ScalarPotentialWall(const sol::table &bc_def);
     ~ScalarPotentialWall();
 
-    virtual std::map<EBType, Vector<Real>> get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const override;
+    virtual std::map<FieldBoundaryEB::EBType, Vector<Real>> get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const override;
 
-    virtual const bool has_charge() const {return true;}
+    virtual const bool has_charge() const override {return true;}
     virtual const EBType get_type() const override {return type;}
     virtual const bool time_varying() const override {return phi.has_func();}
 

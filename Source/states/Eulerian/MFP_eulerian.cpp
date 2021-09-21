@@ -61,6 +61,82 @@ void EulerianState::init_from_lua()
 
 }
 
+void EulerianState::update_face_prim(const Box& box, const Geometry& geom,
+                                  Array<FArrayBox, AMREX_SPACEDIM> &r_lo,
+                                  Array<FArrayBox, AMREX_SPACEDIM> &r_hi,
+                                  #ifdef AMREX_USE_EB
+                                  const EBCellFlagFab& flag,
+                                  #endif
+                                  const Real time, const bool do_all) const
+{
+    BL_PROFILE("EulerianState::update_face_prim");
+    const Box domain = geom.Domain();
+    const int*     domainlo    = domain.loVect();
+    const int*     domainhi    = domain.hiVect();
+
+
+
+    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+        if (geom.isPeriodic(d)) {
+            continue;
+        }
+
+        if (box.smallEnd(d) <= domainlo[d]) {
+            Box lo = box;
+            lo.setBig(d,domainlo[d]);
+            lo.setSmall(d,domainlo[d]);
+
+            // get the left and right reconstructed primitives for all faces
+            FArrayBox &L = r_hi[d];
+            FArrayBox &R = r_lo[d];
+
+            // adjust the boxes so that we can use the same index
+            L.shift(d,1);
+
+            face_bc(d,
+                    lo,
+                    R,
+                    L,
+                    geom,
+        #ifdef AMREX_USE_EB
+                    flag,
+        #endif
+                    time,
+                    do_all);
+
+            // change it back
+            L.shift(d,-1);
+        }
+
+        if (box.bigEnd(d) >= domainhi[d]) {
+            Box hi = box;
+            hi.setBig(d,  domainhi[d]+1);
+            hi.setSmall(d,domainhi[d]+1);
+
+            // get the left and right reconstructed primitives for all faces
+            FArrayBox &L = r_hi[d];
+            FArrayBox &R = r_lo[d];
+
+            // adjust the boxes so that we can use the same index
+            L.shift(d,1);
+
+            face_bc(d,
+                    hi,
+                    L,
+                    R,
+                    geom,
+        #ifdef AMREX_USE_EB
+                    flag,
+        #endif
+                    time,
+                    do_all);
+
+            // change it back
+            L.shift(d,-1);
+        }
+    }
+}
+
 #ifdef AMREX_USE_EB
 Real EulerianState::interp2d(Real cym,
                              Real cy0,

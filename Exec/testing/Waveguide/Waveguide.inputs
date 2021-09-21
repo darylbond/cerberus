@@ -62,6 +62,8 @@ mfp.lua = "
 verbosity = 2
 cfl = 0.5
 
+time_integration_scheme = 'CTU'
+
 -- === DEFINE PROBLEM ===
 
 lightspeed = 1.0

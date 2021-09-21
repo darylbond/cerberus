@@ -3,6 +3,7 @@
 #include "MFP_field_bc.H"
 #include "MFP_field.H"
 #include "MFP_transforms.H"
+#include "MFP_utility.H"
 
 //-----------------------------------------------------------------------------
 
@@ -11,19 +12,84 @@ void FieldState::set_eb_bc(const sol::table &bc_def)
     std::string bc_type = bc_def.get_or<std::string>("type", CollectionWall::tag);
 
     if (bc_type == ConductingWall::tag) {
-        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new ConductingWall(*this, bc_def)));
+        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new ConductingWall(flux_solver.get(), bc_def)));
     } else if (bc_type == ScalarPotentialWall::tag) {
         eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new ScalarPotentialWall(bc_def)));
     } else if (bc_type == SurfaceChargeWall::tag) {
         eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new SurfaceChargeWall(bc_def)));
     } else if (bc_type == CollectionWall::tag) {
         eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new CollectionWall(bc_def)));
-    } else if (bc_type == DirichletWall::tag) {
-        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new DirichletWall(flux_solver.get(), cons_names, {+ConsIdx::Bx, +ConsIdx::Dx}, bc_def)));
+    } else if (bc_type == DefinedWall::tag) {
+        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new DefinedWall(flux_solver.get(), bc_def)));
     } else {
         Abort("Requested EB bc of type '" + bc_type + "' which is not compatible with state '" + name + "'");
     }
 }
+
+//-----------------------------------------------------------------------------
+
+FieldBoundaryEB::FieldBoundaryEB(){}
+FieldBoundaryEB::~FieldBoundaryEB(){}
+
+//-----------------------------------------------------------------------------
+
+std::string DefinedWall::tag = "defined";
+
+DefinedWall::DefinedWall(){}
+DefinedWall::~DefinedWall(){}
+
+DefinedWall::DefinedWall(FieldRiemannSolver *flux, const sol::table &bc_def)
+{
+
+    flux_solver = flux;
+
+    // grab the wall state from the lua definition
+    // only get stuff that is defined, anything else will
+    // be filled in from the fluid side of the wall
+    int i = 0;
+    for (const auto &name : FieldState::cons_names) {
+        sol::object val = bc_def[name];
+        if (val.valid()) {
+            wall_value.push_back({i, val.as<Real>()});
+        }
+        ++i;
+    }
+
+
+}
+
+void DefinedWall::solve(Array<Array<Real,3>,3> &wall_coord,
+                        Array<Real,+FieldDef::ConsIdx::NUM> &state,
+                        Array<Array<Real,+FieldDef::ConsIdx::NUM>,AMREX_SPACEDIM> &F,
+                        const Real* dx) const
+{
+
+    transform_global2local(state, wall_coord,  FieldState::vector_idx);
+
+    // fabricate a state for inside the wall based on the provided state
+    Array<Real, +FieldDef::ConsIdx::NUM> W = state;
+
+    for (const auto& pair : wall_value) {
+        W[pair.first] = pair.second;
+    }
+
+    Array<Real,+FieldDef::ConsIdx::NUM> normal_flux;
+    flux_solver->solve(state, W, normal_flux);
+
+    // convert back to global coordinate system
+    transform_local2global(normal_flux, wall_coord, FieldState::vector_idx);
+
+    // split it up into components
+    for (int d=0; d<AMREX_SPACEDIM; ++d) {
+        for (int n=0; n<normal_flux.size(); ++n) {
+            F[d][n] = wall_coord[0][d]*normal_flux[n];
+        }
+    }
+
+}
+
+
+
 
 //-----------------------------------------------------------------------------
 
@@ -32,12 +98,10 @@ std::string ConductingWall::tag = "conductor";
 ConductingWall::ConductingWall(){}
 ConductingWall::~ConductingWall(){}
 
-ConductingWall::ConductingWall(const State &istate, const sol::table &bc_def)
+ConductingWall::ConductingWall(FieldRiemannSolver* flux, const sol::table &bc_def)
 {
-    const FieldState& state = static_cast<const FieldState&>(istate);
 
-    flux_solver = state.flux_solver.get();
-    vector_idx = state.vector_idx;
+    flux_solver = flux;
 
     // grab any specified normal and tangential fields
     B1_defined = false;
@@ -69,49 +133,48 @@ ConductingWall::ConductingWall(const State &istate, const sol::table &bc_def)
 }
 
 void ConductingWall::solve(Array<Array<Real,3>,3> &wall_coord,
-                                Vector<Real> &state,
-                                Vector<Real> &normal_slope,
-                                Array<Vector<Real>, AMREX_SPACEDIM> &F,
-                                const Real *dx) const
+                           Array<Real,+FieldDef::ConsIdx::NUM> &state,
+                           Array<Array<Real,+FieldDef::ConsIdx::NUM>,AMREX_SPACEDIM> &F,
+                           const Real* dx) const
 {
 
     //
     // get the inviscid flux
     //
 
-    transform_global2local(state, wall_coord,  vector_idx);
+    transform_global2local(state, wall_coord,  FieldState::vector_idx);
 
     // fabricate a state for inside the wall based on the provided state
-    Vector<Real> W = state;
+    Array<Real, +FieldDef::ConsIdx::NUM> W = state;
 
     // https://en.wikipedia.org/wiki/Interface_conditions_for_electromagnetic_fields
 
     //(B2 - B1).n12 = 0, where B2 & B1 are the B vectors and n12 is the normal from 1->2
     // but B2=0 so B1.n12=0 thus BxR=-BxL
-    W[+FieldState::ConsIdx::Bx] *= -1;
-    W[+FieldState::ConsIdx::psi] = 0;
+    W[+FieldDef::ConsIdx::Bx] *= -1;
+    W[+FieldDef::ConsIdx::psi] = 0;
 
     if (B1_defined)
-        W[+FieldState::ConsIdx::By] = wall_B1;
+        W[+FieldDef::ConsIdx::By] = wall_B1;
     if (B2_defined)
-        W[+FieldState::ConsIdx::Bz] = wall_B2;
+        W[+FieldDef::ConsIdx::Bz] = wall_B2;
 
     // need to implement surface charge effects
     //(D2 - D1).n12 = sc, where D2 & D1 are the D vectors and n12 is the normal from 1->2
     // but D2=0 so D1.n12=-sc thus DxR=-DxL+sc
     // we assume here that we have a surface charge sufficient to allow for DxR=DxL
-    W[+FieldState::ConsIdx::Dy] *= -1;
-    W[+FieldState::ConsIdx::Dz] *= -1;
-    W[+FieldState::ConsIdx::phi] = 0;
+    W[+FieldDef::ConsIdx::Dy] *= -1;
+    W[+FieldDef::ConsIdx::Dz] *= -1;
+    W[+FieldDef::ConsIdx::phi] = 0;
 
     if (D_defined)
-        W[+FieldState::ConsIdx::Dx] = wall_D;
+        W[+FieldDef::ConsIdx::Dx] = wall_D;
 
-    Vector<Real> normal_flux(flux_solver->get_flux_size());
-    flux_solver->solve(state, W, normal_flux, nullptr);
+    Array<Real, +FieldDef::ConsIdx::NUM> normal_flux;
+    flux_solver->solve(state, W, normal_flux);
 
     // convert back to global coordinate system
-    transform_local2global(normal_flux, wall_coord, vector_idx);
+    transform_local2global(normal_flux, wall_coord, FieldState::vector_idx);
 
     // split it up into components
     for (int d=0; d<AMREX_SPACEDIM; ++d) {
@@ -177,12 +240,15 @@ SurfaceCurrentWall::SurfaceCurrentWall(const sol::table &bc_def)
 std::map<FieldBoundaryEB::EBType, Vector<Real>> SurfaceCurrentWall::get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const
 {
 
-    Vector<Real> J = {0.0, current_1(0,0,0,t), current_2(0,0,0,t)};
+    Array<Real,3> J = {0.0, current_1(0,0,0,t), current_2(0,0,0,t)};
 
-    transform_local2global(J, wall_coord, {0});
+    Array<int,1> index = {0};
+
+    transform_local2global(J, wall_coord, index);
 
     // needs to be calculated for cell centre
-    return {{FieldBoundaryEB::EBType::SurfaceCurrent, J}};
+
+    return {{FieldBoundaryEB::EBType::SurfaceCurrent, arr2vec(J)}};
 }
 
 //-----------------------------------------------------------------------------
@@ -227,14 +293,15 @@ std::map<FieldBoundaryEB::EBType, Vector<Real>> VectorPotentialWall::get_wall_st
         data["t"] = t;
     }
 
-    Vector<Real> A = {A_0(data), A_1(data), A_2(data)};
+    Array<Real,3> A = {A_0(data), A_1(data), A_2(data)};
 
     if (align_with_boundary) {
-        transform_local2global(A, wall_coord, {0});
+        Array<int,1> index = {0};
+        transform_local2global(A, wall_coord, index);
     }
 
     // calculated at face centre
-    return {{FieldBoundaryEB::EBType::VectorPotential, A}};
+    return {{FieldBoundaryEB::EBType::VectorPotential, arr2vec(A)}};
 }
 
 //-----------------------------------------------------------------------------

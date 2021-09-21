@@ -8,7 +8,7 @@
 // J. Moreno, E. Oliva, P. Velarde, J.C.P. 2020, In Press
 
 std::string FieldRH::tag = "RankineHugoniot";
-bool FieldRH::registered = GetRiemannSolverFactory().Register(FieldRH::tag, RiemannSolverBuilder<FieldRH>);
+bool FieldRH::registered = GetFieldRiemannSolverFactory().Register(FieldRH::tag, FieldRiemannSolverBuilder<FieldRH>);
 
 FieldRH::FieldRH(){}
 FieldRH::FieldRH(const int i)
@@ -22,9 +22,9 @@ FieldRH::FieldRH(const int i)
     ch2 = ch*ch;
 }
 
-void FieldRH::solve(Array<Real,+FieldState::ConsIdx::NUM> &L,
-                    Array<Real,+FieldState::ConsIdx::NUM> &R,
-                    Array<Real,+FieldState::ConsIdx::NUM> &F) const
+void FieldRH::solve(Array<Real,+FieldDef::ConsIdx::NUM> &L,
+                    Array<Real,+FieldDef::ConsIdx::NUM> &R,
+                    Array<Real,+FieldDef::ConsIdx::NUM> &F) const
 {
     BL_PROFILE("FieldRH::solve");
     std::fill(F.begin(), F.end(), 0);
@@ -39,61 +39,61 @@ void FieldRH::solve(Array<Real,+FieldState::ConsIdx::NUM> &L,
 
     // D-wave
 
-    Dl = L[+FieldState::ConsIdx::Dy];
-    Dr = R[+FieldState::ConsIdx::Dy];
+    Dl = L[+FieldDef::ConsIdx::Dy];
+    Dr = R[+FieldDef::ConsIdx::Dy];
 
-    epr = R[+FieldState::ConsIdx::ep];
-    epl = L[+FieldState::ConsIdx::ep];
+    epr = R[+FieldDef::ConsIdx::ep];
+    epl = L[+FieldDef::ConsIdx::ep];
 
-    Bl = L[+FieldState::ConsIdx::Bz];
-    Br = R[+FieldState::ConsIdx::Bz];
+    Bl = L[+FieldDef::ConsIdx::Bz];
+    Br = R[+FieldDef::ConsIdx::Bz];
 
-    mur = R[+FieldState::ConsIdx::mu];
-    mul = L[+FieldState::ConsIdx::mu];
+    mur = R[+FieldDef::ConsIdx::mu];
+    mul = L[+FieldDef::ConsIdx::mu];
 
     cr = 1/std::sqrt(mur*epr);
     cl = 1/std::sqrt(mul*epl);
 
-    F[+FieldState::ConsIdx::Dy] = c0*((Bl*cl + Br*cr) + (Dl/epl - Dr/epr))/(cl*mul + cr*mur);
-    F[+FieldState::ConsIdx::Bz] = c0*((Dl*cl + Dr*cr) + (Bl/mul - Br/mur))/(cl*epl + cr*epr);
+    F[+FieldDef::ConsIdx::Dy] = c0*((Bl*cl + Br*cr) + (Dl/epl - Dr/epr))/(cl*mul + cr*mur);
+    F[+FieldDef::ConsIdx::Bz] = c0*((Dl*cl + Dr*cr) + (Bl/mul - Br/mur))/(cl*epl + cr*epr);
 
 
     // div clean
     if (ch > 0) {
-        Pl = L[+FieldState::ConsIdx::phi];
-        Pr = R[+FieldState::ConsIdx::phi];
+        Pl = L[+FieldDef::ConsIdx::phi];
+        Pr = R[+FieldDef::ConsIdx::phi];
 
-        fl = L[+FieldState::ConsIdx::Dx];
-        fr = R[+FieldState::ConsIdx::Dx];
+        fl = L[+FieldDef::ConsIdx::Dx];
+        fr = R[+FieldDef::ConsIdx::Dx];
 
-        F[+FieldState::ConsIdx::Dx] =   0.5*c0*(Pr + Pl)  - 0.5*ch*(fr - fl);
-        F[+FieldState::ConsIdx::phi] = 0.5*ch2/c0*(fr + fl) - 0.5*ch*(Pr - Pl);
+        F[+FieldDef::ConsIdx::Dx] =   0.5*c0*(Pr + Pl)  - 0.5*ch*(fr - fl);
+        F[+FieldDef::ConsIdx::phi] = 0.5*ch2/c0*(fr + fl) - 0.5*ch*(Pr - Pl);
     }
 
     // B-wave
 
-    Dl = L[+FieldState::ConsIdx::Dz];
-    Dr = R[+FieldState::ConsIdx::Dz];
+    Dl = L[+FieldDef::ConsIdx::Dz];
+    Dr = R[+FieldDef::ConsIdx::Dz];
 
-    epr = R[+FieldState::ConsIdx::ep];
-    epl = L[+FieldState::ConsIdx::ep];
+    epr = R[+FieldDef::ConsIdx::ep];
+    epl = L[+FieldDef::ConsIdx::ep];
 
-    Bl = L[+FieldState::ConsIdx::By];
-    Br = R[+FieldState::ConsIdx::By];
+    Bl = L[+FieldDef::ConsIdx::By];
+    Br = R[+FieldDef::ConsIdx::By];
 
-    F[+FieldState::ConsIdx::Dz] = c0*(-(Bl*cl + Br*cr) + (Dl/epl - Dr/epr))/(cl*mul + cr*mur);
-    F[+FieldState::ConsIdx::By] = c0*(-(Dl*cl + Dr*cr) + (Bl/mul - Br/mur))/(cl*epl + cr*epr);
+    F[+FieldDef::ConsIdx::Dz] = c0*(-(Bl*cl + Br*cr) + (Dl/epl - Dr/epr))/(cl*mul + cr*mur);
+    F[+FieldDef::ConsIdx::By] = c0*(-(Dl*cl + Dr*cr) + (Bl/mul - Br/mur))/(cl*epl + cr*epr);
 
     // div clean
     if (ch > 0) {
-        Pl = L[+FieldState::ConsIdx::psi];
-        Pr = R[+FieldState::ConsIdx::psi];
+        Pl = L[+FieldDef::ConsIdx::psi];
+        Pr = R[+FieldDef::ConsIdx::psi];
 
-        fl = L[+FieldState::ConsIdx::Bx];
-        fr = R[+FieldState::ConsIdx::Bx];
+        fl = L[+FieldDef::ConsIdx::Bx];
+        fr = R[+FieldDef::ConsIdx::Bx];
 
-        F[+FieldState::ConsIdx::Bx] =   0.5*c0*(Pr + Pl)  - 0.5*ch*(fr - fl);
-        F[+FieldState::ConsIdx::psi] = 0.5*ch2/c0*(fr + fl) - 0.5*ch*(Pr - Pl);
+        F[+FieldDef::ConsIdx::Bx] =   0.5*c0*(Pr + Pl)  - 0.5*ch*(fr - fl);
+        F[+FieldDef::ConsIdx::psi] = 0.5*ch2/c0*(fr + fl) - 0.5*ch*(Pr - Pl);
     }
 
 

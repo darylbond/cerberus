@@ -75,7 +75,7 @@ void transform_global2local(Array<Real,M> &U,
         y = U[v+1];
         z = U[v+2];
 
-        U[v+0] = x*C[0][0]  + y*C[0][1]  + z*C[0][2];
+        U[v+0] = x*C[0][0] + y*C[0][1] + z*C[0][2];
         U[v+1] = x*C[1][0] + y*C[1][1] + z*C[1][2];
         U[v+2] = x*C[2][0] + y*C[2][1] + z*C[2][2];
     }

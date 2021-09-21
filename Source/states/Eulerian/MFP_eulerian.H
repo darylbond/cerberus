@@ -102,7 +102,7 @@ public:
                               #ifdef AMREX_USE_EB
                                   const EBCellFlagFab& flag,
                               #endif
-                                  const Real time, const bool do_all = false) const {}
+                                  const Real time, const bool do_all = false) const;
 
     virtual void calc_fluxes(const Box& box,
                              FArrayBox &cons,

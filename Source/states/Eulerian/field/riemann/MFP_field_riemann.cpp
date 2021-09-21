@@ -14,7 +14,7 @@ FieldRiemannSolver::~FieldRiemannSolver()
     // do nothing
 }
 
-ClassFactory<FieldRiemannSolver>& GetRiemannSolverFactory()
+ClassFactory<FieldRiemannSolver>& GetFieldRiemannSolverFactory()
 {
     static ClassFactory<FieldRiemannSolver> F;
     return F;

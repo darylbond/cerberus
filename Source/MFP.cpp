@@ -1,6 +1,7 @@
 #include "MFP.H"
 #include "MFP_state.H"
 #include "MFP_eulerian.H"
+#include "MFP_lagrangian.H"
 
 
 using namespace amrex;
@@ -156,6 +157,12 @@ void MFP::initData()
 void MFP::post_regrid(int lbase, int new_finest)
 {
 
+#ifdef AMREX_PARTICLES
+    for (const auto& i : lagrangian_states) {
+        LagrangianState& istate = LagrangianState::get_state_global(i);
+        istate.redistribute(0, -1, 0);
+    }
+#endif
 
 }
 
@@ -184,6 +191,19 @@ void MFP::post_timestep(int iteration)
     if (level < parent->finestLevel()) {
         avgDown();
     }
+
+#ifdef AMREX_PARTICLES
+    const int ncycle = parent->nCycle(level);
+    // Don't redistribute on the final subiteration except on the coarsest grid.
+    if (iteration < ncycle || level == 0) {
+        int ngrow = (level == 0) ? 0 : iteration;
+
+        for (const auto& i : lagrangian_states) {
+            LagrangianState& istate = LagrangianState::get_state_global(i);
+            istate.redistribute(level, parent->finestLevel(), ngrow);
+        }
+    }
+#endif
 
 }
 
@@ -239,12 +259,6 @@ void MFP::post_init(Real)
         }
     }
 
-    //#ifdef AMREX_PARTICLES
-    //    for (AmrTracerParticleContainer* TracerPC : particles) {
-    //        TracerPC->Redistribute();
-    //    }
-    //#endif
-
     if (level > 0) return;
     for (int k = parent->finestLevel() - 1; k >= 0; --k) {
         getLevel(k).avgDown();
@@ -274,13 +288,82 @@ void MFP::post_restart()
 
     build_eb();
 
-    //#ifdef AMREX_PARTICLES
-    //    std::string restart_chkfile;
-    //    ParmParse pp("amr");
-    //    pp.query("restart", restart_chkfile);
-    //    ParticlePostRestart(restart_chkfile);
-    //#endif
+#ifdef AMREX_PARTICLES
+    std::string restart_chkfile;
+    ParmParse pp("amr");
+    pp.query("restart", restart_chkfile);
+    ParticlePostRestart(restart_chkfile);
+#endif
 }
+
+#ifdef AMREX_PARTICLES
+
+void MFP::writeParticles(const std::string& dir)
+{
+    BL_PROFILE("MFP::writeParticles");
+    for (const auto& i : lagrangian_states) {
+        LagrangianState& istate = LagrangianState::get_state_global(i);
+        istate.checkpoint(dir);
+    }
+}
+
+void
+MFP::ParticlePostRestart (const std::string& dir)
+{
+    BL_PROFILE("MFP::ParticlePostRestart");
+    if ((level == 0) && !lagrangian_states.empty()) {
+
+        // handle if we have archived level data in a restart folder
+        Vector<std::string> to_remove;
+        if (ParallelDescriptor::IOProcessor()) {
+
+            // get the names of the particle folders
+            for (const auto& i : lagrangian_states) {
+                LagrangianState& istate = LagrangianState::get_state_global(i);
+                std::string particle_folder = "Particles_"+istate.name;
+                std::string FullPath = dir+"/"+particle_folder;
+
+                // check if we actually need to un-tar
+                if (FileExists(FullPath))
+                    continue;
+
+                // check tar exists
+                if (!FileExists(FullPath + ".tar"))
+                    continue;
+
+                // add to list of things to clean up later
+                to_remove.push_back(FullPath);
+
+
+                // perform un-tar
+                std::string cmd = "\\tar -C " + dir + " -xf " + FullPath + ".tar ";
+                const char * command = {cmd.c_str()};
+                int retVal = std::system(command);
+                if (retVal == -1 || WEXITSTATUS(retVal) != 0) {
+                    Abort("Error: Unable to un-tar '"+FullPath+"'");
+                }
+            }
+        }
+
+        ParallelDescriptor::Barrier();
+
+        // retrieve particle data
+        for (const auto& i : lagrangian_states) {
+            LagrangianState& istate = LagrangianState::get_state_global(i);
+            istate.init(parent, false);
+            istate.restart(dir);
+        }
+
+        // clean up after un-tar operation
+        if (ParallelDescriptor::IOProcessor()) {
+            for (const auto& path : to_remove) {
+                FileSystem::RemoveAll(path);
+            }
+        }
+    }
+}
+
+#endif
 
 
 State& MFP::get_state(const std::string& name) {

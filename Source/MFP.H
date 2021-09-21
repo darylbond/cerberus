@@ -93,6 +93,12 @@ public:
 
     Real estTimeStep();
 
+#ifdef AMREX_PARTICLES
+    void init_particles();
+    void writeParticles(const std::string& dir);
+    void ParticlePostRestart (const std::string &dir);
+#endif
+
     virtual void computeInitialDt(int finest_level, int sub_cycle,
                                   amrex::Vector<int>& n_cycle,
                                   const amrex::Vector<amrex::IntVect>& ref_ratio,
@@ -130,6 +136,7 @@ public:
     static void read_params();
 
     int get_level() {return level;}
+    AmrCore* get_parent() {return parent;}
     Real get_cum_time() {return parent->cumTime();}
     Real get_dt() {return parent->dtLevel(level);}
 

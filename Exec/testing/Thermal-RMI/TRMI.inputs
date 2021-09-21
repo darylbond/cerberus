@@ -223,7 +223,7 @@ verbosity = 1
 cfl = 0.3
 
 do_face_sources = 1
-do_CTU = 1
+time_integration_scheme = 'CTU'
 
 force_dt = 0
 
@@ -242,14 +242,13 @@ states = {
         gamma=5/3, 
         reconstruction='minmod', 
         flux='HLLC',
-        refine_grad_threshold = {rho=0.1},
+        refinement={name='hydro_gradient', rho=0.1},
         value = {
             rho   = ion_density,
             x_vel = velocity_x,
             p     = pressure,
             alpha = tracer,
         },
-        particles='particle_file',
     },
 
     electron = {
@@ -259,14 +258,13 @@ states = {
         gamma=5/3, 
         reconstruction='minmod',  
         flux='HLLC',
-        refine_grad_threshold = {rho=0.1},
+        refinement={name='hydro_gradient', rho=0.1},
         value = {
             rho   = electron_density,
             x_vel = velocity_x,
             p     = pressure,
             alpha = tracer,
         },
-        particles='particle_file',
     },
 
 
@@ -275,6 +273,13 @@ states = {
         reconstruction='O6', 
         flux='RankineHugoniot',
         project_divergence=1,
+    },
+
+    tracer = {
+        type='tracer',
+        particles={
+            {0,0},{0,0.2},{0,0.5},{0,0.7}
+        }
     }
 
 }
@@ -282,13 +287,18 @@ states = {
 sources = {
 
     plasma={
-        solver = 'implicit',
-        sources = {
-            plasma={'ion', 'electron', 'field',
-                type='plasma5',
-            },
-        },
-    },
+    	type='plasma5',
+        solver = 'explicit',
+        states = {'ion', 'electron', 'field',},
+        Larmor = 1.0,
+        Debye = 1.0,
+     },
+
+     tracer={
+         type='hydro_tracer',
+         particles='tracer',
+         fluid='electron'
+     }
 }
 
 "

@@ -984,6 +984,50 @@ Real HydroState::get_allowed_time_step(MFP* mfp) const
     return dt;
 }
 
+void HydroState::calc_velocity(const Box& box,
+                   FArrayBox& cons,
+                   FArrayBox &prim
+                   #ifdef AMREX_USE_EB
+                   ,const FArrayBox& vfrac
+                   #endif
+                   ) const
+{
+    BL_PROFILE("HydroState::calc_velocity");
+
+
+    prim.resize(box, AMREX_SPACEDIM);
+
+    const Dim3 lo = amrex::lbound(box);
+    const Dim3 hi = amrex::ubound(box);
+    Array4<Real> const& s4 = cons.array();
+    Array4<Real> const& p4 = prim.array();
+
+#ifdef AMREX_USE_EB
+    Array4<const Real> const& vfrac4 = vfrac.array();
+#endif
+
+    for     (int k = lo.z; k <= hi.z; ++k) {
+        for   (int j = lo.y; j <= hi.y; ++j) {
+            AMREX_PRAGMA_SIMD
+                    for (int i = lo.x; i <= hi.x; ++i) {
+
+#ifdef AMREX_USE_EB
+                if (vfrac4(i,j,k) == 0.0) continue;
+#endif
+
+                const Real irho = 1/s4(i,j,k,+HydroDef::ConsIdx::Density);
+
+                for (int n = 0; n<AMREX_SPACEDIM; ++n) {
+                    p4(i,j,k,n) =  irho*s4(i,j,k,+HydroDef::ConsIdx::Xmom+n);
+                }
+
+            }
+        }
+    }
+
+    return;
+}
+
 void HydroState::calc_primitives(const Box& box,
                                  FArrayBox& cons,
                                  FArrayBox& prim,

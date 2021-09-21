@@ -38,9 +38,9 @@ public:
     enum class StateType {
         Null = -1,
         Hydro,
-        Hydro2P,
-        MHD,
         Field,
+        TracerParticle,
+        ChargedParticle,
         NUM
     };
 

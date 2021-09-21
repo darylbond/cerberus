@@ -101,6 +101,14 @@ public:
 
     virtual Real get_allowed_time_step(MFP* mfp) const override;
 
+    void calc_velocity(const Box& box,
+                       FArrayBox& cons,
+                       FArrayBox &prim
+                   #ifdef AMREX_USE_EB
+                       ,const FArrayBox& vfrac
+                   #endif
+                       ) const;
+
     virtual void calc_primitives(const Box& box,
                                  FArrayBox& cons,
                                  FArrayBox &prim,

@@ -293,7 +293,6 @@ states = {
         type='field',
         reconstruction='O6', 
         flux='RankineHugoniot',
-        project_divergence=1,
     },
 
     electron_tracer = {

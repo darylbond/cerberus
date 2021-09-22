@@ -26,7 +26,7 @@ public:
     static Vector<set_bc> bc_set;
 
 
-    Real div_speed;
+    Real div_speed, div_damping;
     Real relative_div_speed;
     Real fastest_speed;
     bool is_static;

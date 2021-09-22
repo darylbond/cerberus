@@ -413,8 +413,13 @@ void FieldState::init_from_lua()
 
     fastest_speed = std::max(MFP::lightspeed, div_speed);
 
+    div_damping = state_def["div_damping"].get_or(0.0);
+
     // or we can use the projection method for divergence error control
     project_divergence = state_def["project_divergence"].get_or(0);
+
+    if ((project_divergence > 0) && (relative_div_speed > 0.0))
+        Abort("State '"+name+"' should not have both 'div_transport' and 'project_divergence' defined, pick one");
 
     //
     // riemann solver

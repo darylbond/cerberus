@@ -429,7 +429,8 @@ void HydroState::init_data(MFP* mfp)
         Array4<Real> const& S4 = S_data.array();
 
 #ifdef AMREX_USE_EB
-        Array4<const EBCellFlag> const& flag4 = mfp->get_eb_data(global_idx).flags.array(mfi);
+        FabArray<EBCellFlagFab>& flags = mfp->get_eb_data(global_idx).flags;
+        Array4<const EBCellFlag> const& flag4 = flags.array(mfi);
 #endif
 
         Real x, y, z;

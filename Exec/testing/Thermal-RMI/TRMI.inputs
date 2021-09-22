@@ -169,6 +169,27 @@ function RMI_interface_B(x, y, L, R)
     return out
 end
 
+function RMI_interface_x(y)    
+    return interface_x + interface_amplitude*math.cos(2*math.pi*y)
+end
+
+function make_particles(N)
+
+    p = {}
+
+    local x, y, dy
+
+    dy = 1/N
+
+    for i=0,N-1,1 do
+        y = i*dy
+        table.insert(p, {RMI_interface_x(y), y})
+    end
+
+    return p
+
+end
+
 -- fluids
 
 function number_density(dat)
@@ -275,11 +296,14 @@ states = {
         project_divergence=1,
     },
 
-    tracer = {
+    electron_tracer = {
         type='tracer',
-        particles={
-            {0,0},{0,0.2},{0,0.5},{0,0.7}
-        }
+        particles=make_particles(100)
+    },
+
+    ion_tracer = {
+        type='tracer',
+        particles=make_particles(100)
     }
 
 }
@@ -294,10 +318,16 @@ sources = {
         Debye = 1.0,
      },
 
-     tracer={
+     tracer_electron={
          type='hydro_tracer',
-         particles='tracer',
+         particles='electron_tracer',
          fluid='electron'
+     },
+
+     tracer_ion={
+         type='hydro_tracer',
+         particles='ion_tracer',
+         fluid='ion'
      }
 }
 

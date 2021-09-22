@@ -102,8 +102,8 @@ if 1:
     q["get"] = [
         {"func":get_number_density, "tag":"nd-ion", "component":"ion"},
         {"func":get_number_density, "tag":"nd-electron", "component":"electron"},
-        {"func":get_particles, "tag":"particles-ion", "get_streak":True, "component":"ion"},
-        {"func":get_particles, "tag":"particles-electron", "get_streak":True, "component":"electron"},
+        {"func":get_particles, "tag":"particles-ion", "get_streak":True, "component":"ion_tracer"},
+        {"func":get_particles, "tag":"particles-electron", "get_streak":True, "component":"electron_tracer"},
     ]
 
     q["plot"] = plot
@@ -117,9 +117,9 @@ if 1:
     q["xy_limits"] = [[-1.25,0], [1.25,1]]
     q["file_include"] = ["TRMI.plt"]
     q["file_exclude"] = []
-    q["cores"] = 8
+    q["cores"] = 1
     q["time_span"] = []  # np.arange(0,1+dt, dt)
-    q["force_data"] = False
+    q["force_data"] = True
     q["force_frames"] = True
     q["only_frames"] = False
     q["redo_streaks"] = False

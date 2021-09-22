@@ -51,7 +51,7 @@ std::map<std::string, int> MFP::source_index;
 
 #ifdef AMREX_USE_EB
 Vector<DataEB> MFP::eb_def;
-Vector<Vector<std::unique_ptr<EBData>>> MFP::eb_data;
+Vector<Vector<EBData>> MFP::eb_data;
 #endif
 
 Real MFP::x_ref = 1.0;

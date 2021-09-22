@@ -66,12 +66,13 @@ void MFP::build_eb() {
     const Vector<int> ngrow = {m_eb_basic_grow_cells,m_eb_volume_grow_cells,m_eb_full_grow_cells};
 
     eb_data.resize(level+1);
+    eb_data[level].resize(states.size());
 
     for (const auto& state : states) {
 
-        std::unique_ptr<EBData> eb(new EBData);
+        EBData& eb = get_eb_data(state->global_idx);
 
-        eb->ebfactory = makeEBFabFactory (state->eb2_index,
+        eb.ebfactory = makeEBFabFactory (state->eb2_index,
                                                      geom,
                                                      grids,
                                                      dmap,
@@ -79,26 +80,26 @@ void MFP::build_eb() {
                                                      EBSupport::full);
 
 
-        const auto& flags_orig = eb->ebfactory->getMultiEBCellFlagFab();
-        eb->flags.define(grids, dmap, 1, flags_orig.n_grow);
-        eb->flags.copy(flags_orig,0,0,1,flags_orig.n_grow,flags_orig.n_grow,geom.periodicity());
+        const auto& flags_orig = eb.ebfactory->getMultiEBCellFlagFab();
+        eb.flags.define(grids, dmap, 1, flags_orig.n_grow);
+        eb.flags.copy(flags_orig,0,0,1,flags_orig.n_grow,flags_orig.n_grow,geom.periodicity());
 
-        const auto& vfrac_original = eb->ebfactory->getVolFrac();
-        eb->volfrac.define(grids, dmap, 1, vfrac_original.n_grow);
-        eb->volfrac.copy(vfrac_original,0,0,1,vfrac_original.n_grow,vfrac_original.n_grow,geom.periodicity());
+        const auto& vfrac_original = eb.ebfactory->getVolFrac();
+        eb.volfrac.define(grids, dmap, 1, vfrac_original.n_grow);
+        eb.volfrac.copy(vfrac_original,0,0,1,vfrac_original.n_grow,vfrac_original.n_grow,geom.periodicity());
 
-        eb->bndrycent = &(eb->ebfactory->getBndryCent());
-        eb->bndrynorm = &(eb->ebfactory->getBndryNormal());
-        eb->areafrac = eb->ebfactory->getAreaFrac();
-        eb->facecent = eb->ebfactory->getFaceCent();
+        eb.bndrycent = &(eb.ebfactory->getBndryCent());
+        eb.bndrynorm = &(eb.ebfactory->getBndryNormal());
+        eb.areafrac = eb.ebfactory->getAreaFrac();
+        eb.facecent = eb.ebfactory->getFaceCent();
 
         // different boundary conditions
-        eb->bndryidx.define(grids, dmap, 1, m_eb_basic_grow_cells, flags_orig);
-        eb->bndryidx.setVal(-1.0);
+        eb.bndryidx.define(grids, dmap, 1, m_eb_basic_grow_cells, flags_orig);
+        eb.bndryidx.setVal(-1.0);
 
         // update ghost cells
-        auto& flags = eb->flags;
-        auto& vfrac = eb->volfrac;
+        auto& flags = eb.flags;
+        auto& vfrac = eb.volfrac;
 
         for (MFIter mfi(vfrac); mfi.isValid(); ++mfi){
 
@@ -111,8 +112,6 @@ void MFP::build_eb() {
             //            plot_FAB_2d(flags[mfi], "flags after", false);
             //            plot_FAB_2d(vfrac[mfi], 0, "vfrac after", false,true);
         }
-
-        eb_data[level].push_back(std::move(eb));
     }
 
 

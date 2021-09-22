@@ -118,7 +118,7 @@ def parse_FAB_header(name, dim):
 
     return data
 
-def parse_plot_header(name, fid, data):
+def  parse_plot_header(name, fid, data):
 
     # data names
 
@@ -128,7 +128,7 @@ def parse_plot_header(name, fid, data):
     
     for i in range(num_items):
         names.append(fid.readline().rstrip())
-    data["names"] = {"all":names}
+    data["names"] = {"all":names} 
 
     # dimensionality
     data["dim"] = int(fid.readline().rstrip())
@@ -454,8 +454,8 @@ def parse_header(name):
     num_state = data["num_state"]
     for istate in range(num_state):
         state = data["state_%i"%istate]
-        if "particle_data" in state:
-            parse_particle_header(os.path.join(name, state["particle_data"]), data, state["name"])
+        if state['type'] == 'tracer':
+            parse_particle_header(os.path.join(name, "Particles_"+state["name"]), data, state["name"])
         
 
     return data

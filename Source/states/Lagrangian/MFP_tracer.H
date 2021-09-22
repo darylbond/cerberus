@@ -14,23 +14,21 @@ public:
     virtual void init_data(MFP* mfp) override;
     virtual void init(AmrCore *amr_core, bool make_particles=true) override;
 
+    virtual Real get_allowed_time_step(MFP* mfp) const override {return std::numeric_limits<Real>::max();}
+    void push_particles(const int level,
+                        MFIter& mfi,
+                        const FArrayBox& prim,
+                        const Geometry geom,
+                        const Real dt
+                    #ifdef AMREX_USE_EB
+                        ,const EBCellFlagFab& flag
+                    #endif
+                        ) const;
+
     virtual void checkpoint(const std::string& dir) override;
     virtual void restart(const std::string& dir) override;
     virtual void redistribute(int level, int finest_level, int ngrow) override;
     virtual void clear() override;
-
-    void push_particles(MFIter& mfi,
-                        const FArrayBox& prim,
-                        Array<FArrayBox, AMREX_SPACEDIM> &rlo,
-                        Array<FArrayBox, AMREX_SPACEDIM> &rhi,
-                        const int vel_idx,
-                        const Real dt,
-                        const Geometry geom,
-                        const int level
-                    #ifdef AMREX_USE_EB
-                        ,const EBCellFlagFab& flag
-                    #endif
-                        );
 
     virtual StateType get_type() const override {return StateType::TracerParticle;}
     virtual void write_info(nlohmann::json& js) const override;

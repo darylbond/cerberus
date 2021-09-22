@@ -21,7 +21,7 @@ Real MFP::advance(Real time, Real dt, int iteration, int ncycle)
         advance_one_step(time, dt, iteration, ncycle);
     }
 
-    for (int i = 0; i < states.size(); ++i) {
+    for (int i = 0; i < eulerian_states.size(); ++i) {
         state[i].setNewTimeLevel(time+dt);
     }
 

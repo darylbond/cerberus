@@ -124,29 +124,24 @@ void TracerParticle::clear()
     particles.reset();
 }
 
-
-void TracerParticle::push_particles(MFIter& mfi,
+// TODO: more advanced velocity interpolation!!
+void TracerParticle::push_particles(const int level,
+                                    MFIter& mfi,
                                     const FArrayBox& prim,
-                                    Array<FArrayBox, AMREX_SPACEDIM> &rlo,
-                                    Array<FArrayBox, AMREX_SPACEDIM> &rhi,
-                                    const int vel_idx,
-                                    const Real dt,
                                     const Geometry geom,
-                                    const int level
+                                    const Real dt
                                     #ifdef AMREX_USE_EB
                                     ,const EBCellFlagFab& flag
                                     #endif
-                                    )
+                                    ) const
 {
     BL_PROFILE("TracerParticle::push_particles");
 
-    // advance particle locations
-
-    // grab the tile of particles
-
     TParTileType& ptile = particles->ParticlesAt(level, mfi);
 
-//    const Real          strttime = amrex::second();
+    // advance particle locations
+
+    //    const Real          strttime = amrex::second();
     const auto          plo      = geom.ProbLoArray();
     const auto          dxi      = geom.InvCellSizeArray();
 
@@ -157,16 +152,8 @@ void TracerParticle::push_particles(MFIter& mfi,
 
 
         auto& aos  = ptile.GetArrayOfStructs();
-        const int n  = aos.numParticles();
+        const int n          = aos.numParticles();
 
-        // get the left and right cell values
-        Array<Array4<const Real>, AMREX_SPACEDIM> rlo4;
-        Array<Array4<const Real>, AMREX_SPACEDIM> rhi4;
-
-        for (int d=0; d<AMREX_SPACEDIM; ++d) {
-            rlo4[d] = rlo[d].array();
-            rhi4[d] = rhi[d].array();
-        }
 
         const auto p4 = prim.array();
         auto  p_pbox = aos().data();
@@ -184,16 +171,12 @@ void TracerParticle::push_particles(MFIter& mfi,
 
             // implement particle boundary conditions here??
 
-//            int valid = 0;
-
             // calculate where we are in index space and cell local space
-            Array<Real,3> loc = {0.0,0.0,0.0};
             Array<int,3> iloc = {0,0,0};
 
             for (int d=0; d<AMREX_SPACEDIM; ++d) {
-                loc[d] = (p.pos(d) - plo[d]) * dxi[d] - 0.5;
-                iloc[d] = static_cast<int>(amrex::Math::floor(loc[d]));
-                loc[d] -= iloc[d];
+                const Real loc = (p.pos(d) - plo[d]) * dxi[d];
+                iloc[d] = static_cast<int>(amrex::Math::floor(loc));
             }
 #ifdef AMREX_USE_EB
             if (f4(iloc[0], iloc[1], iloc[2]).isCovered()) {
@@ -202,17 +185,8 @@ void TracerParticle::push_particles(MFIter& mfi,
             }
 #endif
 
-            // get the velocity at the particle according to the local slopes
-            // obtained via the reconstructed cell face values
-
             for (int d1=0; d1<AMREX_SPACEDIM; ++d1) {
-                v[d1] = p4(iloc[0], iloc[1], iloc[2],vel_idx + d1); // cell centre value
-                for (int d2=0; d2<AMREX_SPACEDIM; ++d2) {
-                    // adjustment due to slopes
-                    const Real lo_val = rlo4[d2](iloc[0], iloc[1], iloc[2],vel_idx + d1);
-                    const Real hi_val = rhi4[d2](iloc[0], iloc[1], iloc[2],vel_idx + d1);
-                    v[d1] += loc[d2]*(hi_val - lo_val);
-                }
+                v[d1] = p4(iloc[0], iloc[1], iloc[2],d1); // cell centre value
             }
 
             // apply updates to particle position and velocity
@@ -224,7 +198,7 @@ void TracerParticle::push_particles(MFIter& mfi,
                 }
             } else  {
                 for (int dim=0; dim < AMREX_SPACEDIM; dim++) {
-                    p.pos(dim) = p.rdata(dim) + dt*v[dim];
+                    p.rdata(dim) = p.rdata(dim) + dt*v[dim];
                     p.rdata(dim) = v[dim];
                 }
             }
@@ -239,6 +213,7 @@ void TracerParticle::write_info(nlohmann::json& js) const
     LagrangianState::write_info(js);
 
     js["state_idx"] = state_idx;
+    js["type"] = tag;
 
 }
 #endif

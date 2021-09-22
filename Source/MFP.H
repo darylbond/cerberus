@@ -229,8 +229,8 @@ public:
 
 #ifdef AMREX_USE_EB
     static Vector<DataEB> eb_def;
-    static Vector<Vector<std::unique_ptr<EBData>>> eb_data;
-    EBData& get_eb_data(const int idx) { return *eb_data[level][idx]; }
+    static Vector<Vector<EBData>> eb_data;
+    EBData& get_eb_data(const int idx) { return eb_data[level][idx]; }
 #endif
 
 

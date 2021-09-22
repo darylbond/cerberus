@@ -12,6 +12,7 @@
 #include "MFP.H"
 #include "MFP_state.H"
 #include "MFP_eulerian.H"
+#include "MFP_lagrangian.H"
 #include "MFP_utility.H"
 #include "MFP_diagnostics.H"
 #include "json.hpp"
@@ -466,6 +467,15 @@ void MFP::archive_folder(const std::string &dir)
     cmds.push_back("\\cd "+dir+";\\tar -cf " + LevelDir + ".tar " + LevelDir);
     to_remove.push_back(FullPath);
 
+#ifdef AMREX_PARTICLES
+    for (const auto& i : lagrangian_states) {
+        LagrangianState& istate = LagrangianState::get_state_global(i);
+        std::string particle_folder = "Particles_"+istate.name;
+        cmds.push_back("\\cd "+dir+";\\tar -cf " + particle_folder + ".tar " + particle_folder);
+        to_remove.push_back(dir+"/"+particle_folder);
+    }
+#endif
+
     // perform the archiving operation
     for (const auto &cmd : cmds) {
         const char * command = {cmd.c_str()};
@@ -488,6 +498,10 @@ void MFP::archive_folder(const std::string &dir)
 void MFP::writePlotFilePost(const std::string &dir, std::ostream &os)
 {
     BL_PROFILE("MFP::writePlotFilePost");
+
+#ifdef AMREX_PARTICLES
+    writeParticles(dir);
+#endif
 
     if (level != parent->finestLevel() || !ParallelDescriptor::IOProcessor())
         return;

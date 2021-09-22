@@ -319,6 +319,7 @@ void ChargedParticle::write_info(nlohmann::json& js) const
     LagrangianState::write_info(js);
 
     js["state_idx"] = state_idx;
+    js["type"] = tag;
 
 }
 

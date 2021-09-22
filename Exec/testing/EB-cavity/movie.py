@@ -33,7 +33,7 @@ def get_vfrac(ds, c):
     return {"x":x[0], "y":x[1], "value":v}
 
 def get_particles(ds, c):
-    idat, rdat =  ds.get_particles('air')
+    idat, rdat =  ds.get_particles('tracer')
     return {"i":idat, "r":rdat}
 
 def get_boxes(ds, c):

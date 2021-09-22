@@ -47,6 +47,10 @@ void MFP::variableCleanUp()
 
     states.clear();
 
+#ifdef AMREX_USE_EB
+    eb_data.clear();
+#endif
+
 }
 
 void MFP::build_eb() {

@@ -22,11 +22,11 @@ amr.loadbalance_with_workestimates = 1
 amr.loadbalance_level0_int = 10
 
 # ======== GRID ==========
-amr.max_level       = 2   # maximum level number allowed
+amr.max_level       = 0   # maximum level number allowed
 amr.ref_ratio       = 2 2 2 2 2 2 2 # refinement ratio
 amr.regrid_int      = 2 2 2 2 2 2 2 # how often to regrid
 amr.blocking_factor = 8
-amr.max_grid_size   = 32
+amr.max_grid_size   = 128
 amr.n_error_buf     = 1 1 1 1 1 1 0 # number of buffer cells in error est
 amr.grid_eff        = 0.7     # what constitutes an efficient grid
 amr.subcycling_mode = Auto # time sub-cycling (Auto, None, Manual, Optimal)
@@ -49,7 +49,7 @@ amr.check_per               = 0.01
 # PLOTFILES
 amr.plot_files_output = 1
 amr.plot_file         = plt.Cavity     # root name of plotfile
-amr.plot_int          = -1      # number of timesteps between plotfiles
+amr.plot_int          = 1      # number of timesteps between plotfiles
 amr.plot_per          = 0.05
 
 

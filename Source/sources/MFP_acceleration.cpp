@@ -1,0 +1,119 @@
+#include "MFP_acceleration.H"
+#include "MFP.H"
+#include "MFP_state.H"
+#include "sol.hpp"
+#include "Eigen"
+#include "Dense"
+
+std::string Acceleration::tag = "acceleration";
+bool Acceleration::registered = GetSourceFactory().Register(Acceleration::tag, SourceBuilder<Acceleration>);
+
+Acceleration::Acceleration(){}
+Acceleration::~Acceleration(){}
+
+Acceleration::Acceleration(const int idx, const sol::table &def)
+{
+    src_idx = idx;
+    name = def["name"];
+
+    sol::table acc_vector = def["vector"];
+    for (const auto& key_value_pair : acc_vector) {
+        int idx = key_value_pair.first.as<int>();
+        Real val = key_value_pair.second.as<Real>();
+        acc[idx-1] = val;
+    }
+
+
+    const sol::table states = def["states"];
+
+    for (const auto& key_value_pair : states) {
+        std::string state_name = key_value_pair.second.as<std::string>();
+        State& istate = MFP::get_state(state_name);
+
+        switch (istate.get_type()) {
+        case State::StateType::Hydro:
+            species.push_back(static_cast<HydroState*>(&istate));
+            break;
+        default:
+            Abort("An invalid state has been defined for the Acceleration source "+name);
+        }
+    }
+    return;
+}
+
+void Acceleration::solve(MFP* mfp, const Real dt) const
+{
+    BL_PROFILE("Acceleration::solve");
+
+    // collect all of the MultiFabs that we need
+    MultiFab& cost = mfp->get_new_data(MFP::Cost_Idx);
+
+    size_t n_species = species.size();
+
+    Vector<MultiFab*> species_data;
+    for (const HydroState* hstate : species) {
+        species_data.push_back(&(mfp->get_new_data(hstate->data_idx)));
+    }
+
+    Vector<Array4<Real>> species4(n_species);
+
+    // define some 'registers'
+
+
+    for (MFIter mfi(cost); mfi.isValid(); ++mfi) {
+
+        Real wt = ParallelDescriptor::second();
+
+        const Box& box = mfi.tilebox();
+        const Dim3 lo = amrex::lbound(box);
+        const Dim3 hi = amrex::ubound(box);
+
+
+#ifdef AMREX_USE_EB
+        // get the EB data required for later calls and check if we can skip this FAB entirely
+
+        EBData& eb = mfp->get_eb_data(species[0]->global_idx);
+        const FArrayBox& vfrac = eb.volfrac[mfi];
+        if (vfrac.getType() == FabType::covered) continue;
+
+        Array4<const Real> const& vf4 = vfrac.array();
+
+#endif
+
+        for (int n=0; n<n_species; ++n) {
+            species4[n] = species_data[n]->array(mfi);
+        }
+
+
+        for     (int k = lo.z; k <= hi.z; ++k) {
+            for   (int j = lo.y; j <= hi.y; ++j) {
+                AMREX_PRAGMA_SIMD
+                        for (int i = lo.x; i <= hi.x; ++i) {
+
+#ifdef AMREX_USE_EB
+                    if (vf4(i,j,k) == 0.0) {
+                        continue;
+                    }
+#endif
+
+
+                    for (size_t n = 0; n < n_species; ++n) {
+
+                        const Real rho =   species4[n](i,j,k,+HydroDef::ConsIdx::Density);
+
+                        // momentum and energy
+                        for (int d = 0; d<3; ++d) {
+                            const Real m = species4[n](i,j,k,+HydroDef::ConsIdx::Xmom + d);
+                            species4[n](i,j,k,+HydroDef::ConsIdx::Xmom + d) += dt*acc[d]*rho; // g*rho
+                            species4[n](i,j,k,+HydroDef::ConsIdx::Eden)     += dt*acc[d]*m; // g*rho*u
+                        }
+                    }
+                }
+            }
+        }
+
+        // update the cost function
+        wt = (ParallelDescriptor::second() - wt) / box.d_numPts();
+        cost[mfi].plus(wt, box);
+    }
+}

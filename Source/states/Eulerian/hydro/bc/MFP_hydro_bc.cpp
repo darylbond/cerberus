@@ -50,13 +50,13 @@ void DirichletWall::solve(Array<Array<Real,3>,3> &wall_coord,
     transform_global2local(cell_state, wall_coord, HydroState::flux_vector_idx);
 
     // fabricate a state for inside the wall based on the provided state
-    Array<Real, +HydroDef::FluxIdx::NUM> W = cell_state;
+    Vector<Real> W = cell_state;
 
     for (const auto& pair : wall_value) {
         W[pair.first] = pair.second;
     }
 
-    Array<Real,+HydroDef::ConsIdx::NUM> normal_flux;
+    Vector<Real> normal_flux(+HydroDef::ConsIdx::NUM);
     flux_solver->solve(cell_state, W, normal_flux, nullptr);
 
     // convert back to global coordinate system
@@ -98,11 +98,11 @@ void HydroSlipWall::solve(Array<Array<Real,3>,3> &wall_coord,
     transform_global2local(cell_state, wall_coord, HydroState::cons_vector_idx);
 
     // fabricate a state for inside the wall based on the provided state
-    Array<Real, +HydroDef::FluxIdx::NUM> W = cell_state;
+    Vector<Real> W = cell_state;
 
     W[+HydroDef::FluxIdx::Xvel] *= -1;
 
-    Array<Real,+HydroDef::ConsIdx::NUM> normal_flux;
+    Vector<Real> normal_flux(+HydroDef::ConsIdx::NUM);
 
     Real shk = 1.0; // consider there to be a shock present if we have a switching flux
     flux_solver->solve(cell_state, W, normal_flux, &shk);
@@ -162,11 +162,11 @@ void HydroNoSlipWall::solve(Array<Array<Real,3>,3> &wall_coord,
     transform_global2local(cell_state, wall_coord,  HydroState::flux_vector_idx);
 
     // fabricate a state for inside the wall based on the provided state
-    Array<Real,+HydroDef::FluxIdx::NUM> W = cell_state;
+    Vector<Real> W = cell_state;
 
     W[+HydroDef::FluxIdx::Xvel] *= -1;
 
-    Array<Real, +HydroDef::ConsIdx::NUM> normal_flux;
+    Vector<Real> normal_flux(+HydroDef::ConsIdx::NUM);
 
     Real shk = 1.0; // consider there to be a shock present if we have a switching flux
     flux_solver->solve(cell_state, W, normal_flux, &shk);

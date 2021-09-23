@@ -9,9 +9,9 @@ public:
     HydroAUSMDV();
     HydroAUSMDV(const int i);
 
-    virtual void solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
-                       Array<Real,+HydroDef::FluxIdx::NUM> &R,
-                       Array<Real,+HydroDef::ConsIdx::NUM> &F,
+    virtual void solve(Vector<Real> &L,
+                       Vector<Real> &R,
+                       Vector<Real> &F,
                        Real* shk) const override;
 
     virtual std::string get_tag() const override {return tag;}

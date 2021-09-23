@@ -2,7 +2,7 @@
 #include "MFP_state.H"
 #include "MFP_eulerian.H"
 #include "MFP_lagrangian.H"
-
+#include "MFP_diagnostics.H"
 
 using namespace amrex;
 
@@ -44,7 +44,7 @@ std::map<std::string, int> MFP::state_index;
 Vector<size_t> MFP::eulerian_states;
 Vector<size_t> MFP::lagrangian_states;
 
-Vector<std::unique_ptr<Source>> MFP::sources;
+Vector<std::unique_ptr<Action>> MFP::actions;
 Vector<std::string> MFP::source_names;
 std::map<std::string, int> MFP::source_index;
 
@@ -144,14 +144,13 @@ void MFP::initData()
 
     for (const auto& state : states) {
 
-        state->init_data(this);
+        state->init_data(this, get_cum_time());
 
     }
 
     // initialise cost state
     MultiFab& C_new = get_new_data(Cost_Idx);
     C_new.setVal(0.0);
-
 }
 
 void MFP::post_regrid(int lbase, int new_finest)
@@ -173,12 +172,12 @@ void MFP::post_timestep(int iteration)
         MFP& fine_level = getLevel(level + 1);
 
         for (int data_idx=0; data_idx<eulerian_states.size(); ++data_idx) {
-            EulerianState& fine_state = EulerianState::get_state(data_idx);
-            if (fine_state.reflux) {
+            EulerianState& istate = EulerianState::get_state(data_idx);
+            if (istate.reflux) {
                 MultiFab& S_crse = get_new_data(data_idx);
 #ifdef AMREX_USE_EB
                 MultiFab& S_fine = fine_level.get_new_data(data_idx);
-                EBData& eb = get_eb_data(fine_state.global_idx);
+                EBData& eb = get_eb_data(istate.global_idx);
                 fine_level.flux_reg[data_idx].Reflux(S_crse, eb.volfrac, S_fine,
                                                      eb.volfrac);
 #else
@@ -373,9 +372,9 @@ State& MFP::get_state(const std::string& name) {
     return *states[state_index[name]];
 }
 
-Source& MFP::get_source(const std::string& name) {
+Action& MFP::get_source(const std::string& name) {
     if ( source_index.find(name) == source_index.end() ) {
         Abort("Attempting to reference a source that doesn't exist");
     }
-    return *sources[source_index[name]];
+    return *actions[source_index[name]];
 }

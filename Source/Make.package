@@ -21,7 +21,7 @@ include $(TOP)/Source/diagnostics/Make.package
 include $(TOP)/Source/fortran/Make.package
 include $(TOP)/Source/states/Make.package
 include $(TOP)/Source/modules/Make.package
-include $(TOP)/Source/sources/Make.package
+include $(TOP)/Source/actions/Make.package
 
 INCLUDE_LOCATIONS += $(TOP)/Source
 VPATH_LOCATIONS   += $(TOP)/Source

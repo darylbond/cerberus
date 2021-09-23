@@ -4,7 +4,7 @@ HydroShockDetector::HydroShockDetector(){}
 
 HydroShockDetector::~HydroShockDetector(){}
 
-Real HydroShockDetector::solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,Array<Real,+HydroDef::FluxIdx::NUM> &R) const {return 0.0;}
+Real HydroShockDetector::solve(Vector<Real> &L,Vector<Real> &R) const {return 0.0;}
 
 ClassFactory<HydroShockDetector>& GetHydroShockDetectorFactory()
 {
@@ -32,7 +32,7 @@ PressureJumpShockDetector::PressureJumpShockDetector(const sol::table& def)
 
 }
 
-Real PressureJumpShockDetector::solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,Array<Real,+HydroDef::FluxIdx::NUM> &R) const
+Real PressureJumpShockDetector::solve(Vector<Real> &L,Vector<Real> &R) const
 {
     BL_PROFILE("PressureJumpShockDetector::solve");
 

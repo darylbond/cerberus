@@ -1,11 +1,11 @@
 #ifndef HYDROTRACER_H
 #define HYDROTRACER_H
 
-#include "MFP_source.H"
+#include "MFP_action.H"
 #include "MFP_hydro.H"
 #include "MFP_tracer.H"
 
-class HydroTracer : public Source
+class HydroTracer : public Action
 {
 public:
     HydroTracer();
@@ -21,7 +21,7 @@ public:
                         #endif
                         ) const;
 
-    virtual void solve(MFP* mfp, const Real dt) const override;
+    virtual void apply_spatial_derivative(MFP* mfp, const Real time, const Real dt) const override;
 
 
     virtual std::string get_tag() const override {return tag;}

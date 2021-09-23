@@ -26,8 +26,8 @@ public:
     Real merge_threshold;
 #endif
 
-    std::map<std::string,Optional3D1VFunction> functions;
-    std::map<int,Optional3D1VFunction*> dynamic_functions; // index is for primitive values
+    std::map<std::string,Optional3D1VFunction> other_functions;
+    Vector<Optional3D1VFunction> functions;
 
     std::unique_ptr<Reconstruction> reconstructor;
 

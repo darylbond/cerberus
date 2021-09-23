@@ -34,7 +34,7 @@ TracerParticle::TracerParticle(const sol::table& def)
     }
 }
 
-void TracerParticle::init_data(MFP* mfp)
+void TracerParticle::init_data(MFP* mfp, const Real time)
 {
     if (mfp->get_level() == 0)
         init(mfp->get_parent());

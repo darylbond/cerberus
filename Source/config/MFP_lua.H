@@ -16,6 +16,17 @@ void expand(const sol::object &in, std::array<T,N> &out) {
 }
 
 template <typename T>
+void set_values(const sol::object &in, std::vector<T> &out) {
+    if (in.get_type() == sol::type::table) {
+        const sol::table m = in.as<sol::table>();
+        out.resize(m.size());
+        for (int i=0; i<m.size(); ++i) {
+            out[i] = m[i+1];
+        }
+    }
+}
+
+template <typename T>
 void get_numbered(const sol::table &in, std::vector<T> &out)
 {
     if (!in.valid())

@@ -7,7 +7,7 @@
 #include "MFP_utility.H"
 
 #include "MFP_state.H"
-#include "MFP_source.H"
+#include "MFP_action.H"
 
 
 void MFP::set_lua_script(const std::string &script)
@@ -76,8 +76,8 @@ void MFP::read_config()
 
     if (time_integrator == "euler") {
         time_integration_scheme = TimeIntegrator::Euler;
-    } else if (time_integrator == "CTU") {
-        time_integration_scheme = TimeIntegrator::CTU;
+    } else if (time_integrator == "strang") {
+        time_integration_scheme = TimeIntegrator::StrangSplitting;
     } else {
         Abort("Time integration scheme "+time_integrator+" is not recognised, try ['euler', ...]");
     }
@@ -266,47 +266,47 @@ void MFP::read_config()
 
 
     //
-    // generate source terms
+    // generate actions
     //
 
-    // what sources do we have?
-    sol::table src_def_names = lua.script("return get_sorted_keys(sources)");
+    // what actions do we have?
+    sol::table act_def_names = lua.script("return get_sorted_keys(actions)");
 
-    ClassFactory<Source> src_fact = GetSourceFactory();
+    ClassFactory<Action> act_fact = GetActionFactory();
 
     // get a list of all the tags
-    Vector<std::string> src_tags;
-    for (const auto& S : src_fact.getRegistered()) {
-        src_tags.push_back(S.first);
+    Vector<std::string> act_tags;
+    for (const auto& S : act_fact.getRegistered()) {
+        act_tags.push_back(S.first);
     }
 
 
-    int src_idx = 0;
-    for (auto& item : src_def_names) {
-        std::string src_name = item.second.as<std::string>();
+    int act_idx = 0;
+    for (auto& item : act_def_names) {
+        std::string act_name = item.second.as<std::string>();
 
-        sol::table src_def = lua["sources"][src_name];
+        sol::table act_def = lua["actions"][act_name];
 
-        src_def["name"] = src_name;
-        src_def["src_idx"] = src_idx;
+        act_def["name"] = act_name;
+        act_def["src_idx"] = act_idx;
 
-        std::string src_type = src_def["type"].get<std::string>();
+        std::string src_type = act_def["type"].get<std::string>();
 
-        std::unique_ptr<Source> isrc = src_fact.Build(src_type, src_def);
+        std::unique_ptr<Action> act = act_fact.Build(src_type, act_def);
 
-        if (!isrc)
-            Abort("Failed to read source "+src_name+", must be one of "+vec2str(src_tags));
+        if (!act)
+            Abort("Failed to read source "+act_name+", must be one of "+vec2str(act_tags));
 
-        sources.push_back(std::move(isrc));
-        source_names.push_back(src_name);
-        source_index[src_name] = src_idx;
+        actions.push_back(std::move(act));
+        source_names.push_back(act_name);
+        source_index[act_name] = act_idx;
 
-        src_idx++;
+        act_idx++;
     }
 
 
 
-    // update anything in the states that requires source terms to be defined
+    // update anything in the states that requires actions to be defined
     for (auto &istate : states) {
         istate->post_init_from_lua();
     }

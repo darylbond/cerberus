@@ -6,7 +6,7 @@
 #include "Dense"
 
 std::string Plasma5::tag = "plasma5";
-bool Plasma5::registered = GetSourceFactory().Register(Plasma5::tag, SourceBuilder<Plasma5>);
+bool Plasma5::registered = GetActionFactory().Register(Plasma5::tag, ActionBuilder<Plasma5>);
 Plasma5::TimeIntegrator Plasma5::solver;
 
 Plasma5::Plasma5(){}
@@ -27,9 +27,9 @@ Plasma5::Plasma5(const int idx, const sol::table &def)
         Abort("Plasma5 source needs to know what type of solver to use, options are ['explicit','implicit']");
     }
 
-    const sol::table states = def["states"];
+    const sol::table state_names = def["states"];
 
-    for (const auto& key_value_pair : states) {
+    for (const auto& key_value_pair : state_names) {
         std::string state_name = key_value_pair.second.as<std::string>();
         State& istate = MFP::get_state(state_name);
 
@@ -37,27 +37,33 @@ Plasma5::Plasma5(const int idx, const sol::table &def)
         case State::StateType::Field:
             if (field != nullptr) Abort("Only one field state can be set for the Plasma5 source "+name);
             field = static_cast<FieldState*>(&istate);
+            state_indexes.push_back(istate.global_idx);
             break;
         case State::StateType::Hydro:
             species.push_back(static_cast<HydroState*>(&istate));
+            state_indexes.push_back(istate.global_idx);
             break;
         default:
             Abort("An invalid state has been defined for the Plasma5 source "+name);
         }
     }
+
+
+
+
     return;
 }
 
-void Plasma5::solve(MFP* mfp, const Real dt) const
+void Plasma5::calc_time_derivative(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, const Real time, const Real dt) const
 {
     BL_PROFILE("Plasma5::solve");
 
     switch(solver) {
     case TimeIntegrator::ForwardsEuler :
-        explicit_solve(mfp, dt);
+        explicit_solve(mfp, dU, time, dt);
         break;
     case TimeIntegrator::BackwardsEuler :
-        implicit_solve(mfp,dt);
+        // don't do anything for implicit solve
         break;
     default:
         Abort("How did we get here?");
@@ -66,23 +72,25 @@ void Plasma5::solve(MFP* mfp, const Real dt) const
 
 }
 
-
-void Plasma5::explicit_solve(MFP* mfp, const Real dt) const
+void Plasma5::explicit_solve(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt) const
 {
+    BL_PROFILE("Plasma5::explicit_solve");
+
     // collect all of the MultiFabs that we need
     MultiFab& cost = mfp->get_new_data(MFP::Cost_Idx);
 
-    MultiFab* field_data = &(mfp->get_new_data(field->data_idx));
+    MultiFab* field_data = &(mfp->get_data(field->data_idx,time));
 
 
     size_t n_species = species.size();
 
     Vector<MultiFab*> species_data;
     for (const HydroState* hstate : species) {
-        species_data.push_back(&(mfp->get_new_data(hstate->data_idx)));
+        species_data.push_back(&(mfp->get_data(hstate->data_idx,time)));
     }
 
     Vector<Array4<Real>> species4(n_species);
+    Vector<Array4<Real>> species_dU4(n_species);
 
     // define some 'registers'
 
@@ -109,6 +117,13 @@ void Plasma5::explicit_solve(MFP* mfp, const Real dt) const
 
     // get charge and current density
     Real charge_density, current_x, current_y, current_z;
+
+    // mark dU components that have been touched
+    dU[field->data_idx].first = 1;
+
+    for (int n=0; n<n_species; ++n) {
+        dU[species[n]->data_idx].first = 1;
+    }
 
 
 
@@ -147,9 +162,11 @@ void Plasma5::explicit_solve(MFP* mfp, const Real dt) const
 #endif
 
         Array4<Real> const& field4 = field_data->array(mfi);
+        Array4<Real> const& field_dU4 = dU[field->data_idx].second.array(mfi);
 
         for (int n=0; n<n_species; ++n) {
             species4[n] = species_data[n]->array(mfi);
+            species_dU4[n] = dU[species[n]->data_idx].second.array(mfi);
         }
 
 
@@ -208,26 +225,23 @@ void Plasma5::explicit_solve(MFP* mfp, const Real dt) const
                         v = my/rho;
                         w = mz/rho;
 
-                        species4[n](i,j,k,+HydroDef::ConsIdx::Xmom) += dt*(rho*r/Larmor)*(lightspeed*Ex + v*Bz - w*By);
-                        species4[n](i,j,k,+HydroDef::ConsIdx::Ymom) += dt*(rho*r/Larmor)*(lightspeed*Ey + w*Bx - u*Bz);
-                        species4[n](i,j,k,+HydroDef::ConsIdx::Zmom) += dt*(rho*r/Larmor)*(lightspeed*Ez + u*By - v*Bx);
-                        species4[n](i,j,k,+HydroDef::ConsIdx::Eden) += dt*(rho*r*lightspeed)/Larmor*(u*Ex + v*Ey + w*Ez);
+                        species_dU4[n](i,j,k,+HydroDef::ConsIdx::Xmom) += dt*(rho*r/Larmor)*(lightspeed*Ex + v*Bz - w*By);
+                        species_dU4[n](i,j,k,+HydroDef::ConsIdx::Ymom) += dt*(rho*r/Larmor)*(lightspeed*Ey + w*Bx - u*Bz);
+                        species_dU4[n](i,j,k,+HydroDef::ConsIdx::Zmom) += dt*(rho*r/Larmor)*(lightspeed*Ez + u*By - v*Bx);
+                        species_dU4[n](i,j,k,+HydroDef::ConsIdx::Eden) += dt*(rho*r*lightspeed)/Larmor*(u*Ex + v*Ey + w*Ez);
                     }
 
                     // electric field and divergence constraint sources
 
-
-
-                    field4(i,j,k,+FieldDef::ConsIdx::Dx)  -= f1*current_x;
-                    field4(i,j,k,+FieldDef::ConsIdx::Dy)  -= f1*current_y;
-                    field4(i,j,k,+FieldDef::ConsIdx::Dz)  -= f1*current_z;
+                    field_dU4(i,j,k,+FieldDef::ConsIdx::Dx) += -f1*current_x;
+                    field_dU4(i,j,k,+FieldDef::ConsIdx::Dy) += -f1*current_y;
+                    field_dU4(i,j,k,+FieldDef::ConsIdx::Dz) += -f1*current_z;
 
                     // source for D divergence correction
-                    field4(i,j,k,+FieldDef::ConsIdx::phi) *= (1-f3);
-                    field4(i,j,k,+FieldDef::ConsIdx::phi) +=  f2*charge_density;
+                    field_dU4(i,j,k,+FieldDef::ConsIdx::phi) += -field4(i,j,k,+FieldDef::ConsIdx::phi)*f3 + f2*charge_density;
 
                     // source for B divergence correction
-                    field4(i,j,k,+FieldDef::ConsIdx::psi) *= (1 - f3);
+                    field_dU4(i,j,k,+FieldDef::ConsIdx::psi) += -field4(i,j,k,+FieldDef::ConsIdx::psi)*f3;
                 }
             }
         }
@@ -238,23 +252,32 @@ void Plasma5::explicit_solve(MFP* mfp, const Real dt) const
     }
 }
 
-void Plasma5::implicit_solve(MFP* mfp, const Real dt) const
+void Plasma5::implicit_solve(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, const Real time, const Real dt) const
 {
+    BL_PROFILE("Plasma5::implicit_solve");
 
     // collect all of the MultiFabs that we need
     MultiFab& cost = mfp->get_new_data(MFP::Cost_Idx);
 
-    MultiFab* field_data = &(mfp->get_new_data(field->data_idx));
+    MultiFab* field_data = &(mfp->get_data(field->data_idx,time));
 
 
     size_t n_species = species.size();
 
     Vector<MultiFab*> species_data;
     for (const HydroState* hstate : species) {
-        species_data.push_back(&(mfp->get_new_data(hstate->data_idx)));
+        species_data.push_back(&(mfp->get_data(hstate->data_idx,time)));
     }
 
     Vector<Array4<Real>> species4(n_species);
+    Vector<Array4<Real>> species_dU4(n_species);
+
+    // mark dU components that have been touched
+    dU[field->data_idx].first = 1;
+
+    for (int n=0; n<n_species; ++n) {
+        dU[species[n]->data_idx].first = 1;
+    }
 
 
     // define the linear system matrix/vector and the associated solver
@@ -309,9 +332,11 @@ void Plasma5::implicit_solve(MFP* mfp, const Real dt) const
 #endif
 
         Array4<Real> const& field4 = field_data->array(mfi);
+        Array4<Real> const& field_dU4 = dU[field->data_idx].second.array(mfi);
 
         for (int n=0; n<n_species; ++n) {
             species4[n] = species_data[n]->array(mfi);
+            species_dU4[n] = dU[species[n]->data_idx].second.array(mfi);
         }
 
 
@@ -402,10 +427,12 @@ void Plasma5::implicit_solve(MFP* mfp, const Real dt) const
                     c = cphqr.solve(b);
 
 
-                    // the updated D field
-                    field4(i,j,k,+FieldDef::ConsIdx::Dx) = c(n_species*3 + 0)*ep;
-                    field4(i,j,k,+FieldDef::ConsIdx::Dy) = c(n_species*3 + 1)*ep;
-                    field4(i,j,k,+FieldDef::ConsIdx::Dz) = c(n_species*3 + 2)*ep;
+                    // the updates for the D field
+                    // note that the linear system has solved for the updated field but we want the delta value
+                    // hence we calculate delta = new - old
+                    field_dU4(i,j,k,+FieldDef::ConsIdx::Dx) = c(n_species*3 + 0)*ep - field4(i,j,k,+FieldDef::ConsIdx::Dx);
+                    field_dU4(i,j,k,+FieldDef::ConsIdx::Dy) = c(n_species*3 + 1)*ep - field4(i,j,k,+FieldDef::ConsIdx::Dy);
+                    field_dU4(i,j,k,+FieldDef::ConsIdx::Dz) = c(n_species*3 + 2)*ep - field4(i,j,k,+FieldDef::ConsIdx::Dz);
 
                     // new electric field
                     Ex = c(n_species*3 + 0);
@@ -414,21 +441,24 @@ void Plasma5::implicit_solve(MFP* mfp, const Real dt) const
 
                     // get the updates for hydro species
                     for (int n=0; n<n_species; ++n) {
-                        species4[n](i,j,k,+HydroDef::ConsIdx::Xmom) = mx = c(n*3 + 0);
-                        species4[n](i,j,k,+HydroDef::ConsIdx::Ymom) = my = c(n*3 + 1);
-                        species4[n](i,j,k,+HydroDef::ConsIdx::Zmom) = mz = c(n*3 + 2);
 
-                        species4[n](i,j,k,+HydroDef::ConsIdx::Eden) += dt*(R[n]*lightspeed/Larmor)*(Ex*mx + Ey*my + Ez*mz);
+                        mx = c(n*3 + 0);
+                        my = c(n*3 + 1);
+                        mz = c(n*3 + 2);
+
+                        species_dU4[n](i,j,k,+HydroDef::ConsIdx::Xmom) += mx - species4[n](i,j,k,+HydroDef::ConsIdx::Xmom);
+                        species_dU4[n](i,j,k,+HydroDef::ConsIdx::Ymom) += my - species4[n](i,j,k,+HydroDef::ConsIdx::Ymom);
+                        species_dU4[n](i,j,k,+HydroDef::ConsIdx::Zmom) += mz - species4[n](i,j,k,+HydroDef::ConsIdx::Zmom);
+
+                        species_dU4[n](i,j,k,+HydroDef::ConsIdx::Eden) += dt*(R[n]*lightspeed/Larmor)*(Ex*mx + Ey*my + Ez*mz);
 
                     }
 
-
-                    // source for E divergence correction
-                    field4(i,j,k,+FieldDef::ConsIdx::phi) *= (1-f3);
-                    field4(i,j,k,+FieldDef::ConsIdx::phi) += f2*charge_density;
+                    // source for D divergence correction
+                    field_dU4(i,j,k,+FieldDef::ConsIdx::phi) += -field4(i,j,k,+FieldDef::ConsIdx::phi)*f3 + f2*charge_density;
 
                     // source for B divergence correction
-                    field4(i,j,k,+FieldDef::ConsIdx::psi) *= (1 - f3);
+                    field_dU4(i,j,k,+FieldDef::ConsIdx::psi) += -field4(i,j,k,+FieldDef::ConsIdx::psi)*f3;
 
                 }
             }

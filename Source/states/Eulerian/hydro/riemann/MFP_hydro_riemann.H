@@ -21,9 +21,9 @@ public:
 
     int idx;
 
-    virtual void solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
-                       Array<Real,+HydroDef::FluxIdx::NUM> &R,
-                       Array<Real,+HydroDef::ConsIdx::NUM> &F,
+    virtual void solve(Vector<Real> &L,
+                       Vector<Real> &R,
+                       Vector<Real> &F,
                        Real* shk) const {}
 
     virtual std::string get_tag() const {return "";}

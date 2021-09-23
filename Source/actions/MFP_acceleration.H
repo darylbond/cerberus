@@ -1,17 +1,17 @@
 #ifndef ACCELERATION_H
 #define ACCELERATION_H
 
-#include "MFP_source.H"
+#include "MFP_action.H"
 #include "MFP_hydro.H"
 
-class Acceleration : public Source
+class Acceleration : public Action
 {
 public:
     Acceleration();
     Acceleration(const int idx, const sol::table &def);
     ~Acceleration();
 
-    virtual void solve(MFP* mfp, const Real dt) const override;
+    virtual void calc_time_derivative(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, const Real time, const Real dt) const override;
 
     virtual std::string get_tag() const override {return tag;}
 

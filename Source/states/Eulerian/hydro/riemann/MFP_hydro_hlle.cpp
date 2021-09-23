@@ -14,12 +14,14 @@ HydroHLLE::HydroHLLE(const int i)
     idx = i;
 }
 
-void HydroHLLE::solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
-                                Array<Real,+HydroDef::FluxIdx::NUM> &R,
-                                Array<Real,+HydroDef::ConsIdx::NUM> &F,
+void HydroHLLE::solve(Vector<Real> &L,
+                                Vector<Real> &R,
+                                Vector<Real> &F,
                                 Real* shk) const
 {
     BL_PROFILE("HydroHLLE::solve");
+
+    const int n_alpha = L.size() - +HydroDef::FluxIdx::NUM;
 
     // get the data out of the passed in arrays
     Real rhoL = L[+HydroDef::FluxIdx::Density];
@@ -27,11 +29,14 @@ void HydroHLLE::solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
     Real vL = L[+HydroDef::FluxIdx::Yvel];
     Real wL = L[+HydroDef::FluxIdx::Zvel];
     Real pL = L[+HydroDef::FluxIdx::Prs];
-    Real apL = L[+HydroDef::FluxIdx::Alpha];
     Real gamL = L[+HydroDef::FluxIdx::Gamma];
     Real nrgL = pL/(gamL - 1) + 0.5*rhoL*(uL*uL + vL*vL + wL*wL);
-    Real tL = apL*rhoL;
     Real aL = sqrt(gamL*pL/rhoL);
+
+    Vector<Real> trL(n_alpha);
+    for (int i=+HydroDef::FluxIdx::NUM; i<L.size(); ++ i) {
+        trL[i-+HydroDef::FluxIdx::NUM]= L[i]*rhoL;
+    }
 
     // get the data out of the passed in arrays
     Real rhoR = R[+HydroDef::FluxIdx::Density];
@@ -39,11 +44,14 @@ void HydroHLLE::solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
     Real vR = R[+HydroDef::FluxIdx::Yvel];
     Real wR = R[+HydroDef::FluxIdx::Zvel];
     Real pR = R[+HydroDef::FluxIdx::Prs];
-    Real apR = R[+HydroDef::FluxIdx::Alpha];
     Real gamR = R[+HydroDef::FluxIdx::Gamma];
     Real nrgR = pR/(gamR-1) + 0.5*rhoR*(uR*uR + vR*vR + wR*wR);
-    Real tR = apR*rhoR;
     Real aR = sqrt(gamR*pR/rhoR);
+
+    Vector<Real> trR(n_alpha);
+    for (int i=+HydroDef::FluxIdx::NUM; i<R.size(); ++ i) {
+        trR[i-+HydroDef::FluxIdx::NUM]= R[i]*rhoR;
+    }
 
     // speeds
     Real sL = std::min(uL - aL, uR - aR);
@@ -56,7 +64,9 @@ void HydroHLLE::solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
         F[+HydroDef::ConsIdx::Ymom]   = rhoL*uL*vL;
         F[+HydroDef::ConsIdx::Zmom]   = rhoL*uL*wL;
         F[+HydroDef::ConsIdx::Eden]   = uL*(nrgL + pL);
-        F[+HydroDef::ConsIdx::Tracer] = tL*uL;
+        for (int i=0; i<n_alpha; ++i) {
+            F[+HydroDef::ConsIdx::NUM+i]  = uL * trL[i];
+        }
     } else if ((sL <= 0.0) && (sR >= 0.0)) {
         Array<Real, +HydroDef::ConsIdx::NUM> fvL, fvR, svL, svR;
         // flux vector L
@@ -65,7 +75,9 @@ void HydroHLLE::solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
         fvL[+HydroDef::ConsIdx::Ymom]   = rhoL*uL*vL;
         fvL[+HydroDef::ConsIdx::Zmom]   = rhoL*uL*wL;
         fvL[+HydroDef::ConsIdx::Eden]   = uL*(nrgL + pL);
-        fvL[+HydroDef::ConsIdx::Tracer] = tL*uL;
+        for (int i=0; i<n_alpha; ++i) {
+            fvL[+HydroDef::ConsIdx::NUM+i]  = uL * trL[i];
+        }
 
         // flux vector R
         fvR[+HydroDef::ConsIdx::Density]  = rhoR*uR;
@@ -73,7 +85,9 @@ void HydroHLLE::solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
         fvR[+HydroDef::ConsIdx::Ymom]   = rhoR*uR*vR;
         fvR[+HydroDef::ConsIdx::Zmom]   = rhoR*uR*wR;
         fvR[+HydroDef::ConsIdx::Eden]   = uR*(nrgR + pR);
-        fvR[+HydroDef::ConsIdx::Tracer] = tR*uR;
+        for (int i=0; i<n_alpha; ++i) {
+            fvR[+HydroDef::ConsIdx::NUM+i]  = uR * trR[i];
+        }
 
         // state vector L
         svL[+HydroDef::ConsIdx::Density]  = rhoL;
@@ -81,7 +95,9 @@ void HydroHLLE::solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
         svL[+HydroDef::ConsIdx::Ymom]   = rhoL*vL;
         svL[+HydroDef::ConsIdx::Zmom]   = rhoL*wL;
         svL[+HydroDef::ConsIdx::Eden]   = nrgL;
-        svL[+HydroDef::ConsIdx::Tracer] = tL;
+        for (int i=0; i<n_alpha; ++i) {
+            svL[+HydroDef::ConsIdx::NUM+i]  = trL[i];
+        }
 
         // state vector R
         svR[+HydroDef::ConsIdx::Density]  = rhoR;
@@ -89,7 +105,9 @@ void HydroHLLE::solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
         svR[+HydroDef::ConsIdx::Ymom]   = rhoR*vR;
         svR[+HydroDef::ConsIdx::Zmom]   = rhoR*wR;
         svR[+HydroDef::ConsIdx::Eden]   = nrgR;
-        svR[+HydroDef::ConsIdx::Tracer] = tR;
+        for (int i=0; i<n_alpha; ++i) {
+            svR[+HydroDef::ConsIdx::NUM+i]  = trR[i];
+        }
 
         for (int i=0; i<+HydroDef::ConsIdx::NUM; ++i) {
             F[i] = (sR*fvL[i] - sL*fvR[i] + sL*sR*(svR[i] - svL[i]))/(sR - sL);
@@ -100,6 +118,8 @@ void HydroHLLE::solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
         F[+HydroDef::ConsIdx::Ymom]   = rhoR*uR*vR;
         F[+HydroDef::ConsIdx::Zmom]   = rhoR*uR*wR;
         F[+HydroDef::ConsIdx::Eden]   = uR*(nrgR + pR);
-        F[+HydroDef::ConsIdx::Tracer] = tR*uR;
+        for (int i=0; i<n_alpha; ++i) {
+            F[+HydroDef::ConsIdx::NUM+i]  = uR*trR[i];
+        }
     }
 }

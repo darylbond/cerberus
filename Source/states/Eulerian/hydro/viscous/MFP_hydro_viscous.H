@@ -21,14 +21,14 @@ public:
         NUM
     };
 
-    virtual void get_coeffs(const Array<Real, +HydroDef::PrimIdx::NUM> &Q, Real &T, Real &mu, Real &kappa) const {}
+    virtual void get_coeffs(const Vector<Real> &Q, Real &T, Real &mu, Real &kappa) const {}
 
     virtual std::string get_tag() const {return "";}
     virtual const std::map<std::string, Real> get_refs() const {return {};}
     virtual std::string str() const;
 
     Real get_min_dt(MFP *mfp) const;
-    virtual Real calc_stability_condition(Array<Real,+HydroDef::ConsIdx::NUM>& U) const {return 0.0;}
+    virtual Real calc_stability_condition(Vector<Real>& U) const {return 0.0;}
 
     int idx;
     bool active;
@@ -74,8 +74,8 @@ public:
         return {{"mu_0", mu_0},{"T0", T0}, {"S",S}, {"Pr",Prandtl}};
     }
 
-    virtual Real calc_stability_condition(Array<Real,+HydroDef::ConsIdx::NUM>& U) const override;
-    virtual void get_coeffs(const Array<Real, +HydroDef::PrimIdx::NUM> &Q, Real &T, Real &mu, Real &kappa) const override;
+    virtual Real calc_stability_condition(Vector<Real> &U) const override;
+    virtual void get_coeffs(const Vector<Real> &Q, Real &T, Real &mu, Real &kappa) const override;
 
     static bool registered;
     static std::string tag;
@@ -104,8 +104,8 @@ public:
         return {{"mu_0", mu_0},{"T0", T0}, {"n",n}, {"Pr",Prandtl}};
     }
 
-    virtual Real calc_stability_condition(Array<Real,+HydroDef::ConsIdx::NUM>& U) const override;
-    virtual void get_coeffs(const Array<Real,+HydroDef::PrimIdx::NUM>& Q, Real &T, Real &mu, Real &kappa) const override;
+    virtual Real calc_stability_condition(Vector<Real> &U) const override;
+    virtual void get_coeffs(const Vector<Real> &Q, Real &T, Real &mu, Real &kappa) const override;
 
     static bool registered;
     static std::string tag;
@@ -134,8 +134,8 @@ public:
         return {{"mu_0", mu_0}, {"Pr",Prandtl}};
     }
 
-    virtual Real calc_stability_condition(Array<Real,+HydroDef::ConsIdx::NUM>& U) const override;
-    virtual void get_coeffs(const Array<Real,+HydroDef::PrimIdx::NUM>& Q, Real &T, Real &mu, Real &kappa) const override;
+    virtual Real calc_stability_condition(Vector<Real> &U) const override;
+    virtual void get_coeffs(const Vector<Real> &Q, Real &T, Real &mu, Real &kappa) const override;
 
     static bool registered;
     static std::string tag;

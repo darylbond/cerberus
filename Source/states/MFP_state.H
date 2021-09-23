@@ -74,7 +74,7 @@ public:
     virtual void init_from_lua() {}
     virtual void post_init_from_lua() {}
     virtual void variable_setup(Vector<int> periodic) {}
-    virtual void init_data(MFP* mfp) {}
+    virtual void init_data(MFP* mfp, const Real time) {}
 
     virtual Real get_allowed_time_step(MFP* mfp) const {return 0.0;}
 

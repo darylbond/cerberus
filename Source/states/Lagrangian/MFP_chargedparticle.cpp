@@ -33,7 +33,7 @@ ChargedParticle::ChargedParticle(const sol::table& def)
     mass = def["mass"];
 }
 
-void ChargedParticle::init_data(MFP* mfp)
+void ChargedParticle::init_data(MFP* mfp, const Real time)
 {
     if (mfp->get_level() == 0)
         init(mfp->get_parent());

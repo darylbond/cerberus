@@ -16,10 +16,10 @@
 
 #include "MFP_eb_structs.H"
 #include "MFP_optional_func.H"
-#include "MFP_source.H"
+#include "MFP_action.H"
 
 class State;
-class Source;
+class Action;
 
 using namespace amrex;
 
@@ -84,12 +84,14 @@ public:
 
     enum class TimeIntegrator {
         Euler = 0,
-        CTU,
+        StrangSplitting,
     };
 
     static TimeIntegrator time_integration_scheme;
 
-    void advance_one_step(Real time, Real dt, int iteration, int ncycle, bool CTU=false);
+    void advance_euler(Real time, Real dt, int iteration, int ncycle);
+    void advance_strang(Real time, Real dt, int iteration, int ncycle);
+    void apply_derivative(Vector<std::pair<int, MultiFab> > &dU);
 
     Real estTimeStep();
 
@@ -153,9 +155,9 @@ public:
     static State& get_state(const int idx) { return *states[idx]; }
     static State& get_state(const std::string& name);
 
-    static Source* get_source_ptr(const int idx) {return sources[idx].get();}
-    static Source& get_source(const int idx) { return *sources[idx]; }
-    static Source& get_source(const std::string& name);
+    static Action* get_source_ptr(const int idx) {return actions[idx].get();}
+    static Action& get_source(const int idx) { return *actions[idx]; }
+    static Action& get_source(const std::string& name);
 
     void build_eb();
     void avgDown();
@@ -202,7 +204,9 @@ public:
     static Vector<size_t> eulerian_states;
     static Vector<size_t> lagrangian_states;
 
-    static Vector<std::unique_ptr<Source>> sources;
+    Vector<std::pair<int,MultiFab>> eulerian_du;
+
+    static Vector<std::unique_ptr<Action>> actions;
     static Vector<std::string> source_names;
     static std::map<std::string, int> source_index;
 

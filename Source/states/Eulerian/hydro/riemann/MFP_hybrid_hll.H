@@ -16,9 +16,9 @@ public:
     HydroHLLC hllc;
     HydroHLLE hlle;
 
-    virtual void solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
-                       Array<Real,+HydroDef::FluxIdx::NUM> &R,
-                       Array<Real,+HydroDef::ConsIdx::NUM> &F,
+    virtual void solve(Vector<Real> &L,
+                       Vector<Real> &R,
+                       Vector<Real> &F,
                        Real* shk) const override;
 
     virtual bool requires_shock_detector() const {return true;}

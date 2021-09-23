@@ -137,14 +137,13 @@ Sutherland::Sutherland(const int global_idx, const sol::table& def)
     }
 }
 
-void Sutherland::get_coeffs(const Array<Real, +HydroDef::PrimIdx::NUM> &Q, Real &T, Real &mu, Real &kappa) const
+void Sutherland::get_coeffs(const Vector<Real> &Q, Real &T, Real &mu, Real &kappa) const
 {
     BL_PROFILE("Sutherland::get_neutral_coeffs");
     const HydroState& istate = HydroState::get_state_global(idx);
 
     T = istate.get_temperature_from_prim(Q);
-    Real alpha = istate.get_alpha_from_prim(Q);
-    Real cp = istate.get_cp(alpha);
+    Real cp = istate.get_cp_from_prim(alpha);
 
     Real T_ = T/T0;
     mu = mu_0*T_*sqrt(T_)*(T0+S)/(T+S);
@@ -153,13 +152,13 @@ void Sutherland::get_coeffs(const Array<Real, +HydroDef::PrimIdx::NUM> &Q, Real 
     return;
 }
 
-Real Sutherland::calc_stability_condition(Array<Real,+HydroDef::ConsIdx::NUM>& U) const
+Real Sutherland::calc_stability_condition(Vector<Real>& U) const
 {
     const HydroState& istate = HydroState::get_state_global(idx);
 
     const Real rho = U[+HydroDef::ConsIdx::Density];
     const Real T = istate.get_temperature_from_cons(U);
-    const Real gamma = istate.get_gamma(U);
+    const Real gamma = istate.get_gamma_from_cons(U);
 
 
     const Real T_ = T/T0;
@@ -203,14 +202,13 @@ PowerLaw::PowerLaw(const int global_idx, const sol::table& def)
     }
 }
 
-void PowerLaw::get_coeffs(const Array<Real,+HydroDef::PrimIdx::NUM>& Q, Real &T, Real &mu, Real &kappa) const
+void PowerLaw::get_coeffs(const Vector<Real>& Q, Real &T, Real &mu, Real &kappa) const
 {
     BL_PROFILE("PowerLaw::get_neutral_coeffs");
     const HydroState& istate = HydroState::get_state_global(idx);
 
     T = istate.get_temperature_from_prim(Q);
-    Real alpha = istate.get_alpha_from_prim(Q);
-    Real cp = istate.get_cp(alpha);
+    Real cp = istate.get_cp_from_prim(Q);
 
 
     mu = mu_0*pow(T/T0,n);
@@ -219,14 +217,14 @@ void PowerLaw::get_coeffs(const Array<Real,+HydroDef::PrimIdx::NUM>& Q, Real &T,
     return;
 }
 
-Real PowerLaw::calc_stability_condition(Array<Real,+HydroDef::ConsIdx::NUM>& U) const
+Real PowerLaw::calc_stability_condition(Vector<Real>& U) const
 {
 
     const HydroState& istate = HydroState::get_state_global(idx);
 
     const Real rho = U[+HydroDef::ConsIdx::Density];
     const Real T = istate.get_temperature_from_cons(U);
-    const Real gamma = istate.get_gamma(U);
+    const Real gamma = istate.get_gamma_from_cons(U);
 
     const Real mu = mu_0*pow(T/T0,n);
 
@@ -256,14 +254,13 @@ UserDefinedViscosity::UserDefinedViscosity(const int global_idx, const sol::tabl
     }
 }
 
-void UserDefinedViscosity::get_coeffs(const Array<Real,+HydroDef::PrimIdx::NUM>& Q, Real &T, Real &mu, Real &kappa) const
+void UserDefinedViscosity::get_coeffs(const Vector<Real>& Q, Real &T, Real &mu, Real &kappa) const
 {
     BL_PROFILE("UserDefinedViscosity::get_neutral_coeffs");
     const HydroState& istate = HydroState::get_state_global(idx);
 
     T = istate.get_temperature_from_prim(Q);
-    Real alpha = istate.get_alpha_from_prim(Q);
-    Real cp = istate.get_cp(alpha);
+    Real cp = istate.get_cp_from_prim(Q);
 
     mu = mu_0;
     kappa = mu*cp/Prandtl;
@@ -271,13 +268,13 @@ void UserDefinedViscosity::get_coeffs(const Array<Real,+HydroDef::PrimIdx::NUM>&
     return;
 }
 
-Real UserDefinedViscosity::calc_stability_condition(Array<Real,+HydroDef::ConsIdx::NUM>& U) const
+Real UserDefinedViscosity::calc_stability_condition(Vector<Real>& U) const
 {
 
     const HydroState& istate = HydroState::get_state_global(idx);
 
     const Real rho = U[+HydroDef::ConsIdx::Density];
-    const Real gamma = istate.get_gamma(U);
+    const Real gamma = istate.get_gamma_from_cons(U);
     const Real mu = mu_0;
 
     return (4*mu*gamma/(Prandtl*rho));

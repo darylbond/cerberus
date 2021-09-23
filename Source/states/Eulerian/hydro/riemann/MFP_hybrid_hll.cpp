@@ -16,15 +16,15 @@ HydroHybridHLL::HydroHybridHLL(const int i)
     hlle = HydroHLLE(i);
 }
 
-void HydroHybridHLL::solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
-                                Array<Real,+HydroDef::FluxIdx::NUM> &R,
-                                Array<Real,+HydroDef::ConsIdx::NUM> &F,
+void HydroHybridHLL::solve(Vector<Real> &L,
+                                Vector<Real> &R,
+                                Vector<Real> &F,
                                 Real* shk) const
 {
     BL_PROFILE("HydroHybridHLL::solve");
     const Real eps = 1e-14;
 
-    Array<Real,+HydroDef::ConsIdx::NUM> F_hlle, F_hllc;
+    Vector<Real> F_hlle, F_hllc;
 
     if (*shk < eps) {
         hllc.solve(L, R, F, shk);

@@ -12,7 +12,7 @@ class ChargedParticle : public LagrangianState
 public:
     ChargedParticle();
     ChargedParticle(const sol::table& def);
-    virtual void init_data(MFP* mfp) override;
+    virtual void init_data(MFP* mfp, const Real time) override;
     virtual void init(AmrCore *amr_core, bool make_particles=true) override;
     virtual Real get_allowed_time_step(MFP* mfp) const override {return std::numeric_limits<Real>::max();}
     virtual void checkpoint(const std::string& dir) override;

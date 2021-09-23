@@ -33,8 +33,12 @@ public:
     static std::map<std::string, int> bc_names;
     static Vector<set_bc> bc_set;
 
-    bool mass_const, charge_const, gamma_const;
-    Array<Real,2> mass, charge, gamma;
+    static bool mass_const, charge_const, gamma_const;
+    static Vector<Real> mass, charge, gamma;
+    static int n_species;
+    static int n_tracers;
+    static std::string multicomp_prim_name;
+    static std::string multicomp_cons_name;
 
     std::unique_ptr<HydroRiemannSolver> flux_solver;
     std::unique_ptr<HydroShockDetector> shock_detector;
@@ -74,22 +78,24 @@ public:
     void set_refinement();
 
     virtual void variable_setup(Vector<int> periodic) override;
-    virtual void init_data(MFP* mfp) override;
+    virtual void init_data(MFP* mfp, const Real time) override;
     virtual void init_from_lua() override;
 
-    Real get_density_from_cons(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const;
-    Real get_density_from_prim(const Array<Real,+HydroDef::PrimIdx::NUM>& Q) const;
-    Real get_alpha_from_cons(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const;
-    Real get_alpha_from_prim(const Array<Real,+HydroDef::PrimIdx::NUM>& Q) const;
-    Real get_mass(Real alpha) const;
-    Real get_mass(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const;
-    Real get_charge(Real alpha) const;
-    Real get_charge(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const;
-    Real get_gamma(Real alpha) const;
-    Real get_gamma(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const;
-    Real get_cp(Real alpha) const;
-    Real get_cp(const Array<Real,+HydroDef::ConsIdx::NUM>& U) const;
-    bool cons2prim(const Array<Real, +HydroDef::ConsIdx::NUM> &U, Array<Real, +HydroDef::PrimIdx::NUM> &Q) const;
+
+
+    Real get_mass_from_cons(const Vector<Real> &U, const int tracer_idx=+HydroDef::ConsIdx::NUM) const;
+    Real get_charge_from_cons(const Vector<Real> &U, const int density_idx=+HydroDef::ConsIdx::Density, const int tracer_idx=+HydroDef::ConsIdx::NUM) const;
+    Real get_gamma_from_cons(const Vector<Real> &U, const int density_idx=+HydroDef::ConsIdx::Density, const int tracer_idx=+HydroDef::ConsIdx::NUM) const;
+    Real get_cp_from_cons(const Vector<Real> &U, const int density_idx=+HydroDef::ConsIdx::Density, const int tracer_idx=+HydroDef::ConsIdx::NUM) const;
+
+    Real get_mass_from_prim(const Vector<Real> &Q, const int idx=+HydroDef::PrimIdx::NUM) const;
+    Real get_charge_from_prim(const Vector<Real> &Q, const int tracer_idx=+HydroDef::PrimIdx::Density) const;
+    Real get_gamma_from_prim(const Vector<Real> &Q, const int idx=+HydroDef::PrimIdx::NUM) const;
+    Real get_cp_from_prim(const Vector<Real> &Q, const int tracer_idx=+HydroDef::PrimIdx::NUM) const;
+
+    bool cons2prim(Vector<Real>& U, Vector<Real>& Q) const;
+    void prim2cons(Vector<Real>& Q, Vector<Real>& U) const;
+
     void prim2cons(const Array<Real, +HydroDef::PrimIdx::NUM> &Q, Array<Real, +HydroDef::ConsIdx::NUM> &U) const;
     bool prim_valid(Array<Real,+HydroDef::PrimIdx::NUM>& Q) const;
     bool cons_valid(Array<Real,+HydroDef::ConsIdx::NUM>& U) const;
@@ -160,7 +166,7 @@ public:
                          const bool do_all) const override;
 
     void load_state_for_flux(const Array4<const Real> &face,
-                             int i, int j, int k, Array<Real, +HydroDef::FluxIdx::NUM> &S) const;
+                             int i, int j, int k, Vector<Real> &S) const;
 
     virtual void calc_fluxes(const Box& box,
                              FArrayBox &cons,

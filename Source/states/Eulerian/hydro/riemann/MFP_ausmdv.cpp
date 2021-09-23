@@ -14,32 +14,40 @@ HydroAUSMDV::HydroAUSMDV(const int i)
     idx = i;
 }
 
-void HydroAUSMDV::solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
-                                Array<Real,+HydroDef::FluxIdx::NUM> &R,
-                                Array<Real,+HydroDef::ConsIdx::NUM> &F,
+void HydroAUSMDV::solve(Vector<Real> &L,
+                                Vector<Real> &R,
+                                Vector<Real> &F,
                                 Real* shk) const
 {
     BL_PROFILE("HydroAUSMDV::solve");
 
+    const int n_alpha = L.size() - +HydroDef::FluxIdx::NUM;
+
     // get the data out of the passed in arrays
-    Real apL = L[+HydroDef::FluxIdx::Alpha];
     Real gamL = L[+HydroDef::FluxIdx::Gamma];
     Real rL = L[+HydroDef::FluxIdx::Density];
     Real uL = L[+HydroDef::FluxIdx::Xvel];
     Real vL = L[+HydroDef::FluxIdx::Yvel];
     Real wL = L[+HydroDef::FluxIdx::Zvel];
     Real pL = L[+HydroDef::FluxIdx::Prs];
-    Real trL = apL*rL;
+
+    Vector<Real> trL(n_alpha);
+    for (int i=+HydroDef::FluxIdx::NUM; i<L.size(); ++ i) {
+        trL[i-+HydroDef::FluxIdx::NUM]= L[i]*rL;
+    }
 
     // get the data out of the passed in arrays
-    Real apR = R[+HydroDef::FluxIdx::Alpha];
     Real gamR = R[+HydroDef::FluxIdx::Gamma];
     Real rR = R[+HydroDef::FluxIdx::Density];
     Real uR = R[+HydroDef::FluxIdx::Xvel];
     Real vR = R[+HydroDef::FluxIdx::Yvel];
     Real wR = R[+HydroDef::FluxIdx::Zvel];
     Real pR = R[+HydroDef::FluxIdx::Prs];
-    Real trR = apR*rR;
+
+    Vector<Real> trR(n_alpha);
+    for (int i=+HydroDef::FluxIdx::NUM; i<R.size(); ++ i) {
+        trR[i-+HydroDef::FluxIdx::NUM]= R[i]*rR;
+    }
 
     // constants
     const Real K_SWITCH = 10.0;
@@ -94,7 +102,11 @@ void HydroAUSMDV::solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
     // Mass Flux (eqn 29)
     // The mass flux is relative to the moving interface.
     Real ru_half = uLplus * rL + uRminus * rR;
-    Real tr_half = uLplus * trL + uRminus * trR;
+
+    for (int i=0; i<n_alpha; ++i) {
+          F[+HydroDef::ConsIdx::NUM+i]  = uLplus * trL[i] + uRminus * trR[i];
+    }
+
     // Pressure flux (eqn 34)
     Real p_half = pLplus + pRminus;
     // Momentum flux: normal direction
@@ -110,7 +122,6 @@ void HydroAUSMDV::solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
     //
     // Assemble components of the flux vector.
     F[+HydroDef::ConsIdx::Density] = ru_half;
-    F[+HydroDef::ConsIdx::Tracer] = tr_half;
     F[+HydroDef::ConsIdx::Xmom] = ru2_half+p_half;
     if (ru_half >= 0.0) {
         // Wind is blowing from the left.
@@ -138,10 +149,13 @@ void HydroAUSMDV::solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,
     //
     if (d_ua != 0.0) {
         F[+HydroDef::ConsIdx::Density] -= d_ua*(rR - rL);
-        F[+HydroDef::ConsIdx::Tracer]  -= d_ua*(trR - trL);
         F[+HydroDef::ConsIdx::Xmom]    -= d_ua*(rR*uR - rL*uL);
         F[+HydroDef::ConsIdx::Ymom]    -= d_ua*(rR*vR - rL*vL);
         F[+HydroDef::ConsIdx::Zmom]    -= d_ua*(rR*wR - rL*wL);
         F[+HydroDef::ConsIdx::Eden]    -= d_ua*(rR*HR - rL*HL);
+
+        for (int i=0; i<n_alpha; ++i) {
+            F[+HydroDef::ConsIdx::NUM+i]  -= d_ua*(trR[i] - trL[i]);
+        }
     } // end of entropy fix (d_ua != 0)
 }

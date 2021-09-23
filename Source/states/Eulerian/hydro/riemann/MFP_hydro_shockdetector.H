@@ -19,7 +19,7 @@ class HydroShockDetector
 public:
     HydroShockDetector();
     ~HydroShockDetector();
-    virtual Real solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,Array<Real,+HydroDef::FluxIdx::NUM> &R) const;
+    virtual Real solve(Vector<Real> &L,Vector<Real> &R) const;
 
     int idx;
     State* istate;
@@ -50,7 +50,7 @@ public:
     PressureJumpShockDetector();
     PressureJumpShockDetector(const sol::table &def);
 
-    virtual Real solve(Array<Real,+HydroDef::FluxIdx::NUM> &L,Array<Real,+HydroDef::FluxIdx::NUM> &R) const override;
+    virtual Real solve(Vector<Real> &L,Vector<Real> &R) const override;
 
 
     virtual std::string get_tag() const override {return tag;}

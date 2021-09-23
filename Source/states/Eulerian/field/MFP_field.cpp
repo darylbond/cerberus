@@ -51,13 +51,13 @@ FieldState::FieldState(const sol::table &def)
 
 FieldState::~FieldState(){}
 
-void FieldState::init_data(MFP* mfp)
+void FieldState::init_data(MFP* mfp, const Real time)
 {
 
     const Real* dx = mfp->Geom().CellSize();
     const Real* prob_lo = mfp->Geom().ProbLo();
 
-    MultiFab& S_new = mfp->get_new_data(data_idx);
+    MultiFab& S_new = mfp->get_data(data_idx, time);
 
     for (MFIter mfi(S_new); mfi.isValid(); ++mfi) {
         const Box& box = mfi.validbox();
@@ -76,10 +76,9 @@ void FieldState::init_data(MFP* mfp)
                         for (int i = lo.x; i <= hi.x; ++i) {
                     x = prob_lo[0] + (i + 0.5)*dx[0];
 
-                    // grab the primitive variables as defined by the user functions
+                    // grab the variables as defined by the user functions
                     for (int icomp=0; icomp<+FieldDef::ConsIdx::NUM; ++icomp) {
-                        const std::string& cons_name = cons_names[icomp];
-                        const auto& f = functions[cons_name];
+                        const auto& f = functions[icomp];
 
                         h4(i,j,k,icomp) = f(x, y, z);
 
@@ -207,9 +206,7 @@ void FieldState::set_udf()
     if ((!value.valid() || value.empty()) && ParallelDescriptor::IOProcessor())
         Warning("WARNING: State '"+name+"' does not have 'value' defined for initial conditions, using defaults");
 
-    // get a list of any initialisation functions that need to be called during the run
 
-    sol::table dynamic = state_def["dynamic"].get_or(sol::table());
 
     const Vector<std::pair<int,Real>> init_with_value = {
         {+FieldDef::ConsIdx::phi, 0.0},
@@ -241,15 +238,8 @@ void FieldState::set_udf()
             }
         }
 
-        functions[comp] = v;
+        functions[i] = v;
 
-        if (dynamic.valid()) {
-            for (const auto &d : dynamic) {
-                if (d.second.as<std::string>().compare(comp) == 0) {
-                    dynamic_functions[i] = &functions[comp];
-                }
-            }
-        }
     }
 
     return;

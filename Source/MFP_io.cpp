@@ -181,7 +181,7 @@ void MFP::getPlotData(MultiFab &plot_data,
     const Array<std::string, AMREX_SPACEDIM> grad = {AMREX_D_DECL("-dx","-dy","-dz")};
     Vector<std::string> updated;
 
-    MultiFab& cost = get_new_data(Cost_Idx);
+    MultiFab& cost = get_data(Cost_Idx, time);
 
 
     for (MFIter mfi(cost); mfi.isValid(); ++mfi) {

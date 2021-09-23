@@ -307,6 +307,30 @@ T tanh_approx(T x)
 
 }
 
+// check if all elements in a vector are less than some value
+template <typename T, typename N>
+bool all_less(T first, T last, N test) {
+    return std::all_of(first, last, [&test = test](N i) { return i < test;} );
+}
+
+// check if all elements in a vector are less than some value
+template <typename T, typename N>
+bool all_greater(T first, T last, N test) {
+    return std::all_of(first, last, [&test = test](N i) { return i > test;} );
+}
+
+// check if all elements in a vector are less than some value
+template <typename T, typename N>
+bool all_equal(T first, T last, N test) {
+    return std::all_of(first, last, [&test = test](N i) { return i == test;} );
+}
+
+// check if any element is equal to some value
+template <typename T, typename N>
+bool any_equal(T first, T last, N test) {
+    return std::any_of(first, last, [&test = test](N i) { return i == test;} );
+}
+
 // conversion of enum class to underlying type
 // usage = +Class::element
 template <typename T>

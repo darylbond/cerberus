@@ -2,7 +2,7 @@
 #include "sol.hpp"
 
 std::string HydroTracer::tag = "hydro_tracer";
-bool HydroTracer::registered = GetSourceFactory().Register(HydroTracer::tag, SourceBuilder<HydroTracer>);
+bool HydroTracer::registered = GetActionFactory().Register(HydroTracer::tag, ActionBuilder<HydroTracer>);
 
 
 HydroTracer::HydroTracer(){}
@@ -39,7 +39,7 @@ HydroTracer::HydroTracer(const int idx, const sol::table &def)
     if (!tracer_state) Abort("Source '"+name+"' unable to attach to tracer particles '"+particle_name+"'");
 }
 
-void HydroTracer::solve(MFP* mfp, const Real dt) const
+void HydroTracer::apply_spatial_derivative(MFP* mfp, const Real time, const Real dt) const
 {
     BL_PROFILE("HydroTracer::solve");
 
@@ -49,7 +49,7 @@ void HydroTracer::solve(MFP* mfp, const Real dt) const
     // grab the density and as many momentum components as necessary
     int num_grow = 1;
     MultiFab hydro_cons(mfp->boxArray(), mfp->DistributionMap(), AMREX_SPACEDIM+1, num_grow, MFInfo(),mfp->Factory());
-    mfp->FillPatch(*mfp, hydro_cons, num_grow, mfp->get_cum_time(), hydro_state->data_idx, +HydroDef::ConsIdx::Density, AMREX_SPACEDIM+1);
+    mfp->FillPatch(*mfp, hydro_cons, num_grow, time, hydro_state->data_idx, +HydroDef::ConsIdx::Density, AMREX_SPACEDIM+1);
 
     FArrayBox vel;
 

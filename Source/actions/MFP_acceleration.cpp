@@ -6,7 +6,7 @@
 #include "Dense"
 
 std::string Acceleration::tag = "acceleration";
-bool Acceleration::registered = GetSourceFactory().Register(Acceleration::tag, SourceBuilder<Acceleration>);
+bool Acceleration::registered = GetActionFactory().Register(Acceleration::tag, ActionBuilder<Acceleration>);
 
 Acceleration::Acceleration(){}
 Acceleration::~Acceleration(){}
@@ -24,15 +24,16 @@ Acceleration::Acceleration(const int idx, const sol::table &def)
     }
 
 
-    const sol::table states = def["states"];
+    const sol::table state_names = def["states"];
 
-    for (const auto& key_value_pair : states) {
+    for (const auto& key_value_pair : state_names) {
         std::string state_name = key_value_pair.second.as<std::string>();
         State& istate = MFP::get_state(state_name);
 
         switch (istate.get_type()) {
         case State::StateType::Hydro:
             species.push_back(static_cast<HydroState*>(&istate));
+            state_indexes.push_back(istate.global_idx);
             break;
         default:
             Abort("An invalid state has been defined for the Acceleration source "+name);
@@ -41,7 +42,7 @@ Acceleration::Acceleration(const int idx, const sol::table &def)
     return;
 }
 
-void Acceleration::solve(MFP* mfp, const Real dt) const
+void Acceleration::calc_time_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt) const
 {
     BL_PROFILE("Acceleration::solve");
 
@@ -52,10 +53,15 @@ void Acceleration::solve(MFP* mfp, const Real dt) const
 
     Vector<MultiFab*> species_data;
     for (const HydroState* hstate : species) {
-        species_data.push_back(&(mfp->get_new_data(hstate->data_idx)));
+        species_data.push_back(&(mfp->get_data(hstate->data_idx, time)));
+
+        // mark dU components that have been touched
+        dU[hstate->data_idx].first = 1;
     }
 
     Vector<Array4<Real>> species4(n_species);
+    Vector<Array4<Real>> species_dU4(n_species);
+
 
     // define some 'registers'
 
@@ -82,6 +88,7 @@ void Acceleration::solve(MFP* mfp, const Real dt) const
 
         for (int n=0; n<n_species; ++n) {
             species4[n] = species_data[n]->array(mfi);
+            species_dU4[n] = dU[species[n]->data_idx].second.array(mfi);
         }
 
 
@@ -104,8 +111,8 @@ void Acceleration::solve(MFP* mfp, const Real dt) const
                         // momentum and energy
                         for (int d = 0; d<3; ++d) {
                             const Real m = species4[n](i,j,k,+HydroDef::ConsIdx::Xmom + d);
-                            species4[n](i,j,k,+HydroDef::ConsIdx::Xmom + d) += dt*acc[d]*rho; // g*rho
-                            species4[n](i,j,k,+HydroDef::ConsIdx::Eden)     += dt*acc[d]*m; // g*rho*u
+                            species_dU4[n](i,j,k,+HydroDef::ConsIdx::Xmom + d) += dt*acc[d]*rho; // g*rho
+                            species_dU4[n](i,j,k,+HydroDef::ConsIdx::Eden)     += dt*acc[d]*m; // g*rho*u
                         }
                     }
                 }

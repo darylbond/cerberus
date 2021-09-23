@@ -32,7 +32,7 @@ public:
     bool is_static;
     int project_divergence;
 
-    std::map<std::string,Optional3D1VFunction> functions;
+    Array<Optional3D1VFunction,+FieldDef::ConsIdx::NUM> functions;
 
     std::unique_ptr<FieldRiemannSolver> flux_solver;
 
@@ -58,7 +58,7 @@ public:
     void set_refinement();
 
     virtual void variable_setup(Vector<int> periodic) override;
-    virtual void init_data(MFP *mfp) override;
+    virtual void init_data(MFP *mfp, const Real time) override;
     virtual void init_from_lua() override;
 
 #ifdef AMREX_USE_EB

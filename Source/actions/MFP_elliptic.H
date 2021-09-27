@@ -29,7 +29,14 @@ public:
     FieldState* field;
     Vector<HydroState*> species;
 
+    // projection method?
     int projection;
+
+    // relative tolerance
+    Real reltol;
+
+    // absolute tolerance
+    Real abstol;
 
     static bool registered;
     static std::string tag;

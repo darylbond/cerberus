@@ -34,6 +34,12 @@ Elliptic::Elliptic(const int idx, const sol::table &def)
 
     projection = def.get_or("projection",0);
 
+    // Define the relative tolerance
+    reltol = def.get_or("relative_tolerance",1.e-8);
+
+    // Define the absolute tolerance; note that this argument is optional
+    abstol = def.get_or("absolute_tolerance",1.e-15);
+
     std::string field_state_name = def.get_or<std::string>("state","null");
 
     if (field_state_name == "null")
@@ -56,6 +62,9 @@ Elliptic::Elliptic(const int idx, const sol::table &def)
 
 void Elliptic::apply_correction(MFP* mfp, const Real time, const Real dt) const
 {
+
+    if (mfp->get_level() > 0) return; // only do this once per coarse timestep
+
     if (projection) {
         project_divergence(mfp, time);
     } else {
@@ -366,10 +375,6 @@ void Elliptic::solve_static_fields(MFP* mfp, const Real time) const
 
     MLMG mlmg(mlabec);
 
-    // relative and absolute tolerances for linear solve
-    const Real tol_rel = 1.e-10;
-    const Real tol_abs = 0.0;
-
     mlmg.setVerbose(MFP::linear_solver_verbosity);
 
     // define array of LinOpBCType for domain boundary conditions
@@ -445,7 +450,7 @@ void Elliptic::solve_static_fields(MFP* mfp, const Real time) const
 
 
         // Solve linear system
-        mlmg.solve(phi_ptr, rhs_ptr, tol_rel, tol_abs);
+        mlmg.solve(phi_ptr, rhs_ptr, reltol, abstol);
 
         // save phi
         for (int ilev = 0; ilev < nlevels; ++ilev) {
@@ -531,7 +536,7 @@ void Elliptic::solve_static_fields(MFP* mfp, const Real time) const
 
 
             // Solve linear system
-            mlmg.solve(A_ptr, rhs_ptr, tol_rel, tol_abs);
+            mlmg.solve(A_ptr, rhs_ptr, reltol, abstol);
 
             //                plot_FAB_2d(*(A_ptr[nlevels-1]),0,0, "A"+num2str(d), false, true);
 
@@ -701,7 +706,7 @@ void Elliptic::project_divergence(MFP* mfp, const Real time) const
         // scale the charge and current density appropriately
         charge_density[ilev].mult(-cd_scale, 0);
 
-//        plot_FAB_2d(charge_density[ilev],0, 0, "charge density "+num2str(ilev), false, true);
+//        plot_FAB_2d(charge_density[ilev],0, ngrow, "charge density "+num2str(ilev), false, true);
     }
 
     ParallelDescriptor::Barrier();
@@ -881,12 +886,6 @@ void Elliptic::solve_divergence(MFP* mfp,
 
     int v = amr.Verbose();
     nodal_solver.setVerbose(v);
-
-    // Define the relative tolerance
-    Real reltol = 1.e-8;
-
-    // Define the absolute tolerance; note that this argument is optional
-    Real abstol = 1.e-15;
 
     //
     // Solve div( sigma * grad(phi) ) = RHS

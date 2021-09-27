@@ -11,7 +11,7 @@ HydroTracer::~HydroTracer(){}
 
 HydroTracer::HydroTracer(const int idx, const sol::table &def)
 {
-    src_idx = idx;
+    action_idx = idx;
     name = def["name"];
 
     std::string hydro_name = def["fluid"];

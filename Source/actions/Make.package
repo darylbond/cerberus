@@ -13,6 +13,9 @@ CEXE_sources += MFP_acceleration.cpp
 CEXE_headers += MFP_CTU.H
 CEXE_sources += MFP_CTU.cpp
 
+CEXE_headers += MFP_elliptic.H
+CEXE_sources += MFP_elliptic.cpp
+
 
 INCLUDE_LOCATIONS += $(TOP)/Source/actions
 VPATH_LOCATIONS   += $(TOP)/Source/actions

@@ -26,11 +26,7 @@ public:
     static Vector<set_bc> bc_set;
 
 
-    Real div_speed, div_damping;
-    Real relative_div_speed;
     Real fastest_speed;
-    bool is_static;
-    int project_divergence;
 
     Array<Optional3D1VFunction,+FieldDef::ConsIdx::NUM> functions;
 
@@ -155,6 +151,16 @@ public:
                                   const Array<const FArrayBox*, AMREX_SPACEDIM> &afrac,
                                   const Real *dx,
                                   const Real dt) const override;
+
+    virtual void get_wall_value(const Box& box,
+                                Vector<FArrayBox*> bcs_data,
+                                const EBCellFlagFab& flag,
+                                const CutFab &bc_idx,
+                                const FArrayBox& bcent,
+                                const FArrayBox &bnorm,
+                                const Real t,
+                                const Real* dx,
+                                const Real* prob_lo) const override;
 #endif
 
     void write_info(nlohmann::json &js) const override;

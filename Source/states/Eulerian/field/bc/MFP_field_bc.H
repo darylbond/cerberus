@@ -20,12 +20,13 @@ public:
         SurfaceCharge,
         SurfaceCurrent,
         Collection,
+        NUM
     };
 
     virtual const EBType get_type() const = 0;
     virtual const bool has_charge() const {return false;}
     virtual const bool time_varying() const {return false;}
-    virtual std::map<EBType, Vector<Real>> get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const { return {};}
+    virtual Vector<Vector<Real>> get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const { return {};}
 
     virtual void solve(Array<Array<Real,3>,3> &wall_coord,
                        Array<Real,+FieldDef::ConsIdx::NUM> &state,
@@ -102,7 +103,7 @@ public:
     ScalarPotentialWall(const sol::table &bc_def);
     ~ScalarPotentialWall();
 
-    virtual std::map<FieldBoundaryEB::EBType, Vector<Real>> get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const override;
+    virtual Vector<Vector<Real>> get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const override;
 
     virtual const bool has_charge() const override {return true;}
     virtual const EBType get_type() const override {return type;}
@@ -124,7 +125,7 @@ public:
     SurfaceChargeWall(const sol::table &bc_def);
     ~SurfaceChargeWall();
 
-    virtual std::map<FieldBoundaryEB::EBType, Vector<Real> > get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const override;
+    virtual Vector<Vector<Real>> get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const override;
 
     virtual const EBType get_type() const override {return type;}
     virtual const bool time_varying() const override {return charge_density.has_func();}
@@ -166,7 +167,7 @@ public:
     VectorPotentialWall(const sol::table &bc_def);
     ~VectorPotentialWall();
 
-    virtual std::map<FieldBoundaryEB::EBType, Vector<Real> > get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const override;
+    virtual Vector<Vector<Real> > get_wall_state(const Array<Real, AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const override;
 
     virtual const EBType get_type() const override {return type;}
     virtual const bool time_varying() const override {return has_function;}

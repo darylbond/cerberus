@@ -13,7 +13,7 @@ Acceleration::~Acceleration(){}
 
 Acceleration::Acceleration(const int idx, const sol::table &def)
 {
-    src_idx = idx;
+    action_idx = idx;
     name = def["name"];
 
     sol::table acc_vector = def["vector"];

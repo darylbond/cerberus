@@ -14,7 +14,7 @@ CTU::~CTU(){}
 
 CTU::CTU(const int idx, const sol::table &def)
 {
-    src_idx = idx;
+    action_idx = idx;
     name = def["name"];
 
     do_CTU = def.get_or("corner_transport", true);

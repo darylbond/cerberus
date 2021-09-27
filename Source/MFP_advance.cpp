@@ -39,6 +39,11 @@ Real MFP::advance(Real time, Real dt, int iteration, int ncycle)
         advance_euler(time, dt, iteration, ncycle);
     }
 
+    // apply any post timestep corrections
+    for (const auto& act : actions) {
+        act->apply_correction(this,time, dt);
+    }
+
     return dt;
 }
 
@@ -146,6 +151,4 @@ void MFP::advance_strang(Real time, Real dt, int iteration, int ncycle)
 
     // add dU to new data (new = new** + dU)
     apply_derivative(eulerian_du);
-
-
 }

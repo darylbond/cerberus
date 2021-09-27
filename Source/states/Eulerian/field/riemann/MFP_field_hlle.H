@@ -19,7 +19,7 @@ public:
     static std::string tag;
     static bool registered;
 
-    Real c0, c2, ch, ch2, cc;
+    Real c0, c2;
 };
 
 #endif // FIELDHLLE_H

@@ -138,7 +138,7 @@ public:
     static void read_params();
 
     int get_level() {return level;}
-    AmrCore* get_parent() {return parent;}
+    Amr* get_parent() {return parent;}
     Real get_cum_time() {return parent->cumTime();}
     Real get_dt() {return parent->dtLevel(level);}
 
@@ -235,6 +235,7 @@ public:
     static Vector<DataEB> eb_def;
     static Vector<Vector<EBData>> eb_data;
     EBData& get_eb_data(const int idx) { return eb_data[level][idx]; }
+    EBData& get_eb_data(const int lev, const int idx) { return eb_data[lev][idx]; }
 #endif
 
 

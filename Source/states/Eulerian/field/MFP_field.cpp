@@ -299,8 +299,6 @@ void FieldState::init_from_lua()
 
     const sol::table state_def = lua["states"][name];
 
-    is_static = (bool) state_def["static"].get_or(0);
-
     //
     // user defined functions
     //
@@ -393,23 +391,9 @@ void FieldState::init_from_lua()
     // check validity of inflow bc
     boundary_conditions.post_init();
 
-    //
-    // divergence handling
-    //
 
-    relative_div_speed = state_def["div_transport"].get_or(0.0);
+    fastest_speed = MFP::lightspeed;
 
-    div_speed = relative_div_speed*MFP::lightspeed;
-
-    fastest_speed = std::max(MFP::lightspeed, div_speed);
-
-    div_damping = state_def["div_damping"].get_or(0.0);
-
-    // or we can use the projection method for divergence error control
-    project_divergence = state_def["project_divergence"].get_or(0);
-
-    if ((project_divergence > 0) && (relative_div_speed > 0.0))
-        Abort("State '"+name+"' should not have both 'div_transport' and 'project_divergence' defined, pick one");
 
     //
     // riemann solver
@@ -1372,6 +1356,84 @@ void FieldState::calc_wall_fluxes(const Box& box,
                     for (int d=0; d<AMREX_SPACEDIM; ++d) {
                         for (int n=0; n<+FieldDef::ConsIdx::NUM; ++n) {
                             flux4[d](i,j,k,n) += wall_flux[d][n];
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return;
+}
+
+void FieldState::get_wall_value(const Box& box,
+                           Vector<FArrayBox*> bcs_data,
+                           const EBCellFlagFab& flag,
+                           const CutFab &bc_idx,
+                           const FArrayBox& bcent,
+                           const FArrayBox &bnorm,
+                           const Real t,
+                           const Real* dx,
+                           const Real* prob_lo) const
+{
+    BL_PROFILE("EulerianState::get_wall_value");
+    const Dim3 lo = amrex::lbound(box);
+    const Dim3 hi = amrex::ubound(box);
+
+    Array4<const Real> const& bcent4 = bcent.array();
+    Array4<const Real> const& bnorm4 = bnorm.array();
+    Array4<const EBCellFlag> const& flag4 = flag.array();
+    const Array4<const Real>& bc_idx4 = bc_idx.array();
+
+    Vector<Vector<Real>> wall_state;
+
+    Array<Array<Real,3>,3> wall_coord = {{{0,0,0},{0,0,0},{0,0,0}}};
+    Array<Real,AMREX_SPACEDIM> wall_centre;
+
+    Array<Real,3> xyz;
+
+    for     (int k = lo.z; k <= hi.z; ++k) {
+        xyz[2] = prob_lo[2] + (k + 0.5)*dx[2];
+        for   (int j = lo.y; j <= hi.y; ++j) {
+            xyz[1] = prob_lo[1] + (j + 0.5)*dx[1];
+            AMREX_PRAGMA_SIMD
+                    for (int i = lo.x; i <= hi.x; ++i) {
+                xyz[0] = prob_lo[0] + (i + 0.5)*dx[0];
+
+                const EBCellFlag &cflag = flag4(i,j,k);
+
+                if (cflag.isSingleValued()) {
+
+                    // the boundary condition
+                    const int ebi = (int)nearbyint(bc_idx4(i,j,k));
+                    const auto& bc = eb_bcs[ebi];
+
+
+                    for (int d=0; d<AMREX_SPACEDIM; ++d) {
+
+                        // get the wall normal
+                        wall_coord[0][d] = bnorm4(i,j,k,d);
+
+                        // get the centre of the wall (in cell coordinates [0,1])
+                        // and convert to x,y,z coordinates
+                        wall_centre[d] = xyz[d] + bcent4(i,j,k,d)*dx[d];
+                    }
+
+                    // get a local coordinate system with x- aligned with the wall normal
+                    expand_coord(wall_coord);
+
+                    // calculate the wall state
+                    wall_state = bc->get_wall_state(wall_centre, wall_coord, t);
+
+                    for (const auto &ws : wall_state) {
+
+                        // only proceed if the boundary condition type is in the list
+                        if (ws.empty()) continue;
+
+                        Array4<Real> const& wall4 = bcs_data[ws.first]->array();
+
+                        // load the wall value into the fab
+                        for (size_t n = 0; n<ws.size(); ++n) {
+                            wall4(i,j,k,n) = ws[n];
                         }
                     }
                 }

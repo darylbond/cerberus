@@ -232,6 +232,15 @@ public:
                                   const Real dt) const override;
 #endif
 
+    void calc_current_and_charge(const Box& box,
+                                 const FArrayBox& cons,
+                                 FArrayBox* cd,
+                                 FArrayBox* J
+                             #ifdef AMREX_USE_EB
+                                 ,const FArrayBox& vfrac
+                             #endif
+                                 ) const;
+
     virtual void write_info(nlohmann::json& js) const override;
 
     static HydroState& get_state_global(const int idx) {return static_cast<HydroState&>(MFP::get_state(idx));}

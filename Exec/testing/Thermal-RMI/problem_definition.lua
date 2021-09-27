@@ -235,6 +235,15 @@ states = {
         type='field',
         reconstruction='O6',
         flux = 'RankineHugoniot',
+        -- bc={x={lo={fill_D_bc='symmetry',
+        --            fill_B_bc='symmetry',
+        --       }, 
+        --       hi={fill_D_bc='symmetry',
+        --            fill_B_bc='symmetry',
+        --       }
+        --    },
+        -- },
+
     },
 
     electron_tracer = {
@@ -266,8 +275,12 @@ actions = {
         type='plasma5',
         solver = 'implicit',
         states = {'ion', 'electron', 'field',},
-        Larmor = 1.0,
-        Debye = 1.0,
+     },
+
+     divergence_cleaning = {
+        type='elliptic',
+        projection=1,
+        state = 'field',
      },
 
      tracer_electron={

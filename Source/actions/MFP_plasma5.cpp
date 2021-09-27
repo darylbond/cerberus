@@ -14,7 +14,7 @@ Plasma5::~Plasma5(){}
 
 Plasma5::Plasma5(const int idx, const sol::table &def)
 {
-    src_idx = idx;
+    action_idx = idx;
     name = def["name"];
 
     std::string solver_name = def["solver"];
@@ -34,15 +34,20 @@ Plasma5::Plasma5(const int idx, const sol::table &def)
         State& istate = MFP::get_state(state_name);
 
         switch (istate.get_type()) {
-        case State::StateType::Field:
+        case State::StateType::Field: {
             if (field != nullptr) Abort("Only one field state can be set for the Plasma5 source "+name);
             field = static_cast<FieldState*>(&istate);
             state_indexes.push_back(istate.global_idx);
+            field->associated_actions.push_back(action_idx);
             break;
-        case State::StateType::Hydro:
-            species.push_back(static_cast<HydroState*>(&istate));
+        }
+        case State::StateType::Hydro: {
+            HydroState* hydro = static_cast<HydroState*>(&istate);
+            species.push_back(hydro);
             state_indexes.push_back(istate.global_idx);
+            hydro->associated_actions.push_back(action_idx);
             break;
+        }
         default:
             Abort("An invalid state has been defined for the Plasma5 source "+name);
         }
@@ -112,13 +117,7 @@ void Plasma5::explicit_solve(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, cons
     const Real Debye = MFP::Debye;
     const Real lightspeed = MFP::lightspeed;
 
-    const Real c_h = field->div_speed;
-    const Real div_damp = field->div_damping;
-    const Real c_d = div_damp != 0.0 ? c_h/div_damp : 0.0;
-
     const Real f1 = dt*Larmor/(Debye*Debye*lightspeed);
-    const Real f2 = dt*c_h*c_h*f1/lightspeed;
-    const Real f3 = c_d != 0.0 ? dt*c_h*c_h/(c_d*c_d) : 0.0;
 
     // get charge and current density
     Real charge_density, current_x, current_y, current_z;
@@ -129,8 +128,6 @@ void Plasma5::explicit_solve(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, cons
     for (int n=0; n<n_species; ++n) {
         dU[species[n]->data_idx].first = 1;
     }
-
-
 
     for (MFIter mfi(cost); mfi.isValid(); ++mfi) {
 
@@ -232,12 +229,6 @@ void Plasma5::explicit_solve(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, cons
                     field_dU4(i,j,k,+FieldDef::ConsIdx::Dx) += -f1*current_x;
                     field_dU4(i,j,k,+FieldDef::ConsIdx::Dy) += -f1*current_y;
                     field_dU4(i,j,k,+FieldDef::ConsIdx::Dz) += -f1*current_z;
-
-                    // source for D divergence correction
-                    field_dU4(i,j,k,+FieldDef::ConsIdx::phi) += -field4(i,j,k,+FieldDef::ConsIdx::phi)*f3 + f2*charge_density;
-
-                    // source for B divergence correction
-                    field_dU4(i,j,k,+FieldDef::ConsIdx::psi) += -field4(i,j,k,+FieldDef::ConsIdx::psi)*f3;
                 }
             }
         }
@@ -295,20 +286,12 @@ void Plasma5::implicit_solve(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, co
 
     Real charge_density;
     Real q, m, r, g;
-    Real rho, mx, my, mz, alpha;
+    Real rho, mx, my, mz;
     Vector<Real> R(n_species);
 
     const Real Larmor = MFP::Larmor;
     const Real Debye = MFP::Debye;
     const Real lightspeed = MFP::lightspeed;
-    const Real c_h = field->div_speed;
-    const Real div_damp = field->div_damping;
-    const Real c_d = div_damp != 0.0 ? c_h/div_damp : 0.0;
-
-    const Real f1 = dt*Larmor/(Debye*Debye*lightspeed);
-    const Real f2 = dt*c_h*c_h*f1/lightspeed;
-    const Real f3 = c_d != 0.0 ? dt*c_h*c_h/(c_d*c_d) : 0.0;
-
 
     for (MFIter mfi(cost); mfi.isValid(); ++mfi) {
 
@@ -460,13 +443,6 @@ void Plasma5::implicit_solve(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, co
                         species_dU4[n](i,j,k,+HydroDef::ConsIdx::Eden) += dt*(R[n]*lightspeed/Larmor)*(Ex*mx + Ey*my + Ez*mz);
 
                     }
-
-                    // source for D divergence correction
-                    field_dU4(i,j,k,+FieldDef::ConsIdx::phi) += -field4(i,j,k,+FieldDef::ConsIdx::phi)*f3 + f2*charge_density;
-
-                    // source for B divergence correction
-                    field_dU4(i,j,k,+FieldDef::ConsIdx::psi) += -field4(i,j,k,+FieldDef::ConsIdx::psi)*f3;
-
                 }
             }
         }
@@ -519,7 +495,6 @@ Real Plasma5::get_allowed_time_step(MFP* mfp) const
     Real D2 = Debye*Debye;
 
     Real max_speed = MFP::lightspeed;
-    max_speed = std::max(max_speed, field->div_speed);
 
     Real dt = dx[0]/max_speed;
     for (int d=1; d<AMREX_SPACEDIM; ++d) {

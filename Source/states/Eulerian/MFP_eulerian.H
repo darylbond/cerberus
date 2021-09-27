@@ -448,6 +448,16 @@ public:
                      FArrayBox &dm_as_fine,
                      const IArrayBox& levmsk) const;
 
+    virtual void get_wall_value(const Box& box,
+                                Vector<FArrayBox*> bcs_data,
+                                const EBCellFlagFab& flag,
+                                const CutFab &bc_idx,
+                                const FArrayBox& bcent,
+                                const FArrayBox &bnorm,
+                                const Real t,
+                                const Real* dx,
+                                const Real* prob_lo) const {}
+
 #endif
 
     void calc_divergence(const Box& box,

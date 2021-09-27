@@ -203,7 +203,11 @@ std::map<FieldBoundaryEB::EBType, Vector<Real> > ScalarPotentialWall::get_wall_s
 {
 
     // calculated at face centre
-    return {{FieldBoundaryEB::EBType::ScalarPotential, {phi(0,0,0,t)}}};
+
+    Vector<Vector<Real>> out(+EBType::NUM);
+    out[EBType::ScalarPotential] = {phi(0,0,0,t)};
+
+    return out;
 }
 
 //-----------------------------------------------------------------------------
@@ -218,10 +222,14 @@ SurfaceChargeWall::SurfaceChargeWall(const sol::table &bc_def)
     get_udf(bc_def["charge"], charge_density, 0.0);
 }
 
-std::map<FieldBoundaryEB::EBType, Vector<Real>> SurfaceChargeWall::get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const
+Vector<Vector<Real>> SurfaceChargeWall::get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const
 {
     // needs to be calculated for cell centre
-    return {{FieldBoundaryEB::EBType::SurfaceCharge, {charge_density(0,0,0,t)}}};
+
+    Vector<Vector<Real>> out(+EBType::NUM);
+    out[EBType::SurfaceCharge] = {charge_density(0,0,0,t)};
+
+    return out;
 }
 
 //-----------------------------------------------------------------------------
@@ -237,7 +245,7 @@ SurfaceCurrentWall::SurfaceCurrentWall(const sol::table &bc_def)
     get_udf(bc_def["j2"], current_2, 0.0);
 }
 
-std::map<FieldBoundaryEB::EBType, Vector<Real>> SurfaceCurrentWall::get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const
+Vector<Vector<Real>> SurfaceCurrentWall::get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const
 {
 
     Array<Real,3> J = {0.0, current_1(0,0,0,t), current_2(0,0,0,t)};
@@ -248,7 +256,10 @@ std::map<FieldBoundaryEB::EBType, Vector<Real>> SurfaceCurrentWall::get_wall_sta
 
     // needs to be calculated for cell centre
 
-    return {{FieldBoundaryEB::EBType::SurfaceCurrent, arr2vec(J)}};
+    Vector<Vector<Real>> out(+EBType::NUM);
+    out[EBType::SurfaceCurrent] = arr2vec(J);
+
+    return out;
 }
 
 //-----------------------------------------------------------------------------
@@ -268,7 +279,7 @@ VectorPotentialWall::VectorPotentialWall(const sol::table &bc_def)
     has_function = A_0.has_func() || A_1.has_func() || A_2.has_func();
 }
 
-std::map<FieldBoundaryEB::EBType, Vector<Real>> VectorPotentialWall::get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const
+Vector<Vector<Real>> VectorPotentialWall::get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const
 {
 
     std::map<std::string, Real> data;
@@ -301,7 +312,10 @@ std::map<FieldBoundaryEB::EBType, Vector<Real>> VectorPotentialWall::get_wall_st
     }
 
     // calculated at face centre
-    return {{FieldBoundaryEB::EBType::VectorPotential, arr2vec(A)}};
+    Vector<Vector<Real>> out(+EBType::NUM);
+    out[EBType::VectorPotential] = arr2vec(A);
+
+    return out;
 }
 
 //-----------------------------------------------------------------------------
@@ -332,15 +346,15 @@ CollectionWall::CollectionWall(const sol::table &bc_def)
     }
 }
 
-std::map<FieldBoundaryEB::EBType, Vector<Real> > CollectionWall::get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const
+Vector<Vector<Real>> CollectionWall::get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const
 {
 
-    std::map<FieldBoundaryEB::EBType, Vector<Real> > out;
+    Vector<Vector<Real>> out;
 
     for (const auto &bc : bcs) {
         const auto val = bc->get_wall_state(wall_centre, wall_coord, t);
         for (const auto &v : val) {
-            out[v.first] = v.second;
+            out[bc->get_type()] = v.second;
         }
     }
 

@@ -17,7 +17,7 @@ public:
     Action();
     ~Action();
 
-    int src_idx;
+    int action_idx;
     std::string name;
     Vector<int> state_indexes;
 
@@ -28,6 +28,9 @@ public:
     // directly update quantities where an accumulation is not possible, these will overwrite stuff!!
     virtual void apply_time_derivative(MFP* mfp, const Real time, const Real dt) const {}
     virtual void apply_spatial_derivative(MFP* mfp, const Real time, const Real dt) const {}
+
+    // just do something, typically at the end of the update main loop
+    virtual void apply_correction(MFP* mfp, const Real time, const Real dt) const {}
 
     virtual Real get_allowed_time_step(MFP* mfp) const {return std::numeric_limits<Real>::max();}
 

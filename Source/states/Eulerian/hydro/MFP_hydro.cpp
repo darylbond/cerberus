@@ -1062,9 +1062,9 @@ void HydroState::get_plot_output(const Box& box,
     bool load_mass = out.find(mass_name) != out.end();
     if (load_mass) other.push_back(mass_name);
 
-//    const std::string gamma_name = "gamma-"+name;
-//    bool load_gamma = out.find(gamma_name) != out.end();
-//    if (load_gamma) other.push_back(gamma_name);
+    //    const std::string gamma_name = "gamma-"+name;
+    //    bool load_gamma = out.find(gamma_name) != out.end();
+    //    if (load_gamma) other.push_back(gamma_name);
 
 #ifdef AMREX_USE_EB
     const std::string vfrac_name = "vfrac-"+name;
@@ -1109,7 +1109,7 @@ void HydroState::get_plot_output(const Box& box,
 
                 if (load_charge) out4[charge_name](i,j,k) = get_charge_from_cons(S);
                 if (load_mass)   out4[mass_name](i,j,k)   = get_mass_from_cons(S);
-//                if (load_gamma)  out4[gamma_name](i,j,k)  = get_gamma_from_cons(S);
+                //                if (load_gamma)  out4[gamma_name](i,j,k)  = get_gamma_from_cons(S);
 #ifdef AMREX_USE_EB
                 if (load_vfrac)  out4[vfrac_name](i,j,k)  = vf4(i,j,k);
 #endif
@@ -2801,6 +2801,80 @@ void HydroState::calc_wall_fluxes(const Box& box,
 }
 
 #endif
+
+void HydroState::calc_current_and_charge(const Box& box,
+                                         const FArrayBox& cons,
+                                         FArrayBox* cd,
+                                         FArrayBox* J
+                                         #ifdef AMREX_USE_EB
+                                         ,const FArrayBox& vfrac
+                                         #endif
+                                         ) const
+{
+    BL_PROFILE("HydroState::calc_current_and_charge");
+
+    Vector<Real> U(n_cons());
+
+    const bool get_current = (J != nullptr);
+    const bool get_charge = (cd != nullptr);
+
+    const Dim3 lo = amrex::lbound(box);
+    const Dim3 hi = amrex::ubound(box);
+    Array4<const Real> const& s4 = cons.array();
+
+
+    Array4<Real> J4, cd4;
+
+    if (get_charge) cd4 = cd->array();
+    if (get_current) J4 = J->array();
+
+#ifdef AMREX_USE_EB
+    Array4<const Real> const& vfrac4 = vfrac.array();
+
+    std::vector<std::array<int,3>> grab;
+    multi_dim_index({-1,AMREX_D_PICK(0,-1,-1),AMREX_D_PICK(0,0,-1)},
+    {1,AMREX_D_PICK(0, 1, 1),AMREX_D_PICK(0,0, 1)},
+                    grab, false);
+#endif
+
+    for     (int k = lo.z; k <= hi.z; ++k) {
+        for   (int j = lo.y; j <= hi.y; ++j) {
+            AMREX_PRAGMA_SIMD
+                    for (int i = lo.x; i <= hi.x; ++i) {
+
+#ifdef AMREX_USE_EB
+                if (vfrac4(i,j,k) == 0.0) {
+                    continue;
+                } else {
+#endif
+                    // grab the conserved variables
+                    for (int n=0; n<n_cons(); ++n) {
+                        U[n] = s4(i,j,k,n);
+                    }
+#ifdef AMREX_USE_EB
+                }
+#endif
+
+                // calculate the mass and charge
+                const Real m = get_mass_from_cons(U);
+                const Real q = get_charge_from_cons(U);
+
+                // calculate the charge density and current
+                if (get_charge) {
+                    cd4(i,j,k) += U[+HydroDef::ConsIdx::Density]*q/m;
+                }
+
+                if (get_current) {
+                    J4(i,j,k,0) += U[+HydroDef::ConsIdx::Xmom]*q/m;
+                    J4(i,j,k,1) += U[+HydroDef::ConsIdx::Ymom]*q/m;
+                    J4(i,j,k,2) += U[+HydroDef::ConsIdx::Zmom]*q/m;
+                }
+            }
+        }
+    }
+
+    return;
+}
 
 void HydroState::write_info(nlohmann::json &js) const
 {

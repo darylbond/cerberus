@@ -44,7 +44,7 @@ public:
         NUM
     };
 
-    Vector<int> associated_sources;
+    Vector<int> associated_actions;
 
 #ifdef AMREX_USE_EB
     bool eb_all_regular;

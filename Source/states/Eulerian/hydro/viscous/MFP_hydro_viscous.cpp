@@ -36,9 +36,8 @@ Real HydroViscous::get_min_dt(MFP *mfp) const
 
     MultiFab& data = mfp->get_new_data(istate.data_idx);
 
-
-
-    Array<Real,+HydroDef::ConsIdx::NUM> U;
+    const size_t n_cons = istate.n_cons();
+    Vector<Real> U(n_cons);
 
     Real max_speed = 0;
 
@@ -74,7 +73,7 @@ Real HydroViscous::get_min_dt(MFP *mfp) const
                     }
 #endif
 
-                    for (int n=0; n<+HydroDef::ConsIdx::NUM; ++n) {
+                    for (int n=0; n<n_cons; ++n) {
                         U[n] = dat(i,j,k,n);
                     }
 
@@ -143,7 +142,7 @@ void Sutherland::get_coeffs(const Vector<Real> &Q, Real &T, Real &mu, Real &kapp
     const HydroState& istate = HydroState::get_state_global(idx);
 
     T = istate.get_temperature_from_prim(Q);
-    Real cp = istate.get_cp_from_prim(alpha);
+    Real cp = istate.get_cp_from_prim(Q);
 
     Real T_ = T/T0;
     mu = mu_0*T_*sqrt(T_)*(T0+S)/(T+S);

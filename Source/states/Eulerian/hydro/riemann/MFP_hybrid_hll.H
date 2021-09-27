@@ -11,7 +11,7 @@ class HydroHybridHLL : public HydroRiemannSolver
 {
 public:
     HydroHybridHLL();
-    HydroHybridHLL(const int i);
+    HydroHybridHLL(const sol::table& def);
 
     HydroHLLC hllc;
     HydroHLLE hlle;
@@ -19,13 +19,15 @@ public:
     virtual void solve(Vector<Real> &L,
                        Vector<Real> &R,
                        Vector<Real> &F,
-                       Real* shk) const override;
+                       Real* shk) override;
 
     virtual bool requires_shock_detector() const {return true;}
 
     virtual std::string get_tag() const override {return tag;}
     static std::string tag;
     static bool registered;
+
+    Vector<Real> F_hlle, F_hllc;
 };
 
 #endif // HYDROHYBRIDHLL_H

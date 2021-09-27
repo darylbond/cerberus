@@ -6,49 +6,59 @@ std::string HydroHLLC::tag = "HLLC";
 bool HydroHLLC::registered = GetHydroRiemannSolverFactory().Register(HydroHLLC::tag, HydroRiemannSolverBuilder<HydroHLLC>);
 
 HydroHLLC::HydroHLLC(){}
-HydroHLLC::HydroHLLC(const int i)
+HydroHLLC::HydroHLLC(const sol::table &def)
 {
-    idx = i;
+    const int n_cons = def["n_cons"];
+    const int n_tracer = def["n_tracer"];
+
+    svLs.resize(n_cons);
+    fvL.resize(n_cons);
+    svL.resize(n_cons);
+    svRs.resize(n_cons);
+    fvR.resize(n_cons);
+    svR.resize(n_cons);
+    trL.resize(n_tracer);
+    trR.resize(n_tracer);
+
 }
 
 void HydroHLLC::solve(Vector<Real> &L,
                                 Vector<Real> &R,
                                 Vector<Real> &F,
-                                Real* shk) const
+                                Real* shk)
 {
     BL_PROFILE("HydroHLLC::solve");
 
-    const int n_alpha = L.size() - +HydroDef::FluxIdx::NUM;
+    const size_t n_alpha = L.size() - +HydroDef::PrimIdx::NUM;
+    const size_t n_flux = +HydroDef::ConsIdx::NUM + n_alpha;
 
     // get the data out of the passed in arrays
-    Real rhoL = L[+HydroDef::FluxIdx::Density];
-    Real uL = L[+HydroDef::FluxIdx::Xvel];
-    Real vL = L[+HydroDef::FluxIdx::Yvel];
-    Real wL = L[+HydroDef::FluxIdx::Zvel];
-    Real pL = L[+HydroDef::FluxIdx::Prs];
-    Real gamL = L[+HydroDef::FluxIdx::Gamma];
+    Real rhoL = L[+HydroDef::PrimIdx::Density];
+    Real uL = L[+HydroDef::PrimIdx::Xvel];
+    Real vL = L[+HydroDef::PrimIdx::Yvel];
+    Real wL = L[+HydroDef::PrimIdx::Zvel];
+    Real pL = L[+HydroDef::PrimIdx::Prs];
+    Real gamL = L[+HydroDef::PrimIdx::Gamma];
     Real nrgL = pL/(gamL - 1) + 0.5*rhoL*(uL*uL + vL*vL + wL*wL);
 
-    Vector<Real> trL(n_alpha);
-    for (int i=+HydroDef::FluxIdx::NUM; i<L.size(); ++ i) {
-        trL[i-+HydroDef::FluxIdx::NUM]= L[i]*rhoL;
+    for (int i=+HydroDef::PrimIdx::NUM; i<L.size(); ++i) {
+        trL[i-+HydroDef::PrimIdx::NUM]= L[i]*rhoL;
     }
 
     Real aL = sqrt(gamL*pL/rhoL);
 
     // get the data out of the passed in arrays
-    Real rhoR = R[+HydroDef::FluxIdx::Density];
-    Real uR = R[+HydroDef::FluxIdx::Xvel];
-    Real vR = R[+HydroDef::FluxIdx::Yvel];
-    Real wR = R[+HydroDef::FluxIdx::Zvel];
-    Real pR = R[+HydroDef::FluxIdx::Prs];
-    Real gamR = R[+HydroDef::FluxIdx::Gamma];
+    Real rhoR = R[+HydroDef::PrimIdx::Density];
+    Real uR = R[+HydroDef::PrimIdx::Xvel];
+    Real vR = R[+HydroDef::PrimIdx::Yvel];
+    Real wR = R[+HydroDef::PrimIdx::Zvel];
+    Real pR = R[+HydroDef::PrimIdx::Prs];
+    Real gamR = R[+HydroDef::PrimIdx::Gamma];
     Real nrgR = pR/(gamR-1) + 0.5*rhoR*(uR*uR + vR*vR + wR*wR);
     Real aR = sqrt(gamR*pR/rhoR);
 
-    Vector<Real> trR(n_alpha);
-    for (int i=+HydroDef::FluxIdx::NUM; i<R.size(); ++ i) {
-        trR[i-+HydroDef::FluxIdx::NUM]= R[i]*rhoR;
+    for (int i=+HydroDef::PrimIdx::NUM; i<R.size(); ++ i) {
+        trR[i-+HydroDef::PrimIdx::NUM]= R[i]*rhoR;
     }
 
     // Calculate wave speeds S_L, S_star and S_R
@@ -92,7 +102,6 @@ void HydroHLLC::solve(Vector<Real> &L,
 
         return;
     } else if ((S_L <= 0.0) && (0.0 <= S_star)) {
-        Array<Real, +HydroDef::ConsIdx::NUM> svLs, fvL, svL;
         // flux vector L
         fvL[+HydroDef::ConsIdx::Density]  = rhoL*uL;
         fvL[+HydroDef::ConsIdx::Xmom]   = rhoL*uL*uL + pL;
@@ -132,7 +141,7 @@ void HydroHLLC::solve(Vector<Real> &L,
         }
 
     } else if ((S_star <= 0.0) && (0.0 <= S_R)) {
-        Array<Real, +HydroDef::ConsIdx::NUM> svRs, fvR, svR;
+
         // flux vector R
         fvR[+HydroDef::ConsIdx::Density]  = rhoR*uR;
         fvR[+HydroDef::ConsIdx::Xmom]   = rhoR*uR*uR + pR;
@@ -164,7 +173,7 @@ void HydroHLLC::solve(Vector<Real> &L,
         svRs[+HydroDef::ConsIdx::Eden] = coeff*(nrgR/rhoR + (S_star - uR)*(S_star + pR/(rhoR*(S_R - uR))));
 
         for (int i=0; i<n_alpha; ++i) {
-            svR[+HydroDef::ConsIdx::NUM+i]  = trR[i]*((S_R - uR)/(S_R - S_star));
+            svRs[+HydroDef::ConsIdx::NUM+i]  = trR[i]*((S_R - uR)/(S_R - S_star));
         }
 
         for (int i=0; i<+HydroDef::ConsIdx::NUM+n_alpha; ++i) {

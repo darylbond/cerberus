@@ -160,6 +160,15 @@ function tracer(dat)
     return t
 end
 
+function tracer_shock(dat)
+    x = dat['x']
+    y = dat['y']
+
+        t = RMI_interface_A(x, 0, 1)
+
+    return t
+end
+
 function pressure(dat)
     x = dat['x']
     y = dat['y']
@@ -201,7 +210,7 @@ states = {
             rho   = ion_density,
             x_vel = velocity_x,
             p     = pressure,
-            alpha = tracer,
+            alpha = {tracer,tracer_shock},
         },
     },
 
@@ -217,7 +226,7 @@ states = {
             rho   = electron_density,
             x_vel = velocity_x,
             p     = pressure,
-            alpha = tracer,
+            alpha = {tracer,tracer_shock},
         },
     },
 
@@ -255,7 +264,7 @@ actions = {
 
     plasma={
         type='plasma5',
-        solver = 'explicit',
+        solver = 'implicit',
         states = {'ion', 'electron', 'field',},
         Larmor = 1.0,
         Debye = 1.0,

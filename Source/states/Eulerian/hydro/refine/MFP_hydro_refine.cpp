@@ -46,9 +46,12 @@ void HydroGradientRefinement::get_tags(MFP* mfp, TagBoxArray& tags) const
 
         HydroState& istate = HydroState::get_state_global(idx);
 
+        const size_t n_cons = istate.n_cons();
+        const size_t n_prim = istate.n_prim();
+
         // grab the conservative state
         const int num_grow = 1;
-        MultiFab U(mfp->boxArray(), mfp->DistributionMap(), +HydroDef::ConsIdx::NUM, num_grow, MFInfo(),mfp->Factory());
+        MultiFab U(mfp->boxArray(), mfp->DistributionMap(), n_cons, num_grow, MFInfo(),mfp->Factory());
 
 #ifdef AMREX_USE_EB
         EB2::IndexSpace::push(const_cast<EB2::IndexSpace*>(istate.eb2_index));
@@ -56,7 +59,7 @@ void HydroGradientRefinement::get_tags(MFP* mfp, TagBoxArray& tags) const
 
         const Real time = mfp->get_cum_time();
 
-        mfp->FillPatch(*mfp, U, num_grow, time, istate.data_idx, 0, +HydroDef::ConsIdx::NUM);
+        mfp->FillPatch(*mfp, U, num_grow, time, istate.data_idx, 0, n_cons);
 
 #ifdef AMREX_USE_EB
         EBData& eb = mfp->get_eb_data(idx);
@@ -106,7 +109,7 @@ void HydroGradientRefinement::get_tags(MFP* mfp, TagBoxArray& tags) const
 
                     Box pbx = grow(bx, 1);
 
-                    Q.resize(pbx, +HydroDef::PrimIdx::NUM);
+                    Q.resize(pbx, n_prim);
 
                     // get primitives
                     istate.calc_primitives(pbx,

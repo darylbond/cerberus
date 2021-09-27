@@ -9,44 +9,46 @@ bool HydroAUSMDV::registered = GetHydroRiemannSolverFactory().Register(HydroAUSM
 
 
 HydroAUSMDV::HydroAUSMDV(){}
-HydroAUSMDV::HydroAUSMDV(const int i)
+HydroAUSMDV::HydroAUSMDV(const sol::table &def)
 {
-    idx = i;
+    const int n_tracer = def["n_tracer"];
+
+    trL.resize(n_tracer);
+    trR.resize(n_tracer);
 }
 
 void HydroAUSMDV::solve(Vector<Real> &L,
                                 Vector<Real> &R,
                                 Vector<Real> &F,
-                                Real* shk) const
+                                Real* shk)
 {
     BL_PROFILE("HydroAUSMDV::solve");
 
-    const int n_alpha = L.size() - +HydroDef::FluxIdx::NUM;
+    const int n_alpha = L.size() - +HydroDef::PrimIdx::NUM;
 
     // get the data out of the passed in arrays
-    Real gamL = L[+HydroDef::FluxIdx::Gamma];
-    Real rL = L[+HydroDef::FluxIdx::Density];
-    Real uL = L[+HydroDef::FluxIdx::Xvel];
-    Real vL = L[+HydroDef::FluxIdx::Yvel];
-    Real wL = L[+HydroDef::FluxIdx::Zvel];
-    Real pL = L[+HydroDef::FluxIdx::Prs];
+    Real gamL = L[+HydroDef::PrimIdx::Gamma];
+    Real rL = L[+HydroDef::PrimIdx::Density];
+    Real uL = L[+HydroDef::PrimIdx::Xvel];
+    Real vL = L[+HydroDef::PrimIdx::Yvel];
+    Real wL = L[+HydroDef::PrimIdx::Zvel];
+    Real pL = L[+HydroDef::PrimIdx::Prs];
 
-    Vector<Real> trL(n_alpha);
-    for (int i=+HydroDef::FluxIdx::NUM; i<L.size(); ++ i) {
-        trL[i-+HydroDef::FluxIdx::NUM]= L[i]*rL;
+    for (int i=+HydroDef::PrimIdx::NUM; i<L.size(); ++ i) {
+        trL[i-+HydroDef::PrimIdx::NUM]= L[i]*rL;
     }
 
     // get the data out of the passed in arrays
-    Real gamR = R[+HydroDef::FluxIdx::Gamma];
-    Real rR = R[+HydroDef::FluxIdx::Density];
-    Real uR = R[+HydroDef::FluxIdx::Xvel];
-    Real vR = R[+HydroDef::FluxIdx::Yvel];
-    Real wR = R[+HydroDef::FluxIdx::Zvel];
-    Real pR = R[+HydroDef::FluxIdx::Prs];
+    Real gamR = R[+HydroDef::PrimIdx::Gamma];
+    Real rR = R[+HydroDef::PrimIdx::Density];
+    Real uR = R[+HydroDef::PrimIdx::Xvel];
+    Real vR = R[+HydroDef::PrimIdx::Yvel];
+    Real wR = R[+HydroDef::PrimIdx::Zvel];
+    Real pR = R[+HydroDef::PrimIdx::Prs];
 
-    Vector<Real> trR(n_alpha);
-    for (int i=+HydroDef::FluxIdx::NUM; i<R.size(); ++ i) {
-        trR[i-+HydroDef::FluxIdx::NUM]= R[i]*rR;
+
+    for (int i=+HydroDef::PrimIdx::NUM; i<R.size(); ++ i) {
+        trR[i-+HydroDef::PrimIdx::NUM]= R[i]*rR;
     }
 
     // constants

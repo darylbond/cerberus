@@ -7,8 +7,8 @@
 
 using namespace amrex;
 
-template<size_t M, size_t N>
-void transform_global2local(Array<Real,M>& U, const int idir, const Array<int,N>& vi)
+template<typename T1, typename T2>
+void transform_global2local(T1& U, const int idir, const T2& vi)
 {
     BL_PROFILE("transform_global2local");
     // iterate over the passed in index and rotate the 3-vectors in-place
@@ -34,8 +34,8 @@ void transform_global2local(Array<Real,M>& U, const int idir, const Array<int,N>
     }
 }
 
-template<size_t M, size_t N>
-void transform_local2global(Array<Real,M>& U, const int idir, const Array<int,N>& vi)
+template<typename T1, typename T2>
+void transform_local2global(T1& U, const int idir, const T2& vi)
 {
     BL_PROFILE("transform_local2global");
     if (idir == 0) {
@@ -60,10 +60,10 @@ void transform_local2global(Array<Real,M>& U, const int idir, const Array<int,N>
     }
 }
 
-template<size_t M, size_t N>
-void transform_global2local(Array<Real,M> &U,
+template<typename T1, typename T2>
+void transform_global2local(T1 &U,
             const Array<Array<Real,3>,3> C,
-            const Array<int,N> &vi)
+            T2 &vi)
 {
     BL_PROFILE("transform_global2local");
     // iterate over the passed in index and rotate the 3-vectors in-place
@@ -81,10 +81,10 @@ void transform_global2local(Array<Real,M> &U,
     }
 }
 
-template<size_t M, size_t N>
-void transform_local2global(Array<Real,M> &U,
+template<typename T1, typename T2>
+void transform_local2global(T1 &U,
                 const Array<Array<Real,3>,3> C,
-                const Array<int,N> &vi)
+                T2 &vi)
 {
     BL_PROFILE("transform_local2global");
     Real x, y, z;

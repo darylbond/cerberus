@@ -19,12 +19,10 @@ public:
     HydroRiemannSolver();
     virtual ~HydroRiemannSolver();
 
-    int idx;
-
     virtual void solve(Vector<Real> &L,
                        Vector<Real> &R,
                        Vector<Real> &F,
-                       Real* shk) const {}
+                       Real* shk) {}
 
     virtual std::string get_tag() const {return "";}
     virtual bool requires_shock_detector() const {return false;}
@@ -33,10 +31,8 @@ public:
 template <typename D>
 std::unique_ptr<HydroRiemannSolver> HydroRiemannSolverBuilder(const sol::table& def)
 {
-    int global_idx = def["global_idx"];
-
     if (def["flux"] == D::tag) {
-        return std::unique_ptr<D>(new D(global_idx));
+        return std::unique_ptr<D>(new D(def));
     } else {
         return nullptr;
     }

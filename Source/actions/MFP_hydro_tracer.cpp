@@ -1,5 +1,6 @@
 #include "MFP_hydro_tracer.H"
 #include "sol.hpp"
+#include "MFP_diagnostics.H"
 
 std::string HydroTracer::tag = "hydro_tracer";
 bool HydroTracer::registered = GetActionFactory().Register(HydroTracer::tag, ActionBuilder<HydroTracer>);
@@ -73,6 +74,8 @@ void HydroTracer::apply_spatial_derivative(MFP* mfp, const Real time, const Real
                                    ,vfrac
                            #endif
                                    );
+
+//        plot_FAB_2d(vel, 0, "x-vel",false,true);
 
         tracer_state->push_particles(mfp->get_level(),
                                      mfi,

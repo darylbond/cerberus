@@ -1,7 +1,7 @@
 #======== AMREX ==========
-amrex.fpe_trap_invalid=0
-amrex.fpe_trap_zero=0
-fpe_trap_overflow=0
+amrex.fpe_trap_invalid=1
+amrex.fpe_trap_zero=1
+fpe_trap_overflow=1
 amr.v = 0
 
 # ======== TIME ==========

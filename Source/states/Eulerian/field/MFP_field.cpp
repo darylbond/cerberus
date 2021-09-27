@@ -577,20 +577,6 @@ void FieldState::calc_primitives(const Box& box,
                 }
 #endif
 
-                // modify the vector if needed and upload back to
-                // the conserved vector
-                if (!dynamic_functions.empty()) {
-                    for (const auto &f : dynamic_functions) {
-                        U[f.first] = (*f.second)(x, y, z, t);
-                    }
-
-                    // copy into primitive
-                    for (int n=0; n<+FieldDef::ConsIdx::NUM; ++n) {
-                        p4(i,j,k,n) = U[n];
-                        s4(i,j,k,n) = U[n];
-                    }
-                }
-
                 // copy into primitive
                 for (int n=0; n<+FieldDef::ConsIdx::NUM; ++n) {
                     p4(i,j,k,n) = U[n];

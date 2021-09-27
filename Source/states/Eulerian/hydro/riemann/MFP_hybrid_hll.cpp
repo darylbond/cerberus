@@ -9,22 +9,24 @@ std::string HydroHybridHLL::tag = "HLLE/HLLC";
 bool HydroHybridHLL::registered = GetHydroRiemannSolverFactory().Register(HydroHybridHLL::tag, HydroRiemannSolverBuilder<HydroHybridHLL>);
 
 HydroHybridHLL::HydroHybridHLL() {}
-HydroHybridHLL::HydroHybridHLL(const int i)
+HydroHybridHLL::HydroHybridHLL(const sol::table &def)
 {
-    idx = i;
-    hllc = HydroHLLC(i);
-    hlle = HydroHLLE(i);
+    hllc = HydroHLLC(def);
+    hlle = HydroHLLE(def);
+
+    const int n_cons = def["n_cons"];
+
+    F_hlle.resize(n_cons);
+    F_hllc.resize(n_cons);
 }
 
 void HydroHybridHLL::solve(Vector<Real> &L,
                                 Vector<Real> &R,
                                 Vector<Real> &F,
-                                Real* shk) const
+                                Real* shk)
 {
     BL_PROFILE("HydroHybridHLL::solve");
-    const Real eps = 1e-14;
-
-    Vector<Real> F_hlle, F_hllc;
+    constexpr Real eps = 1e-14;
 
     if (*shk < eps) {
         hllc.solve(L, R, F, shk);

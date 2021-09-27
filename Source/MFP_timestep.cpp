@@ -15,7 +15,9 @@ Real MFP::estTimeStep() {
         estdt = std::min(estdt, state->get_allowed_time_step(this));
     }
 
-    // do source term limitations here...
+    for (auto& action : actions) {
+        estdt = std::min(estdt, action->get_allowed_time_step(this));
+    }
 
     estdt *= cfl;
     ParallelDescriptor::ReduceRealMin(estdt);

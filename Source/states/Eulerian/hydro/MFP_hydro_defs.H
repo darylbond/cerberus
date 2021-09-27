@@ -21,23 +21,13 @@ struct HydroDef
         Zvel,
         Prs,
         Temp,
-        NUM,
-    };
-
-    enum class FluxIdx : int {
-        Density=0,
-        Xvel,
-        Yvel,
-        Zvel,
-        Prs,
-        Temp,
         Gamma,
-        NUM
+        SpHeat,
+        NUM,
     };
 
     enum class VectorIdx : int {
         Cons=1,
-        Flux=1,
         Prim=1
     };
 

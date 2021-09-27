@@ -29,7 +29,7 @@ public:
     virtual void apply_time_derivative(MFP* mfp, const Real time, const Real dt) const {}
     virtual void apply_spatial_derivative(MFP* mfp, const Real time, const Real dt) const {}
 
-
+    virtual Real get_allowed_time_step(MFP* mfp) const {return std::numeric_limits<Real>::max();}
 
     virtual std::string get_tag() const = 0;
 };

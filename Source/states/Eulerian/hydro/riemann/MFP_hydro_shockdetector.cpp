@@ -36,8 +36,8 @@ Real PressureJumpShockDetector::solve(Vector<Real> &L,Vector<Real> &R) const
 {
     BL_PROFILE("PressureJumpShockDetector::solve");
 
-    Real pL = L[+HydroDef::FluxIdx::Prs];
-    Real pR = R[+HydroDef::FluxIdx::Prs];
+    Real pL = L[+HydroDef::PrimIdx::Prs];
+    Real pR = R[+HydroDef::PrimIdx::Prs];
     Real varphi = std::abs(pR - pL)/(pR + pL);
 
     return 0.5 + 0.5*tanh_approx(5*(varphi - 0.75*shock_threshold)/shock_threshold);

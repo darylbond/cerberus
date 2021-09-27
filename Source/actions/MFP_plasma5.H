@@ -22,6 +22,8 @@ public:
     void explicit_solve(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, const Real time, const Real dt) const;
     void implicit_solve(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt) const;
 
+    virtual Real get_allowed_time_step(MFP* mfp) const override;
+
     virtual std::string get_tag() const override {return tag;}
 
     FieldState* field;

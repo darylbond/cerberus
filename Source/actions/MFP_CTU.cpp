@@ -4,6 +4,7 @@
 #include "sol.hpp"
 #include "Eigen"
 #include "Dense"
+#include "MFP_diagnostics.H"
 
 std::string CTU::tag = "CTU";
 bool CTU::registered = GetActionFactory().Register(CTU::tag, ActionBuilder<CTU>);
@@ -107,9 +108,6 @@ void CTU::calc_spatial_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU,
 #endif
         mfp->FillPatch(*mfp, local_old[idx], ng, time, data_idx, 0, ns);
 
-        //        plot_FAB_2d(local_new[idx], 0, 0, "cons density", false, false);
-        //        plot_FAB_2d(flag, "flag", true);
-
         if (istate.reflux && level < finest_level) {
             MFP& fine_level = mfp->getLevel(level + 1);
             fr_as_crse[idx] = &fine_level.flux_reg[data_idx];
@@ -173,9 +171,6 @@ void CTU::calc_spatial_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU,
             const EBCellFlagFab& flag = eb.flags[mfi]; fab_flags[idx] = &flag;
             const FArrayBox& vfrac = eb.volfrac[mfi]; fab_vfrac[idx] = &vfrac;
 
-            //            plot_FAB_2d(flag, "flag", false);
-            //            plot_FAB_2d(vfrac, 0, "vfrac", false, true);
-
             // check if this box is active
             active[idx] = flag.getType(rbox);
             if (active[idx] == FabType::covered)
@@ -204,8 +199,7 @@ void CTU::calc_spatial_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU,
                        #endif
                                    );
 
-//            plot_FAB_1d(prim, "prim-"+num2str(level), true);
-//                        plot_FAB_2d(prim, 0, "prim 0", false, true);
+//            plot_FAB_2d(prim, +HydroDef::PrimIdx::NUM, "prim", false, true);
 
 
             // fill in any cells that need special boundary values
@@ -316,10 +310,6 @@ void CTU::calc_spatial_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU,
 
 
             if (active[idx] == FabType::covered) continue;
-
-//            plot_FAB_2d(*fab_flags[idx], "flag", false);
-//            plot_FAB_2d(R_lo[idx][0], 0, box, istate.get_cons_names()[0]+"-R_lo", false, false);
-//            plot_FAB_2d(R_hi[idx][0], 0, box, istate.get_cons_names()[0]+"-R_hi", false, true);
 
             istate.calc_fluxes(box,
                                *conserved[idx],
@@ -513,6 +503,7 @@ void CTU::calc_spatial_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU,
             } else {
 
 #endif
+
                 // calculate divergence
 
                 istate.calc_divergence(box,

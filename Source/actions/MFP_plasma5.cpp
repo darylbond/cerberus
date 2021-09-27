@@ -63,7 +63,7 @@ void Plasma5::calc_time_derivative(MFP* mfp, Vector<std::pair<int, MultiFab> > &
         explicit_solve(mfp, dU, time, dt);
         break;
     case TimeIntegrator::BackwardsEuler :
-        // don't do anything for implicit solve
+        implicit_solve(mfp, dU, time, dt);
         break;
     default:
         Abort("How did we get here?");
@@ -84,13 +84,18 @@ void Plasma5::explicit_solve(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, cons
 
     size_t n_species = species.size();
 
+    Vector<Vector<Real>> U(species.size());
     Vector<MultiFab*> species_data;
-    for (const HydroState* hstate : species) {
-        species_data.push_back(&(mfp->get_data(hstate->data_idx,time)));
+    for (size_t i=0; i<species.size();++i) {
+        const HydroState& hstate = *species[i];
+        species_data.push_back(&(mfp->get_data(hstate.data_idx,time)));
+        U[i].resize(hstate.n_cons());
     }
 
     Vector<Array4<Real>> species4(n_species);
     Vector<Array4<Real>> species_dU4(n_species);
+
+
 
     // define some 'registers'
 
@@ -100,7 +105,7 @@ void Plasma5::explicit_solve(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, cons
     Real ep;
 
     Real q, m, r;
-    Real rho, mx, my, mz, nrg, alpha;
+    Real rho, mx, my, mz;
     Real u, v, w;
 
     const Real Larmor = MFP::Larmor;
@@ -142,20 +147,6 @@ void Plasma5::explicit_solve(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, cons
         EBData& eb = mfp->get_eb_data(field->global_idx);
         const FArrayBox& vfrac = eb.volfrac[mfi];
         if (vfrac.getType() == FabType::covered) continue;
-
-        //        bool skip = false;
-        //        for (const HydroState* hstate : species) {
-        //            EBData& eb = mfp->get_eb_data(hstate->global_idx);
-        //            const FArrayBox& vfrac_hydro = eb.volfrac[mfi];
-        //            if (vfrac_hydro.getType() == FabType::covered) {
-        //                skip = true;
-        //                break;
-        //            }
-        //            //            if (???) {
-        //            //                Abort("All EB data is not the same for source "+name);
-        //            //            }
-        //        }
-        //        if (skip) continue;
 
         Array4<const Real> const& vf4 = vfrac.array();
 
@@ -204,15 +195,20 @@ void Plasma5::explicit_solve(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, cons
 
                     for (size_t n = 0; n < n_species; ++n) {
 
-                        rho =   species4[n](i,j,k,+HydroDef::ConsIdx::Density);
-                        mx =    species4[n](i,j,k,+HydroDef::ConsIdx::Xmom);
-                        my =    species4[n](i,j,k,+HydroDef::ConsIdx::Ymom);
-                        mz =    species4[n](i,j,k,+HydroDef::ConsIdx::Zmom);
-                        nrg =   species4[n](i,j,k,+HydroDef::ConsIdx::Eden);
-                        alpha = species4[n](i,j,k,+HydroDef::ConsIdx::Tracer)/rho;
+                        const Array4<Real>& sp4 = species4[n];
+                        Vector<Real>& UU = U[n];
+                        for (size_t l=0; l<UU.size(); ++l) {
+                            UU[l] = sp4(i,j,k,l);
+                        }
 
-                        m = species[n]->get_mass(alpha);
-                        q = species[n]->get_charge(alpha);
+                        rho =   sp4(i,j,k,+HydroDef::ConsIdx::Density);
+                        mx =    sp4(i,j,k,+HydroDef::ConsIdx::Xmom);
+                        my =    sp4(i,j,k,+HydroDef::ConsIdx::Ymom);
+                        mz =    sp4(i,j,k,+HydroDef::ConsIdx::Zmom);
+
+
+                        m = species[n]->get_mass_from_cons(UU);
+                        q = species[n]->get_charge_from_cons(UU);
 
                         r = q/m;
 
@@ -264,9 +260,12 @@ void Plasma5::implicit_solve(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, co
 
     size_t n_species = species.size();
 
+    Vector<Vector<Real>> U(species.size());
     Vector<MultiFab*> species_data;
-    for (const HydroState* hstate : species) {
-        species_data.push_back(&(mfp->get_data(hstate->data_idx,time)));
+    for (size_t i=0; i<species.size();++i) {
+        const HydroState& hstate = *species[i];
+        species_data.push_back(&(mfp->get_data(hstate.data_idx,time)));
+        U[i].resize(hstate.n_cons());
     }
 
     Vector<Array4<Real>> species4(n_species);
@@ -376,14 +375,20 @@ void Plasma5::implicit_solve(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, co
 
                     for (size_t n = 0; n < n_species; ++n) {
 
-                        rho =   species4[n](i,j,k,+HydroDef::ConsIdx::Density);
-                        mx =    species4[n](i,j,k,+HydroDef::ConsIdx::Xmom);
-                        my =    species4[n](i,j,k,+HydroDef::ConsIdx::Ymom);
-                        mz =    species4[n](i,j,k,+HydroDef::ConsIdx::Zmom);
-                        alpha = species4[n](i,j,k,+HydroDef::ConsIdx::Tracer)/rho;
+                        const Array4<Real>& sp4 = species4[n];
+                        Vector<Real>& UU = U[n];
 
-                        m = species[n]->get_mass(alpha);
-                        q = species[n]->get_charge(alpha);
+                        for (size_t l=0; l<UU.size(); ++l) {
+                            UU[l] = sp4(i,j,k,l);
+                        }
+
+                        rho =   sp4(i,j,k,+HydroDef::ConsIdx::Density);
+                        mx =    sp4(i,j,k,+HydroDef::ConsIdx::Xmom);
+                        my =    sp4(i,j,k,+HydroDef::ConsIdx::Ymom);
+                        mz =    sp4(i,j,k,+HydroDef::ConsIdx::Zmom);
+
+                        m = species[n]->get_mass_from_cons(UU);
+                        q = species[n]->get_charge_from_cons(UU);
 
                         r = q/m;
                         R[n] = r;
@@ -442,13 +447,15 @@ void Plasma5::implicit_solve(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, co
                     // get the updates for hydro species
                     for (int n=0; n<n_species; ++n) {
 
+                        Array4<Real>& sp4 = species4[n];
+
                         mx = c(n*3 + 0);
                         my = c(n*3 + 1);
                         mz = c(n*3 + 2);
 
-                        species_dU4[n](i,j,k,+HydroDef::ConsIdx::Xmom) += mx - species4[n](i,j,k,+HydroDef::ConsIdx::Xmom);
-                        species_dU4[n](i,j,k,+HydroDef::ConsIdx::Ymom) += my - species4[n](i,j,k,+HydroDef::ConsIdx::Ymom);
-                        species_dU4[n](i,j,k,+HydroDef::ConsIdx::Zmom) += mz - species4[n](i,j,k,+HydroDef::ConsIdx::Zmom);
+                        species_dU4[n](i,j,k,+HydroDef::ConsIdx::Xmom) += mx - sp4(i,j,k,+HydroDef::ConsIdx::Xmom);
+                        species_dU4[n](i,j,k,+HydroDef::ConsIdx::Ymom) += my - sp4(i,j,k,+HydroDef::ConsIdx::Ymom);
+                        species_dU4[n](i,j,k,+HydroDef::ConsIdx::Zmom) += mz - sp4(i,j,k,+HydroDef::ConsIdx::Zmom);
 
                         species_dU4[n](i,j,k,+HydroDef::ConsIdx::Eden) += dt*(R[n]*lightspeed/Larmor)*(Ex*mx + Ey*my + Ez*mz);
 
@@ -467,4 +474,140 @@ void Plasma5::implicit_solve(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, co
         wt = (ParallelDescriptor::second() - wt) / box.d_numPts();
         cost[mfi].plus(wt, box);
     }
+}
+
+Real Plasma5::get_allowed_time_step(MFP* mfp) const
+{
+
+    if (solver != TimeIntegrator::ForwardsEuler) return std::numeric_limits<Real>::max();
+
+    constexpr Real PI = acos(-1);
+
+    const Real* dx = mfp->Geom().CellSize();
+
+    BL_PROFILE("Plasma5::explicit_solve");
+
+    // collect all of the MultiFabs that we need
+    MultiFab& cost = mfp->get_new_data(MFP::Cost_Idx);
+
+    MultiFab* field_data = &(mfp->get_new_data(field->data_idx));
+
+
+    size_t n_species = species.size();
+
+    Vector<Vector<Real>> U(species.size());
+    Vector<MultiFab*> species_data;
+    for (size_t i=0; i<species.size();++i) {
+        const HydroState& hstate = *species[i];
+        species_data.push_back(&(mfp->get_new_data(hstate.data_idx)));
+        U[i].resize(hstate.n_cons());
+    }
+
+    Vector<Array4<Real>> species4(n_species);
+
+
+
+    // define some 'registers'
+
+    Real Bx, By, Bz;
+    Real q, m, r;
+    Real rho;
+
+
+    const Real Larmor = MFP::Larmor;
+    const Real Debye = MFP::Debye;
+    Real D2 = Debye*Debye;
+
+    Real max_speed = MFP::lightspeed;
+    max_speed = std::max(max_speed, field->div_speed);
+
+    Real dt = dx[0]/max_speed;
+    for (int d=1; d<AMREX_SPACEDIM; ++d) {
+        dt = std::min(dt, dx[d]/max_speed);
+    }
+
+    for (MFIter mfi(cost); mfi.isValid(); ++mfi) {
+
+        Real wt = ParallelDescriptor::second();
+
+        const Box& box = mfi.tilebox();
+        const Dim3 lo = amrex::lbound(box);
+        const Dim3 hi = amrex::ubound(box);
+
+
+#ifdef AMREX_USE_EB
+        // get the EB data required for later calls and check if we can skip this FAB entirely
+
+        EBData& eb = mfp->get_eb_data(field->global_idx);
+        const FArrayBox& vfrac = eb.volfrac[mfi];
+        if (vfrac.getType() == FabType::covered) continue;
+
+        Array4<const Real> const& vf4 = vfrac.array();
+
+#endif
+
+        Array4<Real> const& field4 = field_data->array(mfi);
+
+        for (int n=0; n<n_species; ++n) {
+            species4[n] = species_data[n]->array(mfi);
+        }
+
+
+        for     (int k = lo.z; k <= hi.z; ++k) {
+            for   (int j = lo.y; j <= hi.y; ++j) {
+                AMREX_PRAGMA_SIMD
+                        for (int i = lo.x; i <= hi.x; ++i) {
+
+#ifdef AMREX_USE_EB
+                    if (vf4(i,j,k) == 0.0) {
+                        continue;
+                    }
+#endif
+
+                    // magnetic field
+                    Bx = field4(i,j,k,+FieldDef::ConsIdx::Bx);
+                    By = field4(i,j,k,+FieldDef::ConsIdx::By);
+                    Bz = field4(i,j,k,+FieldDef::ConsIdx::Bz);
+
+                    const Real B = std::sqrt(Bx*Bx + By*By + Bz*Bz);
+
+                    for (size_t n = 0; n < n_species; ++n) {
+
+                        const Array4<Real>& sp4 = species4[n];
+                        Vector<Real>& UU = U[n];
+                        for (size_t l=0; l<UU.size(); ++l) {
+                            UU[l] = sp4(i,j,k,l);
+                        }
+
+                        rho =   sp4(i,j,k,+HydroDef::ConsIdx::Density);
+
+                        m = species[n]->get_mass_from_cons(UU);
+                        q = species[n]->get_charge_from_cons(UU);
+
+                        r = q/m;
+
+
+                        const Real omega_p = 10*std::sqrt(rho*r*r/D2)/(2*PI);
+
+                        if (omega_p > 0) {
+                            dt = std::min(dt, 1/omega_p);
+                        }
+
+                        const Real omega_c = 10*(std::abs(r)*B)/(Larmor*2*PI);
+
+                        if (omega_c > 0) {
+                            dt = std::min(dt, 1/omega_c);
+                        }
+
+                    }
+                }
+            }
+        }
+
+        // update the cost function
+        wt = (ParallelDescriptor::second() - wt) / box.d_numPts();
+        cost[mfi].plus(wt, box);
+    }
+
+    return dt;
 }

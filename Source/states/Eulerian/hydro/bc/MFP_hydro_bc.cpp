@@ -37,17 +37,17 @@ DirichletWall::DirichletWall(HydroRiemannSolver *flux,
 
 void DirichletWall::solve(Array<Array<Real,3>,3> &wall_coord,
                           Array<Real,AMREX_SPACEDIM> wall_centre,
-                          Array<Real,+HydroDef::FluxIdx::NUM> &cell_state,
+                          Vector<Real> &cell_state,
                           Array4<const Real> const &prim4,
                           const int i, const int j, const int k, const Real *dx,
-                          Array<Array<Real,+HydroDef::ConsIdx::NUM>, AMREX_SPACEDIM> &F) const
+                          Array<Vector<Real>,AMREX_SPACEDIM> &F) const
 {
     BL_PROFILE("DirichletWall::solve");
     //
     // get the inviscid flux
     //
 
-    transform_global2local(cell_state, wall_coord, HydroState::flux_vector_idx);
+    transform_global2local(cell_state, wall_coord, HydroState::prim_vector_idx);
 
     // fabricate a state for inside the wall based on the provided state
     Vector<Real> W = cell_state;
@@ -56,7 +56,7 @@ void DirichletWall::solve(Array<Array<Real,3>,3> &wall_coord,
         W[pair.first] = pair.second;
     }
 
-    Vector<Real> normal_flux(+HydroDef::ConsIdx::NUM);
+    Vector<Real> normal_flux(F[0].size());
     flux_solver->solve(cell_state, W, normal_flux, nullptr);
 
     // convert back to global coordinate system
@@ -85,10 +85,10 @@ HydroSlipWall::HydroSlipWall(HydroRiemannSolver *flux)
 
 void HydroSlipWall::solve(Array<Array<Real,3>,3> &wall_coord,
                           Array<Real,AMREX_SPACEDIM> wall_centre,
-                          Array<Real,+HydroDef::FluxIdx::NUM> &cell_state,
+                          Vector<Real> &cell_state,
                           Array4<const Real> const &prim4,
                           const int i, const int j, const int k, const Real *dx,
-                          Array<Array<Real,+HydroDef::ConsIdx::NUM>, AMREX_SPACEDIM> &F) const
+                          Array<Vector<Real>,AMREX_SPACEDIM> &F) const
 {
     BL_PROFILE("HydroSlipWall::solve");
     //
@@ -100,9 +100,9 @@ void HydroSlipWall::solve(Array<Array<Real,3>,3> &wall_coord,
     // fabricate a state for inside the wall based on the provided state
     Vector<Real> W = cell_state;
 
-    W[+HydroDef::FluxIdx::Xvel] *= -1;
+    W[+HydroDef::PrimIdx::Xvel] *= -1;
 
-    Vector<Real> normal_flux(+HydroDef::ConsIdx::NUM);
+    Vector<Real> normal_flux(F[0].size());
 
     Real shk = 1.0; // consider there to be a shock present if we have a switching flux
     flux_solver->solve(cell_state, W, normal_flux, &shk);
@@ -147,10 +147,10 @@ HydroNoSlipWall::HydroNoSlipWall(HydroRiemannSolver *flux,
 
 void HydroNoSlipWall::solve(Array<Array<Real,3>,3> &wall_coord,
                             Array<Real,AMREX_SPACEDIM> wall_centre,
-                            Array<Real,+HydroDef::FluxIdx::NUM> &cell_state,
+                            Vector<Real> &cell_state,
                             Array4<const Real> const &prim4,
                             const int i, const int j, const int k, const Real *dx,
-                            Array<Array<Real,+HydroDef::ConsIdx::NUM>, AMREX_SPACEDIM> &F) const
+                            Array<Vector<Real>,AMREX_SPACEDIM> &F) const
 {
     BL_PROFILE("HydroNoSlipWall::solve");
 
@@ -159,14 +159,14 @@ void HydroNoSlipWall::solve(Array<Array<Real,3>,3> &wall_coord,
     // get the inviscid flux
     //
 
-    transform_global2local(cell_state, wall_coord,  HydroState::flux_vector_idx);
+    transform_global2local(cell_state, wall_coord,  HydroState::prim_vector_idx);
 
     // fabricate a state for inside the wall based on the provided state
     Vector<Real> W = cell_state;
 
-    W[+HydroDef::FluxIdx::Xvel] *= -1;
+    W[+HydroDef::PrimIdx::Xvel] *= -1;
 
-    Vector<Real> normal_flux(+HydroDef::ConsIdx::NUM);
+    Vector<Real> normal_flux(F[0].size());
 
     Real shk = 1.0; // consider there to be a shock present if we have a switching flux
     flux_solver->solve(cell_state, W, normal_flux, &shk);
@@ -209,17 +209,9 @@ void HydroNoSlipWall::solve(Array<Array<Real,3>,3> &wall_coord,
 
 
         // convert cell_state (flux vector form) to primitive vector form
-        Array<Real,+HydroDef::PrimIdx::NUM> Q;
-        Q[+HydroDef::PrimIdx::Density] = cell_state[+HydroDef::FluxIdx::Density];
-        Q[+HydroDef::PrimIdx::Xvel] = cell_state[+HydroDef::FluxIdx::Xvel];
-        Q[+HydroDef::PrimIdx::Yvel] = cell_state[+HydroDef::FluxIdx::Yvel];
-        Q[+HydroDef::PrimIdx::Zvel] = cell_state[+HydroDef::FluxIdx::Zvel];
-        Q[+HydroDef::PrimIdx::Prs] = cell_state[+HydroDef::FluxIdx::Prs];
-        Q[+HydroDef::PrimIdx::Temp] = cell_state[+HydroDef::FluxIdx::Temp];
-        Q[+HydroDef::PrimIdx::Alpha] = cell_state[+HydroDef::FluxIdx::Alpha];
 
         Real T, mu, kappa;
-        viscous->get_coeffs(Q, T, mu, kappa);
+        viscous->get_coeffs(cell_state, T, mu, kappa);
 
         Array<Real, 3> dxinv = {0,0,0};
         AMREX_D_TERM(dxinv[0] = 1/dx[0];,dxinv[1] = 1/dx[1];,dxinv[2] = 1/dx[2];)

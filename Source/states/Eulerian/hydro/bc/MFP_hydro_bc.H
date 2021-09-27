@@ -30,10 +30,10 @@ public:
 
     virtual void solve(Array<Array<Real,3>,3> &wall_coord,
                        Array<Real,AMREX_SPACEDIM> wall_centre,
-                       Array<Real,+HydroDef::FluxIdx::NUM> &cell_state,
+                       Vector<Real> &cell_state,
                        Array4<const Real> const &prim4,
                        const int i, const int j, const int k, const Real *dx,
-                       Array<Array<Real,+HydroDef::ConsIdx::NUM>, AMREX_SPACEDIM> &F) const = 0;
+                       Array<Vector<Real>,AMREX_SPACEDIM> &F) const = 0;
 
 
 };
@@ -52,10 +52,10 @@ public:
 
     virtual void solve(Array<Array<Real,3>,3> &wall_coord,
                        Array<Real,AMREX_SPACEDIM> wall_centre,
-                       Array<Real,+HydroDef::FluxIdx::NUM> &cell_state,
+                       Vector<Real> &cell_state,
                        Array4<const Real> const &prim4,
                        const int i, const int j, const int k, const Real *dx,
-                       Array<Array<Real,+HydroDef::ConsIdx::NUM>, AMREX_SPACEDIM> &F) const override;
+                       Array<Vector<Real>,AMREX_SPACEDIM> &F) const override;
 
 
     virtual const EBType get_type() const override {return EBType::Dirichlet;}
@@ -79,10 +79,10 @@ public:
 
     virtual void solve(Array<Array<Real,3>,3> &wall_coord,
                        Array<Real,AMREX_SPACEDIM> wall_centre,
-                       Array<Real,+HydroDef::FluxIdx::NUM> &cell_state,
+                       Vector<Real> &cell_state,
                        Array4<const Real> const &prim4,
                        const int i, const int j, const int k, const Real *dx,
-                       Array<Array<Real,+HydroDef::ConsIdx::NUM>, AMREX_SPACEDIM> &F) const override;
+                       Array<Vector<Real>,AMREX_SPACEDIM> &F) const override;
 
     virtual const EBType get_type() const override {return type;}
 
@@ -107,10 +107,10 @@ public:
 
     virtual void solve(Array<Array<Real,3>,3> &wall_coord,
                        Array<Real,AMREX_SPACEDIM> wall_centre,
-                       Array<Real,+HydroDef::FluxIdx::NUM> &cell_state,
+                       Vector<Real> &cell_state,
                        Array4<const Real> const &prim4,
                        const int i, const int j, const int k, const Real *dx,
-                       Array<Array<Real,+HydroDef::ConsIdx::NUM>, AMREX_SPACEDIM> &F) const override;
+                       Array<Vector<Real>,AMREX_SPACEDIM> &F) const override;
 
     virtual const EBType get_type() const override {return EBType::NoSlip;}
 

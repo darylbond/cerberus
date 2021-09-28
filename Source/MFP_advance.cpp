@@ -21,10 +21,16 @@ Real MFP::advance(Real time, Real dt, int iteration, int ncycle)
     if (eulerian_du.empty()) {
         eulerian_du.resize(eulerian_states.size());
 
+#ifdef AMREX_USE_EB
+        const int num_grow_eb = 2;
+#else
+        const int num_grow_eb = 0;
+#endif
+
         for (int data_idx=0; data_idx<eulerian_states.size(); ++data_idx) {
             int nc = state[data_idx].descriptor()->nComp();
             eulerian_du[data_idx].first = 0;
-            eulerian_du[data_idx].second.define(grids, dmap, nc, 0, MFInfo(), Factory());
+            eulerian_du[data_idx].second.define(grids, dmap, nc, num_grow_eb, MFInfo(), Factory());
         }
     }
 
@@ -92,7 +98,7 @@ void MFP::advance_euler(Real time, Real dt, int iteration, int ncycle)
     // add dU to new data (new = old + dU)
     apply_derivative(eulerian_du);
 
-//    plot_FAB_2d(eulerian_du[0].second, 0, 0, "eulerian_du", false, true);
+    //    plot_FAB_2d(eulerian_du[0].second, 0, 0, "eulerian_du", false, true);
 
     // update new data with any one-shot updates based on old data (new = f(old))
     for (const auto& act : actions) {

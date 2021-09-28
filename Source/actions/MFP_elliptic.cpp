@@ -650,7 +650,7 @@ void Elliptic::project_divergence(MFP* mfp, const Real time) const
 
         AmrLevel& ilevel = amr.getLevel(ilev);
 #ifdef AMREX_USE_EB
-        Vector<EBData>& eb_data = gd.eb_data[ilev];
+        Vector<EBData>& eb_data = mfp->eb_data[ilev];
 #endif
 
 

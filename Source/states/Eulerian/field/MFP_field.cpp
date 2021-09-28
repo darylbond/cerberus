@@ -1424,12 +1424,13 @@ void FieldState::get_wall_value(const Box& box,
                     // calculate the wall state
                     wall_state = bc->get_wall_state(wall_centre, wall_coord, t);
 
-                    for (const auto &ws : wall_state) {
+                    for (size_t n=0; n<wall_state.size(); ++n) {
+                        Vector<Real>& ws = wall_state[n];
 
                         // only proceed if the boundary condition type is in the list
                         if (ws.empty()) continue;
 
-                        Array4<Real> const& wall4 = bcs_data[ws.first]->array();
+                        Array4<Real> const& wall4 = bcs_data[n]->array();
 
                         // load the wall value into the fab
                         for (size_t n = 0; n<ws.size(); ++n) {

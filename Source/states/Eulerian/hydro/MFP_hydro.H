@@ -193,8 +193,7 @@ public:
                                    const Real *dx,
                                    const Real dt) const override;
 
-    void calc_diffusion_terms(const Box& box,
-                              const FArrayBox& prim,
+    void calc_diffusion_terms(const FArrayBox& prim,
                               FArrayBox& diff
                           #ifdef AMREX_USE_EB
                               ,const EBCellFlagFab& flag
@@ -203,7 +202,6 @@ public:
 
     virtual void calc_viscous_fluxes(const Box& box,
                                      Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
-                                     const Box& pbox,
                                      const FArrayBox &prim,
                                  #ifdef AMREX_USE_EB
                                      const EBCellFlagFab& flag,
@@ -213,7 +211,6 @@ public:
 #ifdef AMREX_USE_EB
 
     virtual void calc_viscous_fluxes_eb(const Box& box, Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
-                                        const Box& pbox,
                                         const FArrayBox &prim,
                                     #ifdef AMREX_USE_EB
                                         const EBCellFlagFab& flag,

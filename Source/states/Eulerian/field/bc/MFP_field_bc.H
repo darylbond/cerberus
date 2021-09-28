@@ -146,7 +146,7 @@ public:
     SurfaceCurrentWall(const sol::table &bc_def);
     ~SurfaceCurrentWall();
 
-    virtual std::map<FieldBoundaryEB::EBType, Vector<Real> > get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const override;
+    virtual Vector<Vector<Real> > get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const override;
 
     virtual const EBType get_type() const override {return type;}
     virtual const bool time_varying() const override {return current_1.has_func() || current_2.has_func();}
@@ -190,7 +190,7 @@ public:
     CollectionWall(const sol::table &bc_def);
     ~CollectionWall();
 
-    virtual std::map<FieldBoundaryEB::EBType, Vector<Real> > get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const override;
+    virtual Vector<Vector<Real> > get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const override;
 
     virtual const EBType get_type() const override {return type;}
     virtual const bool time_varying() const override;

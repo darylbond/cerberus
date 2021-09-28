@@ -160,7 +160,6 @@ void CTU::calc_spatial_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU,
         // 1. iterate over all states to set-up the data required for flux calculation
         for (int idx=0; idx<n_states; ++idx) {
             EulerianState &istate = *data_states[idx];
-            const int data_idx = data_indexes[idx];
 
             // get a pointer to the conserved quantities
             conserved[idx] = &local_old[idx][mfi];
@@ -386,11 +385,9 @@ void CTU::calc_spatial_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU,
 
                 // now calculate any viscous fluxes
 
-                const Box pbox = amrex::grow(box, istate.num_grow + num_grow_eb);
-
                 istate.calc_viscous_fluxes(grow(box,num_grow_eb),
                                            fluxes[idx],
-                                           pbox, primitives[idx],
+                                           primitives[idx],
                                #ifdef AMREX_USE_EB
                                            *fab_flags[idx],
                                #endif
@@ -435,6 +432,11 @@ void CTU::calc_spatial_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU,
                                         afrac,
                                         dx,
                                         dt);
+
+//                plot_FAB_2d(primitives[idx], +HydroDef::PrimIdx::Prs, "prim", false, false);
+
+//                plot_FAB_2d(wall_fluxes[idx][0], +HydroDef::ConsIdx::Eden, "flux nrg x", false, false);
+//                plot_FAB_2d(wall_fluxes[idx][1], +HydroDef::ConsIdx::Eden, "flux nrg y", false, true);
 
                 // calculate divergence, including cut-cells
 

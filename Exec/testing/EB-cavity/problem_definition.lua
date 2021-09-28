@@ -15,8 +15,7 @@ freestream_temperature = 1.0
 
 verbosity = 1
 cfl = 0.5
-
-time_integration_scheme = 'CTU'
+time_integration_scheme = 'strang'
 
 -- === GEOMETRY ===
 
@@ -36,7 +35,7 @@ embedded_boundaries = {
 
   C = {
     geom=svgC,
-    bcs={air={type='slip_wall'},
+    bcs={air={type='no_slip_wall', T=10},
     },
     boolean_operation='or',
     inside=1,
@@ -125,7 +124,13 @@ function make_rectangles(x,y,collection)
 end
 
 function pressure(dat)
-    return -(2.0-dat['y'])*gravity*freestream_density
+  local h = dat['y']
+  return math.exp(gravity*h/freestream_temperature)
+end
+
+function density(dat)
+  local p = pressure(dat)
+  return p/freestream_temperature
 end
 
 function blob(dat)
@@ -137,7 +142,7 @@ function blob(dat)
   if make_circles(dat['x'],dat['y'],circles) < 0 then
     return 20.0
   else
-    return freestream_density
+    return density(dat)
   end
 end
 
@@ -158,7 +163,7 @@ states = {
         mass=1.0,
         charge= 0.0,
         gamma=1.4,
-        reconstruction='MC', 
+        reconstruction='constant', 
         flux='HLLC',
         viscosity=Sutherland,
         value = {
@@ -170,6 +175,7 @@ states = {
             alpha =   tracer,
         },
         refinement={name='hydro_gradient', rho=0.1},
+        merge_threshold = 0.5,
 
         bc={
           x={
@@ -198,9 +204,15 @@ states = {
   },
 }
 
--- === SOURCES ===
+-- === ACTIONS ===
 
-sources = {
+actions = {
+
+  hydro_fluxes = {
+    type = 'CTU',
+    corner_transport=true,
+    states = {'air'},
+},
 
   gravity = {
     type='acceleration',

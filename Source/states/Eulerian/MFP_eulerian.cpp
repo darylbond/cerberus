@@ -48,6 +48,9 @@ void EulerianState::init_from_lua()
 {
     BL_PROFILE("EulerianState::init_from_lua");
 
+    sol::state& lua = MFP::lua;
+    const sol::table state_def = lua["states"][name];
+
     //
     // reflux
     //
@@ -58,6 +61,10 @@ void EulerianState::init_from_lua()
     //
 
     set_reconstruction();
+
+#ifdef AMREX_USE_EB
+    merge_threshold = state_def.get_or("merge_threshold", 0.5);
+#endif
 
 }
 
@@ -248,6 +255,23 @@ bool is_inside(const int i,const int j, const int k, const Dim3 &lo, const Dim3 
             k >= lo.z && k <= hi.z;
 }
 
+// https://stackoverflow.com/a/53283994
+struct ArrayHasher {
+    int N;
+    ArrayHasher(int n){
+        N = n;
+    }
+    int operator()(const Array<int,3> &V) const {
+        return V[0] + N*(V[1] + N*V[2]);
+    }
+};
+
+struct ArrayEqual {
+    int operator()(const Array<int,3> &V1, const Array<int,3> &V2) const {
+        return (V1[0] == V2[0]) &&  (V1[1] == V2[1]) && (V1[2] == V2[2]);
+    }
+};
+
 void EulerianState::merge_cells(const Box& box,
                                 FArrayBox &cons,
                                 FArrayBox& du,
@@ -279,14 +303,6 @@ void EulerianState::merge_cells(const Box& box,
 
     Real vf;
 
-    // the sets of cells that are to be merged
-    Vector<Vector<Array<int,3>>> merge;
-
-    // a container for all of the unique cells that are part of the problem and
-    // the super-cell that they are a part of
-    std::map<Array<int,3>,int> cells;
-
-
     int ii, jj, kk;
     int mi, mj, mk;
 
@@ -301,6 +317,17 @@ void EulerianState::merge_cells(const Box& box,
     Box calc = grow(box,1);
     const Dim3 lo = amrex::lbound(calc);
     const Dim3 hi = amrex::ubound(calc);
+
+    // the sets of cells that are to be merged
+    Vector<Vector<Array<int,3>>> merge;
+
+    // a container for all of the unique cells that are part of the problem and
+    // the super-cell that they are a part of
+    int Ni = halo.size().max(); // the largest logical size of the data
+    int Nc = halo.numPts()*0.1; // guess at how many cells will need to be merged
+    const ArrayHasher hash(Ni);
+    const ArrayEqual equal;
+    std::unordered_map<Array<int,3>,int, ArrayHasher,ArrayEqual> cells(Nc, hash, equal);
 
 
     for (int k = lo.z; k <= hi.z; ++k) {

@@ -224,7 +224,7 @@ void MFP::avgDown()
         MultiFab volume(S_fine.boxArray(), S_fine.DistributionMap(), 1, 0);
         volume.setVal(1.0);
 
-        EBData& eb = get_eb_data(global_idx);
+        EBData& eb = get_eb_data(level+1, global_idx);
         amrex::EB_average_down(S_fine, S_crse, volume, eb.volfrac, 0,
                                S_fine.nComp(), fine_ratio);
 #else

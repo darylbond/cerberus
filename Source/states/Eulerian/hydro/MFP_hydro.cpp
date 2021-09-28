@@ -103,6 +103,10 @@ void HydroState::set_viscosity()
 
     if (!visc.empty() && !viscous)
         Abort("Invalid viscosity option '"+visc+"'. Options are "+vec2str(vfact.getKeys()));
+
+    if (viscous) {
+        set_num_grow(2); // needs at least two cells
+    }
 }
 
 Real HydroState::init_from_number_density(std::map<std::string, Real> data)
@@ -2250,8 +2254,7 @@ void HydroState::correct_face_prim(const Box& box,
     }
 }
 
-void HydroState::calc_diffusion_terms(const Box& box,
-                                      const FArrayBox& prim,
+void HydroState::calc_diffusion_terms(const FArrayBox& prim,
                                       FArrayBox& diff
                                       #ifdef AMREX_USE_EB
                                       ,const EBCellFlagFab& flag
@@ -2259,8 +2262,8 @@ void HydroState::calc_diffusion_terms(const Box& box,
                                       ) const
 {
     BL_PROFILE("HydroState::calc_neutral_diffusion_terms");
-    const Dim3 lo = amrex::lbound(box);
-    const Dim3 hi = amrex::ubound(box);
+    const Dim3 lo = amrex::lbound(prim.box());
+    const Dim3 hi = amrex::ubound(prim.box());
 
     Array4<const Real> const& prim4 = prim.array();
     Array4<Real> const& d4 = diff.array();
@@ -2301,7 +2304,6 @@ void HydroState::calc_diffusion_terms(const Box& box,
 
 
 void HydroState::calc_viscous_fluxes(const Box& box, Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
-                                     const Box& pbox,
                                      const FArrayBox &prim,
                                      #ifdef AMREX_USE_EB
                                      const EBCellFlagFab& flag,
@@ -2311,14 +2313,15 @@ void HydroState::calc_viscous_fluxes(const Box& box, Array<FArrayBox, AMREX_SPAC
     BL_PROFILE("HydroState::calc_viscous_fluxes");
 #ifdef AMREX_USE_EB
     if (flag.getType() != FabType::regular) {
-        calc_viscous_fluxes_eb(box, fluxes, pbox, prim, flag, dx);
+        calc_viscous_fluxes_eb(box, fluxes, prim, flag, dx);
         return;
     }
 #endif
 
+    const Box pbox = prim.box();
+
     FArrayBox diff(pbox, +HydroViscous::CoeffIdx::NUM);
-    calc_diffusion_terms(pbox,
-                         prim,
+    calc_diffusion_terms(prim,
                          diff
                      #ifdef AMREX_USE_EB
                          ,flag
@@ -2481,7 +2484,6 @@ void HydroState::calc_viscous_fluxes(const Box& box, Array<FArrayBox, AMREX_SPAC
 #ifdef AMREX_USE_EB
 void HydroState::calc_viscous_fluxes_eb(const Box& box, Array<FArrayBox,
                                         AMREX_SPACEDIM> &fluxes,
-                                        const Box& pbox,
                                         const FArrayBox &prim,
                                         #ifdef AMREX_USE_EB
                                         const EBCellFlagFab& flag,
@@ -2489,9 +2491,8 @@ void HydroState::calc_viscous_fluxes_eb(const Box& box, Array<FArrayBox,
                                         const Real* dx) const
 {
     BL_PROFILE("HydroState::calc_neutral_viscous_fluxes_eb");
-    FArrayBox diff(pbox, +HydroViscous::CoeffIdx::NUM);
-    calc_diffusion_terms(pbox,
-                         prim,
+    FArrayBox diff(prim.box(), +HydroViscous::CoeffIdx::NUM);
+    calc_diffusion_terms(prim,
                          diff
                      #ifdef AMREX_USE_EB
                          ,flag

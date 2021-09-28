@@ -127,7 +127,6 @@ public:
 
     virtual void calc_viscous_fluxes(const Box& box,
                                      Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
-                                     const Box& pbox,
                                      const FArrayBox &prim,
                                  #ifdef AMREX_USE_EB
                                      const EBCellFlagFab& flag,

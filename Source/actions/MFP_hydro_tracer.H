@@ -1,5 +1,6 @@
 #ifndef HYDROTRACER_H
 #define HYDROTRACER_H
+#ifdef AMREX_PARTICLES
 
 #include "MFP_action.H"
 #include "MFP_hydro.H"
@@ -33,4 +34,5 @@ public:
     static std::string tag;
 };
 
+#endif
 #endif // TRACER_H

@@ -1,3 +1,4 @@
+#ifdef AMREX_PARTICLES
 #include "MFP_hydro_tracer.H"
 #include "sol.hpp"
 #include "MFP_diagnostics.H"
@@ -95,3 +96,5 @@ void HydroTracer::apply_spatial_derivative(MFP* mfp, const Real time, const Real
         cost[mfi].plus(wt, box);
     }
 }
+
+#endif

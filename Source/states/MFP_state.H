@@ -85,17 +85,13 @@ public:
 #ifdef AMREX_USE_EB
 
     virtual void set_eb_bc(const sol::table &bc_def) {}
+    virtual size_t get_eb_bc_size() const {return 0;}
 
     void update_eb_vfrac(const Geometry &geom,
                          FArrayBox& vfrac) const;
 
     void update_eb_flags(const Geometry &geom,
                          EBCellFlagFab& flags) const;
-
-    // keep track of the embedded boundaries that are being applied by this state
-    // first index is the state local definition of the eb bc
-    // second index is for grabbing any data to go with the bc
-    Vector<std::pair<int,int>> eb_bc_index;
 
 #endif
 

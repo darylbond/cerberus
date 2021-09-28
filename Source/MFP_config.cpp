@@ -250,7 +250,7 @@ void MFP::read_config()
             std::string state_name = state.as<std::string>();
             if (state_name != "func") {
                 State &istate = get_state(state_name);
-                eb_dat.states.push_back({istate.global_idx,istate.eb_bc_index.size()});
+                eb_dat.states.push_back({istate.global_idx,istate.get_eb_bc_size()});
 
                 // define bc
                 istate.set_eb_bc(bc_def);

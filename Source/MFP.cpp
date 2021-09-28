@@ -4,6 +4,8 @@
 #include "MFP_lagrangian.H"
 #include "MFP_diagnostics.H"
 
+#include "MFP_field.H"
+
 using namespace amrex;
 
 MFP::TimeIntegrator MFP::time_integration_scheme;

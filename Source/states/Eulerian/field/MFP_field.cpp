@@ -394,10 +394,15 @@ void FieldState::init_from_lua()
 
     fastest_speed = MFP::lightspeed;
 
+    // handle static fields (electrostatic, magnetostatic)
+    is_static = state_def.get_or("static", 0);
+    if (is_static) reflux = false;
+
 
     //
     // riemann solver
     //
+
     set_flux();
 
     //

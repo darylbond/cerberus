@@ -25,7 +25,7 @@ public:
     static std::map<std::string, int> bc_names;
     static Vector<set_bc> bc_set;
 
-
+    int is_static;
     Real fastest_speed;
 
     Array<Optional3D1VFunction,+FieldDef::ConsIdx::NUM> functions;
@@ -36,6 +36,7 @@ public:
     virtual int get_num_cons() const override {return +FieldDef::ConsIdx::NUM;}
     virtual int get_num_grow() const override {return num_grow;}
     virtual void set_num_grow(int n) override {num_grow = std::max(n, num_grow);}
+    virtual bool is_transported() const override {return !is_static;}
 
     virtual const Vector<std::string>& get_cons_names() const override {return cons_names;}
     virtual Vector<std::string> get_plot_output_names() const override;
@@ -59,6 +60,7 @@ public:
 
 #ifdef AMREX_USE_EB
     virtual void set_eb_bc(const sol::table &bc_def) override;
+    virtual size_t get_eb_bc_size() const override {return eb_bcs.size();}
     Vector<std::unique_ptr<FieldBoundaryEB>> eb_bcs;
 #endif
 

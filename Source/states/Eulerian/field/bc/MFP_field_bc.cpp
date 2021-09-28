@@ -349,7 +349,7 @@ CollectionWall::CollectionWall(const sol::table &bc_def)
 Vector<Vector<Real>> CollectionWall::get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const
 {
 
-    Vector<Vector<Real>> out;
+    Vector<Vector<Real>> out(+EBType::NUM);
 
     for (const auto &bc : bcs) {
         const auto val = bc->get_wall_state(wall_centre, wall_coord, t);

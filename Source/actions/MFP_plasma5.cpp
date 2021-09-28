@@ -7,7 +7,6 @@
 
 std::string Plasma5::tag = "plasma5";
 bool Plasma5::registered = GetActionFactory().Register(Plasma5::tag, ActionBuilder<Plasma5>);
-Plasma5::TimeIntegrator Plasma5::solver;
 
 Plasma5::Plasma5(){}
 Plasma5::~Plasma5(){}

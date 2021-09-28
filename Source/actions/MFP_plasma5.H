@@ -29,7 +29,7 @@ public:
     FieldState* field;
     Vector<HydroState*> species;
 
-    static TimeIntegrator solver;
+    TimeIntegrator solver;
 
     static bool registered;
     static std::string tag;

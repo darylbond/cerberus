@@ -29,7 +29,7 @@ struct DataEB {
     std::function<Real (AMREX_D_DECL(Real, Real, Real))> geom_func;
     int insertion_type; // add = 1, subtract = -1
     bool inside;
-    Vector<std::pair<int,int>> states;
+    Vector<std::pair<int,int>> states; // [state global index, bc index withn state]
     bool regular;
 };
 #endif

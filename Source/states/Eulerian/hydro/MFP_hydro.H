@@ -55,6 +55,7 @@ public:
 #ifdef AMREX_USE_EB
     Vector<std::unique_ptr<HydroBoundaryEB>> eb_bcs;
     virtual void set_eb_bc(const sol::table &bc_def) override;
+    virtual size_t get_eb_bc_size() const override {return eb_bcs.size();}
 #endif
 
     virtual int get_num_grow() const override {return num_grow;}

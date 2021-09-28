@@ -46,7 +46,7 @@ verbosity = 1
 cfl = 0.5
 
 
-time_integration_scheme = 'CTU'
+time_integration_scheme = 'euler'
 
 refine_boxes = {
     {{-8, -8}, {8, 8}, type='force_refine'},
@@ -73,4 +73,15 @@ states = {
         },
         refinement={name='hydro_gradient', rho=0.1},
     },
+}
+
+-- === ACTIONS ===
+
+actions = {
+
+  hydro_fluxes = {
+    type = 'CTU',
+    corner_transport=true,
+    states = {'air'},
+  },
 }

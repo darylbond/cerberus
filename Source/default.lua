@@ -364,7 +364,7 @@ where anything in [] is something to be defined and can be so as follows:
     - damping_ratio : single value giving the ratio of damping rate to cleaning transport (0 for off)
 
 --]]
-sources = {}
+actions = {}
 
 --[[
 embedded boundary definitions including boundary condition
@@ -461,6 +461,9 @@ end
 -- get a list of all the keys in a table
 function get_sorted_keys(T)
   local keys = {}
+  if len(T) < 1 then
+    return keys
+  end
   local n = 0
   for k,v in spairs(T) do
     n = n + 1

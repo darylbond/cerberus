@@ -14,6 +14,7 @@ public:
     virtual void calc_time_derivative(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, const Real time, const Real dt) const override;
 
     virtual std::string get_tag() const override {return tag;}
+    virtual ActionType get_type() const override {return ActionType::Acceleration;}
 
     Vector<HydroState*> species;
 

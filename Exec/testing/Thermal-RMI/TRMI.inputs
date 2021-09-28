@@ -42,7 +42,7 @@ particles.v = 0
 # ======== OUTPUT ==========
 
 # CHECKPOINT FILES
-amr.checkpoint_files_output = -1
+amr.checkpoint_files_output = 0
 amr.check_file              = TRMI.chk    # root name of checkpoint file
 amr.check_int               = 1    # number of timesteps between checkpoints
 amr.check_per               = -0.005

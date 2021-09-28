@@ -26,6 +26,7 @@ public:
 
 
     virtual std::string get_tag() const override {return tag;}
+    virtual ActionType get_type() const override {return ActionType::HydroTracer;}
 
     HydroState* hydro_state;
     TracerParticle* tracer_state;

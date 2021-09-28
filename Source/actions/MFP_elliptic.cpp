@@ -18,6 +18,7 @@ using Location = amrex::MLLinOp::Location;
 #include "MFP.H"
 #include "MFP_state.H"
 #include "MFP_plasma5.H"
+#include "MFP_lorentz.H"
 #include "sol.hpp"
 #include "MFP_diagnostics.H"
 
@@ -223,12 +224,25 @@ void Elliptic::solve_static_fields(MFP* mfp, const Real time) const
         // get all of the source contributions
         for (const auto& src_idx : field->associated_actions) {
 
-            if (mfp->actions[src_idx]->get_tag() != Plasma5::tag) continue;
+            Vector<HydroState*> hydro_states;
 
-            Plasma5& plasma = static_cast<Plasma5&>(*(mfp->actions[src_idx]));
+            switch(mfp->actions[src_idx]->get_type()) {
+            case ActionType::Plasma5 : {
+                Plasma5& plasma = static_cast<Plasma5&>(*(mfp->actions[src_idx]));
+                hydro_states = plasma.species;
+                break;
+            }
+            case ActionType::Lorentz : {
+                Lorentz& plasma = static_cast<Lorentz&>(*(mfp->actions[src_idx]));
+                hydro_states = plasma.species;
+                break;
+            }
+            default:
+                continue;
+            }
 
             // now calculate the charge and current density
-            const size_t num_src = plasma.species.size();
+            const size_t num_src = hydro_states.size();
 
             // iterate over data
             for (MFIter mfi(ilevel.get_new_data(MFP::Cost_Idx)); mfi.isValid(); ++mfi) {
@@ -239,7 +253,7 @@ void Elliptic::solve_static_fields(MFP* mfp, const Real time) const
 
                 // get lists of the data for each state included in the src
                 for (size_t src_idx=0; src_idx<num_src; ++src_idx) {
-                    HydroState& hydro = *plasma.species[src_idx];
+                    HydroState& hydro = *hydro_states[src_idx];
                     const FArrayBox& cons = ilevel.get_new_data(hydro.data_idx)[mfi];
 #ifdef AMREX_USE_EB
                     const FArrayBox& vfrac = eb_data[hydro.global_idx].volfrac[mfi];
@@ -256,7 +270,6 @@ void Elliptic::solve_static_fields(MFP* mfp, const Real time) const
                               #endif
                                                   );
 
-
                 }
 
                 // scale by the relative permittivity and permeability
@@ -267,7 +280,6 @@ void Elliptic::solve_static_fields(MFP* mfp, const Real time) const
                 local_J.divide(field_data, box, +FieldDef::ConsIdx::mu, 0, 1);
                 local_J.divide(field_data, box, +FieldDef::ConsIdx::mu, 1, 1);
                 local_J.divide(field_data, box, +FieldDef::ConsIdx::mu, 2, 1);
-
             }
         }
 
@@ -295,7 +307,7 @@ void Elliptic::solve_static_fields(MFP* mfp, const Real time) const
 
             const CutFab& bc_idx = ebd.bndryidx[mfi];
 
-//            plot_FAB_2d(bc_idx,0,"bc idx", false, true);
+            //            plot_FAB_2d(bc_idx,0,"bc idx", false, true);
 
             field->get_wall_value(cbox,
                                   bcs_data,
@@ -340,10 +352,15 @@ void Elliptic::solve_static_fields(MFP* mfp, const Real time) const
             }
         }
 
-//                    plot_FAB_2d(defined_phi[ilev],0,0, "phi", false, false);
-//                    plot_FAB_2d(defined_A[ilev],0,0, "Ax", false, false);
-//                    plot_FAB_2d(defined_A[ilev],1,0, "Ay", false, false);
-//                    plot_FAB_2d(defined_A[ilev],2,0, "Az", false, true);
+//        plot_FAB_2d(defined_phi[ilev],0,0, "phi", false, false);
+//        plot_FAB_2d(defined_A[ilev],0,0, "Ax", false, false);
+//        plot_FAB_2d(defined_A[ilev],1,0, "Ay", false, false);
+//        plot_FAB_2d(defined_A[ilev],2,0, "Az", false, true);
+
+//        plot_FAB_2d(defined_charge[ilev],0,0,"cd", false, false);
+//        plot_FAB_2d(defined_current[ilev],0,0,"Jx", false, false);
+//        plot_FAB_2d(defined_current[ilev],1,0,"Jy", false, false);
+//        plot_FAB_2d(defined_current[ilev],2,0,"Jz", false, true);
 
     }
 
@@ -446,8 +463,8 @@ void Elliptic::solve_static_fields(MFP* mfp, const Real time) const
 
         }
 
-//        plot_FAB_2d(defined_phi[nlevels-1],0,1, "phi", false, false);
-//        plot_FAB_2d(defined_charge[nlevels-1],0,1, "cd", false, true);
+        //        plot_FAB_2d(defined_phi[nlevels-1],0,1, "phi", false, false);
+        //        plot_FAB_2d(defined_charge[nlevels-1],0,1, "cd", false, true);
 
 
         // Solve linear system
@@ -460,7 +477,7 @@ void Elliptic::solve_static_fields(MFP* mfp, const Real time) const
 
             MultiFab::Copy(ifield, defined_phi[ilev], 0, +FieldDef::ConsIdx::phi, 1, 0);
 
-//            plot_FAB_2d(ifield,+FieldDef::ConsIdx::phi,ifield.nGrow(), "phi", false, true);
+            //            plot_FAB_2d(ifield,+FieldDef::ConsIdx::phi,ifield.nGrow(), "phi", false, true);
         }
 
         // Get fluxes from solver
@@ -534,8 +551,8 @@ void Elliptic::solve_static_fields(MFP* mfp, const Real time) const
 
             }
 
-            //                plot_FAB_2d(*(A_ptr[nlevels-1]),0,0, "A"+num2str(d), false, false);
-            //                plot_FAB_2d(*(rhs_ptr[nlevels-1]),0, "J"+num2str(d), false, true);
+//            plot_FAB_2d(*(A_ptr[nlevels-1]),0,0, "A"+num2str(d), false, false);
+//            plot_FAB_2d(*(rhs_ptr[nlevels-1]),0,0, "J"+num2str(d), false, true);
 
 
             // Solve linear system
@@ -709,7 +726,7 @@ void Elliptic::project_divergence(MFP* mfp, const Real time) const
         // scale the charge and current density appropriately
         charge_density[ilev].mult(-cd_scale, 0);
 
-//        plot_FAB_2d(charge_density[ilev],0, ngrow, "charge density "+num2str(ilev), false, true);
+        //        plot_FAB_2d(charge_density[ilev],0, ngrow, "charge density "+num2str(ilev), false, true);
     }
 
     ParallelDescriptor::Barrier();

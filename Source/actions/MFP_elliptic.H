@@ -25,6 +25,7 @@ public:
 
 
     virtual std::string get_tag() const override {return tag;}
+    virtual ActionType get_type() const override {return ActionType::Elliptic;}
 
     FieldState* field;
     Vector<HydroState*> species;

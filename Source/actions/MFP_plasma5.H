@@ -25,6 +25,7 @@ public:
     virtual Real get_allowed_time_step(MFP* mfp) const override;
 
     virtual std::string get_tag() const override {return tag;}
+    virtual ActionType get_type() const override {return ActionType::Plasma5;}
 
     FieldState* field;
     Vector<HydroState*> species;

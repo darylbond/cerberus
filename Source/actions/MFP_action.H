@@ -17,6 +17,15 @@ public:
     Action();
     ~Action();
 
+    enum class ActionType {
+        Acceleration = 0,
+        CTU,
+        Elliptic,
+        HydroTracer,
+        Lorentz,
+        Plasma5
+    };
+
     int action_idx;
     std::string name;
     Vector<int> state_indexes;
@@ -35,6 +44,7 @@ public:
     virtual Real get_allowed_time_step(MFP* mfp) const {return std::numeric_limits<Real>::max();}
 
     virtual std::string get_tag() const = 0;
+    virtual ActionType get_type() const = 0;
 };
 
 template <typename D>

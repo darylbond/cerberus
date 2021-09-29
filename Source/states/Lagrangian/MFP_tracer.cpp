@@ -8,6 +8,8 @@
 #include <AMReX_MultiCutFab.H>
 #endif
 
+#include "MFP_diagnostics.H"
+
 Vector<std::string> TracerParticle::particle_real_names = {"x_vel", "y_vel", "z_vel"};
 Vector<std::string> TracerParticle::particle_int_names = {};
 
@@ -37,12 +39,14 @@ TracerParticle::TracerParticle(const sol::table& def)
 void TracerParticle::init_data(MFP* mfp, const Real time)
 {
     if (mfp->get_level() == 0)
-        init(mfp->get_parent());
+        init(mfp);
 }
 
 // this should only be called at level 0
-void TracerParticle::init(AmrCore* amr_core, bool make_particles)
+void TracerParticle::init(MFP* mfp, bool make_particles)
 {
+    AmrCore* amr_core = mfp->get_parent();
+
     // generate the particle container
     particles = std::unique_ptr<AmrTParContType>(new AmrTParContType(amr_core));
     particles->SetVerbose(verbosity);
@@ -114,9 +118,9 @@ void TracerParticle::restart(const std::string& dir)
     particles->Restart(dir, "Particles_"+name);
 }
 
-void TracerParticle::redistribute(int level, int finest_level, int ngrow)
+void TracerParticle::redistribute(int level, int finest_level, int ngrow, int local)
 {
-    particles->Redistribute(level, finest_level, ngrow);
+    particles->Redistribute(level, finest_level, ngrow, local);
 }
 
 void TracerParticle::clear()
@@ -206,6 +210,101 @@ void TracerParticle::push_particles(const int level,
     }
 
     return;
+}
+
+Vector<std::string> TracerParticle::get_plot_output_names() const
+{
+    Vector<std::string> plot_names = {"count", "x_vel", "y_vel", "z_vel"};
+
+    return plot_names;
+}
+
+void TracerParticle::get_plot_output(MFP* mfp, MultiFab &plot_data, std::vector<std::string> &plot_names) const
+{
+
+    std::pair<bool,int> get_count = findInVector(plot_names, "count-"+name);
+    std::pair<bool,int> get_u = findInVector(plot_names, "x_vel-"+name);
+    std::pair<bool,int> get_v = findInVector(plot_names, "y_vel-"+name);
+    std::pair<bool,int> get_w = findInVector(plot_names, "z_vel-"+name);
+
+    if (!(get_count.first || get_u.first || get_v.first ||get_w.first)) return;
+
+    // zero out the data
+    if (get_count.first) plot_data.setVal(0.0, get_count.second, 1, 0);
+    if (get_u.first) plot_data.setVal(0.0, get_u.second, 1, 0);
+    if (get_v.first) plot_data.setVal(0.0, get_v.second, 1, 0);
+    if (get_w.first) plot_data.setVal(0.0, get_w.second, 1, 0);
+
+    const auto& P = particles;
+    const int level = mfp->get_level();
+    const Geometry& geom = mfp->Geom();
+
+    const auto plo = geom.ProbLoArray();
+    const Real* dxi = geom.InvCellSize();
+
+    // just do a simple count of how many particles in each cell
+    for(amrex::MFIter mfi= P->MakeMFIter(level) ;mfi.isValid();++mfi) {
+
+        const Box& box = mfi.fabbox();
+
+        FArrayBox& plot = plot_data[mfi];
+
+        Array4<Real> const& plot4 = plot.array();
+
+        // Each grid,tile has a their own local particle container
+        TParTileType& pc = P->DefineAndReturnParticleTile(level, mfi.index(), mfi.LocalTileIndex());
+
+        auto& aos  = pc.GetArrayOfStructs();
+        const int n  = aos.numParticles();
+
+        auto  p_pbox = aos().data();
+
+        IArrayBox counter(box);
+        counter.setVal(0);
+
+        Array4<int> const& counter4 = counter.array();
+
+        amrex::ParallelFor(n,[=] AMREX_GPU_DEVICE (int i)
+        {
+            TParticleType& p  = p_pbox[i];
+            if (p.id() <= 0) return;
+
+            // calculate where we are in index space and cell local space
+            Array<Real,3> loc = {0.0,0.0,0.0};
+            Array<int,3> iloc = {0,0,0};
+
+            for (int d=0; d<AMREX_SPACEDIM; ++d) {
+                loc[d] = (p.pos(d) - plo[d]) * dxi[d];
+                iloc[d] = static_cast<int>(amrex::Math::floor(loc[d]));
+            }
+
+            // accumulate an independent counter for later use
+            counter4(iloc[0], iloc[1], iloc[2]) += 1;
+
+            if (get_count.first) plot4(iloc[0], iloc[1], iloc[2], get_count.second) += 1;
+            if (get_u.first) plot4(iloc[0], iloc[1], iloc[2], get_u.second) += p.rdata(+ParticleIdxR::VX);
+            if (get_v.first) plot4(iloc[0], iloc[1], iloc[2], get_v.second) += p.rdata(+ParticleIdxR::VY);
+            if (get_w.first) plot4(iloc[0], iloc[1], iloc[2], get_w.second) += p.rdata(+ParticleIdxR::VZ);
+
+
+        });
+
+        // average
+        ParallelFor(mfi.fabbox(), [=] AMREX_GPU_DEVICE (int i, int j, int k)
+        {
+
+            const int N = counter4(i,j,k);
+
+            if (N > 0) {
+                if (get_u.first) plot4(i,j,k, get_u.second) /= counter4(i,j,k);
+                if (get_v.first) plot4(i,j,k, get_v.second) /= counter4(i,j,k);
+                if (get_w.first) plot4(i,j,k, get_w.second) /= counter4(i,j,k);
+            }
+
+        });
+
+//        plot_FAB_2d(plot,get_count.second,"count", false, true);
+    }
 }
 
 void TracerParticle::write_info(nlohmann::json& js) const

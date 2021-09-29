@@ -12,7 +12,7 @@ public:
     TracerParticle();
     TracerParticle(const sol::table& def);
     virtual void init_data(MFP* mfp, const Real time) override;
-    virtual void init(AmrCore *amr_core, bool make_particles=true) override;
+    virtual void init(MFP* mfp, bool make_particles=true) override;
 
     virtual Real get_allowed_time_step(MFP* mfp) const override {return std::numeric_limits<Real>::max();}
     void push_particles(const int level,
@@ -25,9 +25,12 @@ public:
                     #endif
                         ) const;
 
+    virtual Vector<std::string> get_plot_output_names() const override;
+    virtual void get_plot_output(MFP *mfp, MultiFab &plot_data, std::vector<std::string> &plot_names) const override;
+
     virtual void checkpoint(const std::string& dir) override;
     virtual void restart(const std::string& dir) override;
-    virtual void redistribute(int level, int finest_level, int ngrow) override;
+    virtual void redistribute(int level=0, int finest_level=-1, int ngrow=0, int local=0) override;
     virtual void clear() override;
 
     virtual StateType get_type() const override {return StateType::TracerParticle;}

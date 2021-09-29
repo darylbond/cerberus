@@ -301,6 +301,13 @@ void MFP::getPlotData(MultiFab &plot_data,
 //        plot_FAB_2d(plot_data, i, 0, plot_names[i], false, true);
 //    }
 
+    // now do the lagrangian states
+    for (const int& global_idx : lagrangian_states) {
+        LagrangianState& istate = LagrangianState::get_state_global(global_idx);
+
+        istate.get_plot_output(this, plot_data, plot_names);
+    }
+
     return;
 }
 

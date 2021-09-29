@@ -23,7 +23,10 @@ public:
         Elliptic,
         HydroTracer,
         Lorentz,
-        Plasma5
+        Plasma5,
+#ifdef SYMPLECTIC
+        Symplectic
+#endif
     };
 
     int action_idx;
@@ -40,6 +43,11 @@ public:
 
     // just do something, typically at the end of the update main loop
     virtual void apply_correction(MFP* mfp, const Real time, const Real dt) const {}
+
+#ifdef SYMPLECTIC
+    // symplectic update
+    virtual void apply_symplectic_update(MFP* mfp, const Real time, const Real dt) const {}
+#endif
 
     virtual Real get_allowed_time_step(MFP* mfp) const {return std::numeric_limits<Real>::max();}
 

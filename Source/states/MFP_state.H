@@ -62,14 +62,6 @@ public:
     virtual StateType get_type() const {return StateType::Null;}
 
     virtual Vector<std::string> get_plot_output_names() const {return {};}
-    virtual void get_plot_output(const Box& box,
-                                 const FArrayBox& src,
-                                 std::map<std::string,FArrayBox>& out,
-                                 Vector<std::string>& updated
-                             #ifdef AMREX_USE_EB
-                                 ,const FArrayBox& vfrac
-                             #endif
-                                 ) const {return;}
 
     virtual void init_from_lua() {}
     virtual void post_init_from_lua() {}

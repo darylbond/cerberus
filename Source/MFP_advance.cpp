@@ -18,7 +18,7 @@ Real MFP::advance(Real time, Real dt, int iteration, int ncycle)
     C_new.setVal(0.0);
 
     // sety up the scratch space for derivatives of the eulerian data
-    if (eulerian_du.empty()) {
+    if (eulerian_du.empty() && need_scratch_space) {
         eulerian_du.resize(eulerian_states.size());
 
 #ifdef AMREX_USE_EB
@@ -41,6 +41,11 @@ Real MFP::advance(Real time, Real dt, int iteration, int ncycle)
     case TimeIntegrator::StrangSplitting:
         advance_strang(time, dt, iteration, ncycle);
         break;
+#ifdef SYMPLECTIC
+    case TimeIntegrator::Symplectic:
+        advance_symplectic(time, dt, iteration, ncycle);
+        break;
+#endif
     default:
         advance_euler(time, dt, iteration, ncycle);
     }
@@ -158,3 +163,21 @@ void MFP::advance_strang(Real time, Real dt, int iteration, int ncycle)
     // add dU to new data (new = new** + dU)
     apply_derivative(eulerian_du);
 }
+
+#ifdef SYMPLECTIC
+void MFP::advance_symplectic(Real time, Real dt, int iteration, int ncycle)
+{
+    // copy old into new
+    for (const int& global_idx : eulerian_states) {
+        EulerianState& istate = EulerianState::get_state_global(global_idx);
+        const int data_idx = istate.data_idx;
+        MultiFab& old_data = get_old_data(data_idx);
+        MultiFab& new_data = get_new_data(data_idx);
+        MultiFab::Copy(new_data, old_data,0,0,old_data.nComp(),0);
+    }
+
+    for (const auto& act : actions) {
+        act->apply_symplectic_update(this, time, dt);
+    }
+}
+#endif

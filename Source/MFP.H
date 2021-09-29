@@ -85,6 +85,7 @@ public:
     enum class TimeIntegrator {
         Euler = 0,
         StrangSplitting,
+        Symplectic,
     };
 
     static TimeIntegrator time_integration_scheme;
@@ -92,6 +93,10 @@ public:
     void advance_euler(Real time, Real dt, int iteration, int ncycle);
     void advance_strang(Real time, Real dt, int iteration, int ncycle);
     void apply_derivative(Vector<std::pair<int, MultiFab> > &dU);
+
+#ifdef SYMPLECTIC
+    void advance_symplectic(Real time, Real dt, int iteration, int ncycle);
+#endif
 
     Real estTimeStep();
 
@@ -204,6 +209,7 @@ public:
     static Vector<size_t> eulerian_states;
     static Vector<size_t> lagrangian_states;
 
+    static bool need_scratch_space;
     Vector<std::pair<int,MultiFab>> eulerian_du;
 
     static Vector<std::unique_ptr<Action>> actions;

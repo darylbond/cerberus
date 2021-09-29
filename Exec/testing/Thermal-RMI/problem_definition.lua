@@ -264,15 +264,15 @@ actions = {
 
     plasma={
         type='plasma5',
-        solver = 'implicit',
+        solver = 'explicit',
         states = {'ion', 'electron', 'field',},
      },
 
-    --  divergence_cleaning = {
-    --     type='elliptic',
-    --     projection=1,
-    --     state = 'field',
-    --  },
+     divergence_cleaning = {
+        type='elliptic',
+        projection=1,
+        state = 'field',
+     },
 
      tracer_electron={
          type='hydro_tracer',

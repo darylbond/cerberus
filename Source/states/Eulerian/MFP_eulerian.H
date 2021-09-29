@@ -35,6 +35,15 @@ public:
     virtual int get_num_cons() const {return 0;}
     virtual const Vector<std::string>& get_cons_names() const = 0;
 
+    virtual void get_plot_output(const Box& box,
+                                 const FArrayBox& src,
+                                 std::map<std::string,FArrayBox>& out,
+                                 Vector<std::string>& updated
+                             #ifdef AMREX_USE_EB
+                                 ,const FArrayBox& vfrac
+                             #endif
+                                 ) const {return;}
+
     virtual void set_reflux();
     virtual void set_reconstruction();
     virtual int get_num_grow() const = 0;

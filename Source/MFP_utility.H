@@ -115,6 +115,15 @@ amrex::Vector<T> arr2vec(const amrex::Array<T, N> &in) {
     return vec;
 }
 
+// === APPEND VECTOR ===
+
+template <typename T>
+void append(std::vector<T>& a, const std::vector<T>& b)
+{
+    a.reserve(a.size() + b.size());
+    a.insert(a.end(), b.begin(), b.end());
+}
+
 // === CLAMP NUMBER WITHIN RANGE ===
 
 template <typename T>

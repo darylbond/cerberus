@@ -76,10 +76,15 @@ void MFP::read_config()
 
     if (time_integrator == "euler") {
         time_integration_scheme = TimeIntegrator::Euler;
+        need_scratch_space = true;
     } else if (time_integrator == "strang") {
         time_integration_scheme = TimeIntegrator::StrangSplitting;
+        need_scratch_space = true;
+    } else if (time_integrator == "symplectic") {
+        time_integration_scheme = TimeIntegrator::Symplectic;
+        need_scratch_space = false;
     } else {
-        Abort("Time integration scheme "+time_integrator+" is not recognised, try ['euler', ...]");
+        Abort("Time integration scheme '"+time_integrator+"' is not recognised, try ['euler', 'strang', 'symplectic']");
     }
 
     linear_solver_verbosity = lua["linear_solver_verbosity"];

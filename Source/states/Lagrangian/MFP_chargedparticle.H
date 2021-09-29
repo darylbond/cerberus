@@ -4,6 +4,7 @@
 
 #include "MFP_lagrangian.H"
 #include "MFP_utility.H"
+#include "MFP_distribution.h"
 
 using namespace amrex;
 
@@ -13,11 +14,11 @@ public:
     ChargedParticle();
     ChargedParticle(const sol::table& def);
     virtual void init_data(MFP* mfp, const Real time) override;
-    virtual void init(AmrCore *amr_core, bool make_particles=true) override;
-    virtual Real get_allowed_time_step(MFP* mfp) const override {return std::numeric_limits<Real>::max();}
+    virtual void init(MFP* mfp, bool make_particles=true) override;
+    virtual Real get_allowed_time_step(MFP* mfp) const override;
     virtual void checkpoint(const std::string& dir) override;
     virtual void restart(const std::string& dir) override;
-    virtual void redistribute(int level, int finest_level, int ngrow) override;
+    virtual void redistribute(int level=0, int finest_level=-1, int ngrow=0, int local=0) override;
     virtual int num_source() override {return 3;}
     virtual void calculate_source(MFIter& mfi, FArrayBox& S, Geometry &geom, int level) const override;
     virtual void clear() override;
@@ -35,6 +36,9 @@ public:
                         ,const EBCellFlagFab& flag
                     #endif
                         );
+
+    virtual Vector<std::string> get_plot_output_names() const override;
+    virtual void get_plot_output(MFP *mfp, MultiFab &plot_data, std::vector<std::string> &plot_names) const override;
 
     virtual StateType get_type() const override {return StateType::ChargedParticle;}
 
@@ -62,9 +66,8 @@ public:
 
     int state_idx;
     int verbosity;
-    Real charge, mass;
-    Vector<RealArray> initial_positions;
-    Vector<Array<Real,3>> initial_velocities;
+
+    std::unique_ptr<ParticleDistribution> initial;
 
     static Vector<std::string> particle_real_names;
     static Vector<std::string> particle_int_names;

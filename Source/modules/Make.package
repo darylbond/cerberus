@@ -9,6 +9,9 @@ CEXE_sources += MFP_transforms.cpp
 CEXE_headers += MFP_refine.H
 CEXE_sources += MFP_refine.cpp
 
+CEXE_headers += MFP_pdf.H
+CEXE_sources += MFP_pdf.cpp
+
 include $(TOP)/Source/modules/eb/Make.package
 include $(TOP)/Source/modules/boundary/Make.package
 

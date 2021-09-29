@@ -22,9 +22,12 @@ void MFP::variableSetUp()
 
     Cost_Idx = desc_lst.size();
 
-    // just grab any old BCRec, its not applied anyway
+    // just generate a bc
     BCRec bc;
-    set_scalar_bc(bc, states[0]->boundary_conditions.fill_bc[0]);
+    for (int i=0; i<AMREX_SPACEDIM; ++i) {
+        bc.setLo(i,BCType::foextrap);
+        bc.setHi(i,BCType::foextrap);
+    }
 
     desc_lst.addDescriptor(Cost_Idx, IndexType::TheCellType(),
                            StateDescriptor::Point, 0, 1, &pc_interp);

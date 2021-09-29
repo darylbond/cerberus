@@ -7,5 +7,8 @@ CEXE_sources += MFP_tracer.cpp
 CEXE_headers += MFP_chargedparticle.H
 CEXE_sources += MFP_chargedparticle.cpp
 
+CEXE_headers += MFP_distribution.H
+CEXE_sources += MFP_distribution.cpp
+
 INCLUDE_LOCATIONS += $(TOP)/Source/states/Lagrangian
 VPATH_LOCATIONS   += $(TOP)/Source/states/Lagrangian

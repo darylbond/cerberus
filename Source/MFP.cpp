@@ -46,6 +46,8 @@ std::map<std::string, int> MFP::state_index;
 Vector<size_t> MFP::eulerian_states;
 Vector<size_t> MFP::lagrangian_states;
 
+bool MFP::need_scratch_space;
+
 Vector<std::unique_ptr<Action>> MFP::actions;
 Vector<std::string> MFP::source_names;
 std::map<std::string, int> MFP::source_index;
@@ -351,7 +353,7 @@ MFP::ParticlePostRestart (const std::string& dir)
         // retrieve particle data
         for (const auto& i : lagrangian_states) {
             LagrangianState& istate = LagrangianState::get_state_global(i);
-            istate.init(parent, false);
+            istate.init(this, false);
             istate.restart(dir);
         }
 

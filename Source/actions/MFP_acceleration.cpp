@@ -2,8 +2,6 @@
 #include "MFP.H"
 #include "MFP_state.H"
 #include "sol.hpp"
-#include "Eigen"
-#include "Dense"
 
 std::string Acceleration::tag = "acceleration";
 bool Acceleration::registered = GetActionFactory().Register(Acceleration::tag, ActionBuilder<Acceleration>);

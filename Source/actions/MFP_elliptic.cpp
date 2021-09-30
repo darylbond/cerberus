@@ -18,7 +18,7 @@ using Location = amrex::MLLinOp::Location;
 #include "MFP.H"
 #include "MFP_state.H"
 #include "MFP_plasma5.H"
-//#include "MFP_lorentz.H"
+#include "MFP_lorentz.H"
 #include "sol.hpp"
 #include "MFP_diagnostics.H"
 
@@ -232,11 +232,11 @@ void Elliptic::solve_static_fields(MFP* mfp, const Real time) const
                 hydro_states = plasma.species;
                 break;
             }
-//            case ActionType::Lorentz : {
-//                Lorentz& plasma = static_cast<Lorentz&>(*(mfp->actions[src_idx]));
-//                hydro_states = plasma.species;
-//                break;
-//            }
+            case ActionType::Lorentz : {
+                Lorentz& plasma = static_cast<Lorentz&>(*(mfp->actions[src_idx]));
+                hydro_states = plasma.species;
+                break;
+            }
             default:
                 continue;
             }

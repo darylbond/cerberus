@@ -12,16 +12,16 @@ public:
     Elliptic(const int idx, const sol::table &def);
     ~Elliptic();
 
-    virtual void apply_correction(MFP* mfp, const Real time, const Real dt) const override;
+    virtual void apply_change(MFP* mfp, const Real time, const Real dt) override;
 
-    void solve_static_fields(MFP* mfp, const Real time) const;
-    void project_divergence(MFP* mfp, const Real time) const;
+    void solve_static_fields(MFP* mfp, const Real time);
+    void project_divergence(MFP* mfp, const Real time);
     void solve_divergence(MFP* mfp,
                           const int state_idx,
                           const int vector_idx,
                           const int phi_idx,
                           const BCRec &bc,
-                          Vector<MultiFab*> S_cc_ptr={}) const;
+                          Vector<MultiFab*> S_cc_ptr={});
 
 
     virtual std::string get_tag() const override {return tag;}

@@ -2103,6 +2103,9 @@ void HydroState::calc_fluxes(const Box& box,
                     // load the flux into the array
                     for (int n=0; n<n_cons(); ++n) {
                         flux4(i,j,k,n) += F[n];
+
+                        AMREX_ASSERT(std::isfinite(flux4(i,j,k,n)));
+
                     }
 
                 }

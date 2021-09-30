@@ -13,8 +13,11 @@ CEXE_sources += MFP_hydro_tracer.cpp
 CEXE_headers += MFP_acceleration.H
 CEXE_sources += MFP_acceleration.cpp
 
-CEXE_headers += MFP_CTU.H
-CEXE_sources += MFP_CTU.cpp
+CEXE_headers += MFP_CTU_hydro.H
+CEXE_sources += MFP_CTU_hydro.cpp
+
+CEXE_headers += MFP_CTU_Braginskii.H
+CEXE_sources += MFP_CTU_Braginskii.cpp
 
 CEXE_headers += MFP_elliptic.H
 CEXE_sources += MFP_elliptic.cpp

@@ -61,7 +61,7 @@ Elliptic::Elliptic(const int idx, const sol::table &def)
     return;
 }
 
-void Elliptic::apply_correction(MFP* mfp, const Real time, const Real dt) const
+void Elliptic::apply_change(MFP* mfp, const Real time, const Real dt)
 {
 
     if (mfp->get_level() > 0) return; // only do this once per coarse timestep
@@ -144,7 +144,7 @@ void set_field_bcs(Array<LinOpBCType, AMREX_SPACEDIM> &bc_lo,
     }
 }
 
-void Elliptic::solve_static_fields(MFP* mfp, const Real time) const
+void Elliptic::solve_static_fields(MFP* mfp, const Real time)
 {
     BL_PROFILE("Elliptic::solve_static_fields()");
 #if AMREX_SPACEDIM > 1
@@ -627,7 +627,7 @@ void Elliptic::solve_static_fields(MFP* mfp, const Real time) const
 }
 
 
-void Elliptic::project_divergence(MFP* mfp, const Real time) const
+void Elliptic::project_divergence(MFP* mfp, const Real time)
 {
     BL_PROFILE("Elliptic::project_divergence");
     // MLNodeLaplacian not implemented for 1D
@@ -743,7 +743,7 @@ void Elliptic::solve_divergence(MFP* mfp,
                                 const int vector_idx,
                                 const int phi_idx,
                                 const BCRec &bc,
-                                Vector<MultiFab*> S_cc_ptr) const
+                                Vector<MultiFab*> S_cc_ptr)
 {
     BL_PROFILE("MFP::solve_divergence");
     Amr& amr = *(mfp->get_parent());

@@ -40,7 +40,7 @@ Acceleration::Acceleration(const int idx, const sol::table &def)
     return;
 }
 
-void Acceleration::calc_time_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt) const
+void Acceleration::calc_time_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt)
 {
     BL_PROFILE("Acceleration::solve");
 

@@ -94,10 +94,6 @@ public:
     void advance_strang(Real time, Real dt, int iteration, int ncycle);
     void apply_derivative(Vector<std::pair<int, MultiFab> > &dU);
 
-#ifdef SYMPLECTIC
-    void advance_symplectic(Real time, Real dt, int iteration, int ncycle);
-#endif
-
     Real estTimeStep();
 
 #ifdef AMREX_PARTICLES
@@ -206,7 +202,7 @@ public:
     static Vector<std::unique_ptr<State>> states;
     static Vector<std::string> state_names;
     static std::map<std::string, int> state_index;
-    static Vector<size_t> eulerian_states;
+    static Vector<size_t> eulerian_states; // mapping from data_idx to global_idx
     static Vector<size_t> lagrangian_states;
 
     static bool need_scratch_space;

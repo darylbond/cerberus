@@ -41,7 +41,7 @@ HydroTracer::HydroTracer(const int idx, const sol::table &def)
     if (!tracer_state) Abort("Source '"+name+"' unable to attach to tracer particles '"+particle_name+"'");
 }
 
-void HydroTracer::apply_spatial_derivative(MFP* mfp, const Real time, const Real dt) const
+void HydroTracer::apply_spatial_derivative(MFP* mfp, const Real time, const Real dt)
 {
     BL_PROFILE("HydroTracer::solve");
 

@@ -1,4 +1,4 @@
-#include "MFP_CTU.H"
+#include "MFP_CTU_hydro.H"
 #include "MFP.H"
 #include "MFP_state.H"
 #include "sol.hpp"
@@ -6,13 +6,13 @@
 #include "Dense"
 #include "MFP_diagnostics.H"
 
-std::string CTU::tag = "CTU";
-bool CTU::registered = GetActionFactory().Register(CTU::tag, ActionBuilder<CTU>);
+std::string HydroCTU::tag = "CTU";
+bool HydroCTU::registered = GetActionFactory().Register(HydroCTU::tag, ActionBuilder<HydroCTU>);
 
-CTU::CTU(){}
-CTU::~CTU(){}
+HydroCTU::HydroCTU(){}
+HydroCTU::~HydroCTU(){}
 
-CTU::CTU(const int idx, const sol::table &def)
+HydroCTU::HydroCTU(const int idx, const sol::table &def)
 {
     action_idx = idx;
     name = def["name"];
@@ -40,7 +40,7 @@ CTU::CTU(const int idx, const sol::table &def)
 
 
 
-void CTU::calc_spatial_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt) const
+void HydroCTU::calc_spatial_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt)
 {
     BL_PROFILE("CTU::calc_spatial_derivative");
 

@@ -168,7 +168,7 @@ public:
     void write_info(nlohmann::json &js) const override;
 
     static FieldState& get_state_global(const int idx) {return static_cast<FieldState&>(MFP::get_state(idx));}
-
+    static FieldState& get_state(const std::string& name) {return static_cast<FieldState&>(MFP::get_state(name));}
 };
 
 #endif // FIELDSTATE_H

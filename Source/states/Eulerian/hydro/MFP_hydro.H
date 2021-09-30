@@ -242,6 +242,7 @@ public:
     virtual void write_info(nlohmann::json& js) const override;
 
     static HydroState& get_state_global(const int idx) {return static_cast<HydroState&>(MFP::get_state(idx));}
+    static HydroState& get_state(const std::string& name) {return static_cast<HydroState&>(MFP::get_state(name));}
 
 };
 

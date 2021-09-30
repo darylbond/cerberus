@@ -69,12 +69,12 @@ void EulerianState::init_from_lua()
 }
 
 void EulerianState::update_face_prim(const Box& box, const Geometry& geom,
-                                  Array<FArrayBox, AMREX_SPACEDIM> &r_lo,
-                                  Array<FArrayBox, AMREX_SPACEDIM> &r_hi,
-                                  #ifdef AMREX_USE_EB
-                                  const EBCellFlagFab& flag,
-                                  #endif
-                                  const Real time, const bool do_all) const
+                                     Array<FArrayBox, AMREX_SPACEDIM> &r_lo,
+                                     Array<FArrayBox, AMREX_SPACEDIM> &r_hi,
+                                     #ifdef AMREX_USE_EB
+                                     const EBCellFlagFab& flag,
+                                     #endif
+                                     const Real time, const bool do_all) const
 {
     BL_PROFILE("EulerianState::update_face_prim");
     const Box domain = geom.Domain();
@@ -538,6 +538,70 @@ void EulerianState::calc_divergence(const Box& box,
 
     return;
 }
+
+void EulerianState::calc_slope(const Box& box,
+                               const FArrayBox& src,
+                               FArrayBox &slope,
+                               #ifdef AMREX_USE_EB
+                               const EBCellFlagFab &flag,
+                               #endif
+                               const Real *dx,
+                               const int src_idx,
+                               const int slope_idx,
+                               const int dim,
+                               Reconstruction &reco)
+{
+    BL_PROFILE("EulerianState::calc_slope");
+    const Dim3 lo = amrex::lbound(box);
+    const Dim3 hi = amrex::ubound(box);
+
+    Array4<const Real> const& src4 = src.array();
+
+#ifdef AMREX_USE_EB
+    Array4<const EBCellFlag> const& f4 = flag.array();
+    bool check_eb = flag.getType() != FabType::regular;
+
+#endif
+
+    Vector<Real> stencil(reco.stencil_length);
+    int offset = reco.stencil_length/2;
+    Array<int,3> stencil_index;
+
+    Array4<Real> const& s4 = slope.array();
+
+    for     (int k = lo.z; k <= hi.z; ++k) {
+        for   (int j = lo.y; j <= hi.y; ++j) {
+            AMREX_PRAGMA_SIMD
+                    for (int i = lo.x; i <= hi.x; ++i) {
+
+
+                stencil_index.fill(0);
+
+#ifdef AMREX_USE_EB
+                if (check_eb) {
+                    // covered cell doesn't need calculating
+                    if (f4(i,j,k).isCovered() || check_covered_stencil(f4, i, j, k, dim, reco.stencil_length)) {
+                        s4(i,j,k) = 0.0;
+                        continue;
+                    }
+                }
+#endif
+
+                for (int s=0; s<reco.stencil_length; ++s) {
+                    stencil_index[dim] = s - offset;
+                    stencil[s] = src4(i+stencil_index[0], j+stencil_index[1], k+stencil_index[2], src_idx);
+                }
+
+                // perform reconstruction
+                s4(i,j,k,slope_idx) = reco.get_slope(stencil)/dx[dim]; // account for local cell size
+            }
+        }
+    }
+
+
+    return;
+}
+
 
 void EulerianState::write_info(nlohmann::json &js) const
 {

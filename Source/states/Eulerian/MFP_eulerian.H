@@ -474,10 +474,23 @@ public:
                          const Real *dx,
                          const Real dt) const;
 
+    static void calc_slope(const Box& box,
+                           const FArrayBox& src,
+                           FArrayBox &slope,
+                       #ifdef AMREX_USE_EB
+                           const EBCellFlagFab &flag,
+                       #endif
+                           const Real *dx,
+                           const int src_idx,
+                           const int slope_idx,
+                           const int dim,
+                           Reconstruction &reco);
+
     virtual void write_info(nlohmann::json& js) const override;
 
     static EulerianState& get_state_global(const int idx) {return static_cast<EulerianState&>(MFP::get_state(idx));}
     static EulerianState& get_state(const int idx) {return static_cast<EulerianState&>(MFP::get_state(MFP::eulerian_states[idx]));}
+    static EulerianState& get_state(const std::string& name) {return static_cast<EulerianState&>(MFP::get_state(name));}
 
 };
 

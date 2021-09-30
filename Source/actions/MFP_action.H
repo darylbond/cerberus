@@ -34,22 +34,17 @@ public:
     Vector<int> state_indexes;
 
     // calculate time and space derivatives for situations where we can accumulate the effects
-    virtual void calc_time_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt) const {}
-    virtual void calc_spatial_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt) const {}
+    virtual void calc_time_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt) {}
+    virtual void calc_spatial_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt) {}
 
     // directly update quantities where an accumulation is not possible, these will overwrite stuff!!
-    virtual void apply_time_derivative(MFP* mfp, const Real time, const Real dt) const {}
-    virtual void apply_spatial_derivative(MFP* mfp, const Real time, const Real dt) const {}
+    virtual void apply_time_derivative(MFP* mfp, const Real time, const Real dt) {}
+    virtual void apply_spatial_derivative(MFP* mfp, const Real time, const Real dt) {}
 
     // just do something, typically at the end of the update main loop
-    virtual void apply_correction(MFP* mfp, const Real time, const Real dt) const {}
+    virtual void apply_change(MFP* mfp, const Real time, const Real dt) {}
 
-#ifdef SYMPLECTIC
-    // symplectic update
-    virtual void apply_symplectic_update(MFP* mfp, const Real time, const Real dt) const {}
-#endif
-
-    virtual Real get_allowed_time_step(MFP* mfp) const {return std::numeric_limits<Real>::max();}
+    virtual Real get_allowed_time_step(MFP* mfp) {return std::numeric_limits<Real>::max();}
 
     virtual std::string get_tag() const = 0;
     virtual ActionType get_type() const = 0;

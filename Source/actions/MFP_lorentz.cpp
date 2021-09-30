@@ -48,7 +48,7 @@ Lorentz::Lorentz(const int idx, const sol::table &def)
     return;
 }
 
-void Lorentz::calc_time_derivative(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, const Real time, const Real dt) const
+void Lorentz::calc_time_derivative(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, const Real time, const Real dt)
 {
     BL_PROFILE("Lorentz::calc_time_derivative");
 

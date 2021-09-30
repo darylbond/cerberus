@@ -58,7 +58,7 @@ Plasma5::Plasma5(const int idx, const sol::table &def)
     return;
 }
 
-void Plasma5::calc_time_derivative(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, const Real time, const Real dt) const
+void Plasma5::calc_time_derivative(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, const Real time, const Real dt)
 {
     BL_PROFILE("Plasma5::solve");
 
@@ -76,7 +76,7 @@ void Plasma5::calc_time_derivative(MFP* mfp, Vector<std::pair<int, MultiFab> > &
 
 }
 
-void Plasma5::explicit_solve(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt) const
+void Plasma5::explicit_solve(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt)
 {
     BL_PROFILE("Plasma5::explicit_solve");
 
@@ -238,7 +238,7 @@ void Plasma5::explicit_solve(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, cons
     }
 }
 
-void Plasma5::implicit_solve(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, const Real time, const Real dt) const
+void Plasma5::implicit_solve(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, const Real time, const Real dt)
 {
     BL_PROFILE("Plasma5::implicit_solve");
 
@@ -451,7 +451,7 @@ void Plasma5::implicit_solve(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, co
     }
 }
 
-Real Plasma5::get_allowed_time_step(MFP* mfp) const
+Real Plasma5::get_allowed_time_step(MFP* mfp)
 {
 
     if (solver != TimeIntegrator::ForwardsEuler) return std::numeric_limits<Real>::max();

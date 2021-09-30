@@ -204,7 +204,7 @@ void MFP::getPlotData(MultiFab &plot_data,
 
 #ifdef AMREX_USE_EB
             EBData& eb = get_eb_data(istate.global_idx);
-//            const EBCellFlagFab& flag = eb.flags[mfi];
+            //            const EBCellFlagFab& flag = eb.flags[mfi];
             const FArrayBox& vfrac = eb.volfrac[mfi];
 #endif
 
@@ -257,7 +257,7 @@ void MFP::getPlotData(MultiFab &plot_data,
             }*/
         }
 
-//        plot_FABs_2d(dat_arrays,0,false,true);
+        //        plot_FABs_2d(dat_arrays,0,false,true);
 
         // now iterate over the data, load it into a map, and call the lua functions on it
         const Dim3 lo = amrex::lbound(orig_box);
@@ -297,16 +297,18 @@ void MFP::getPlotData(MultiFab &plot_data,
 
     }
 
-//    for (int i=0; i<plot_data.nComp(); ++i) {
-//        plot_FAB_2d(plot_data, i, 0, plot_names[i], false, true);
-//    }
+    //    for (int i=0; i<plot_data.nComp(); ++i) {
+    //        plot_FAB_2d(plot_data, i, 0, plot_names[i], false, true);
+    //    }
 
+#ifdef AMREX_PARTICLES
     // now do the lagrangian states
     for (const int& global_idx : lagrangian_states) {
         LagrangianState& istate = LagrangianState::get_state_global(global_idx);
 
         istate.get_plot_output(this, plot_data, plot_names);
     }
+#endif
 
     return;
 }

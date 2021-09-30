@@ -17,12 +17,12 @@ public:
         BackwardsEuler,
     };
 
-    virtual void calc_time_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU,  const Real time, const Real dt) const override;
+    virtual void calc_time_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU,  const Real time, const Real dt) override;
 
-    void explicit_solve(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, const Real time, const Real dt) const;
-    void implicit_solve(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt) const;
+    void explicit_solve(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, const Real time, const Real dt);
+    void implicit_solve(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt);
 
-    virtual Real get_allowed_time_step(MFP* mfp) const override;
+    virtual Real get_allowed_time_step(MFP* mfp) override;
 
     virtual std::string get_tag() const override {return tag;}
     virtual ActionType get_type() const override {return ActionType::Plasma5;}

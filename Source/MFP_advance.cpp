@@ -34,6 +34,15 @@ Real MFP::advance(Real time, Real dt, int iteration, int ncycle)
         }
     }
 
+    // copy old into new
+    for (const int& global_idx : eulerian_states) {
+        EulerianState& istate = EulerianState::get_state_global(global_idx);
+        const int data_idx = istate.data_idx;
+        MultiFab& old_data = get_old_data(data_idx);
+        MultiFab& new_data = get_new_data(data_idx);
+        MultiFab::Copy(new_data, old_data,0,0,old_data.nComp(),0);
+    }
+
     switch (time_integration_scheme) {
     case TimeIntegrator::Euler:
         advance_euler(time, dt, iteration, ncycle);
@@ -43,7 +52,7 @@ Real MFP::advance(Real time, Real dt, int iteration, int ncycle)
         break;
 #ifdef SYMPLECTIC
     case TimeIntegrator::Symplectic:
-        advance_symplectic(time, dt, iteration, ncycle);
+        // do nothing, handled by 'apply_change'
         break;
 #endif
     default:
@@ -52,7 +61,7 @@ Real MFP::advance(Real time, Real dt, int iteration, int ncycle)
 
     // apply any post timestep corrections
     for (const auto& act : actions) {
-        act->apply_correction(this,time, dt);
+        act->apply_change(this,time, dt);
     }
 
     return dt;
@@ -63,6 +72,8 @@ void MFP::apply_derivative(Vector<std::pair<int,MultiFab>>& dU)
     for (int data_idx = 0; data_idx < eulerian_states.size(); ++data_idx) {
 
         if (!dU[data_idx].first) continue;
+
+        plot_FAB_2d(dU[data_idx].second,1, 0, "dU[1] "+EulerianState::get_state(data_idx).name, false, true);
 
         MultiFab& new_data = get_new_data(data_idx);
 
@@ -83,15 +94,6 @@ void MFP::advance_euler(Real time, Real dt, int iteration, int ncycle)
     // zero out the derivative accumulator
     for (auto& dU : eulerian_du) {
         dU.second.setVal(0.0);
-    }
-
-    // copy old into new
-    for (const int& global_idx : eulerian_states) {
-        EulerianState& istate = EulerianState::get_state_global(global_idx);
-        const int data_idx = istate.data_idx;
-        MultiFab& old_data = get_old_data(data_idx);
-        MultiFab& new_data = get_new_data(data_idx);
-        MultiFab::Copy(new_data, old_data,0,0,old_data.nComp(),0);
     }
 
     for (const auto& act : actions) {
@@ -118,15 +120,6 @@ void MFP::advance_strang(Real time, Real dt, int iteration, int ncycle)
     // zero out the derivative accumulator
     for (auto& dU : eulerian_du) {
         dU.second.setVal(0.0);
-    }
-
-    // copy old into new
-    for (const int& global_idx : eulerian_states) {
-        EulerianState& istate = EulerianState::get_state_global(global_idx);
-        const int data_idx = istate.data_idx;
-        MultiFab& old_data = get_old_data(data_idx);
-        MultiFab& new_data = get_new_data(data_idx);
-        MultiFab::Copy(new_data, old_data,0,0,old_data.nComp(),0);
     }
 
     for (const auto& act : actions) {
@@ -163,21 +156,3 @@ void MFP::advance_strang(Real time, Real dt, int iteration, int ncycle)
     // add dU to new data (new = new** + dU)
     apply_derivative(eulerian_du);
 }
-
-#ifdef SYMPLECTIC
-void MFP::advance_symplectic(Real time, Real dt, int iteration, int ncycle)
-{
-    // copy old into new
-    for (const int& global_idx : eulerian_states) {
-        EulerianState& istate = EulerianState::get_state_global(global_idx);
-        const int data_idx = istate.data_idx;
-        MultiFab& old_data = get_old_data(data_idx);
-        MultiFab& new_data = get_new_data(data_idx);
-        MultiFab::Copy(new_data, old_data,0,0,old_data.nComp(),0);
-    }
-
-    for (const auto& act : actions) {
-        act->apply_symplectic_update(this, time, dt);
-    }
-}
-#endif

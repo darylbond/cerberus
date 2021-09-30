@@ -20,9 +20,9 @@ public:
                         #ifdef AMREX_USE_EB
                         ,const EBCellFlagFab& flag
                         #endif
-                        ) const;
+                        );
 
-    virtual void apply_spatial_derivative(MFP* mfp, const Real time, const Real dt) const override;
+    virtual void apply_spatial_derivative(MFP* mfp, const Real time, const Real dt) override;
 
 
     virtual std::string get_tag() const override {return tag;}

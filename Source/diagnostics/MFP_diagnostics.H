@@ -15,6 +15,36 @@
 namespace plt = matplotlibcpp;
 using namespace amrex;
 
+template<size_t N>
+void plot_history_1d(Vector<std::pair<Real,Array<Real,N>>>& history, std::string title, bool block)
+{
+    Vector<double> x(history.size());
+    Vector<double> y(history.size());
+
+    for (int i=0; i<history.size(); ++i) {
+        x[i] = history[i].first;
+    }
+
+    if (block)
+        plt::figure_size(1200, 780);
+
+    for (int n=0; n<N; ++n) {
+
+        for (int i=0; i<history.size(); ++i) {
+            y[i] = history[i].second[n];
+        }
+
+        plt::plot(x,y);
+    }
+
+    plt::title(title);
+
+    if (block)
+        plt::show(block);
+
+    return;
+}
+
 void calc_gradient(const Box& box,
                    FArrayBox& data,
                    FArrayBox& slope,

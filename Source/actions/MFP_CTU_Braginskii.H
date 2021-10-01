@@ -5,7 +5,6 @@
 #include "MFP_action.H"
 #include "MFP_hydro.H"
 #include "MFP_field.H"
-#include "LSODA.H"
 
 class BraginskiiCTU : public Action
 {
@@ -206,8 +205,37 @@ public:
                 const Array<Real, AMREX_SPACEDIM> slopes,
                 Array<Real, +HydroDef::ConsIdx::NUM> &dU) const;
 
-    static int rhs(double t, Vector<Real> &y, Vector<Real> &dydt, const int offset);
 
+    enum class DataIdx {
+        IonMass=0,
+        IonCharge,
+        IonGamma,
+        IonDensity,
+        ElectronMass,
+        ElectronCharge,
+        ElectronGamma,
+        ElectronDensity,
+        Bx,
+        By,
+        Bz,
+        AMREX_D_DECL(dTdx,dTdy,dTdz),
+        NUM
+    };
+
+    enum class VectorIdx {
+        IonXmom=0,
+        IonYmom,
+        IonZmom,
+        IonEden,
+        ElectronXmom,
+        ElectronYmom,
+        ElectronZmom,
+        ElectronEden,
+        NUM
+    };
+
+    static int rhs(Real t, Array<Real,+VectorIdx::NUM> y, Array<Real,+VectorIdx::NUM> &dydt, Array<Real,+DataIdx::NUM>& data);
+    static bool check_invalid(Array<Real,+VectorIdx::NUM> &y);
     virtual void calc_time_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt) override;
 
     enum class BraginskiiStateIdx {
@@ -243,8 +271,6 @@ public:
     ElectronCoeffs electron_coeffs;
 
     bool do_CTU;
-
-    static LSODA lsoda;
 
     static bool registered;
     static std::string tag;

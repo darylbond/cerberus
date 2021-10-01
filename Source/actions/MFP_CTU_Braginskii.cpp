@@ -8,13 +8,13 @@
 #include "Eigen"
 #include "Dense"
 #include "MFP_diagnostics.H"
+#include "MFP_rk4.H"
 
 std::string BraginskiiCTU::tag = "BraginskiiCTU";
 bool BraginskiiCTU::registered = GetActionFactory().Register(BraginskiiCTU::tag, ActionBuilder<BraginskiiCTU>);
 
 bool BraginskiiCTU::braginskii_anisotropic = true;
 bool BraginskiiCTU::srin_switch = false;
-LSODA BraginskiiCTU::lsoda;
 
 BraginskiiCTU::BraginskiiCTU(){}
 BraginskiiCTU::~BraginskiiCTU(){}
@@ -1834,24 +1834,24 @@ void BraginskiiCTU::calc_spatial_derivative(MFP* mfp, Vector<std::pair<int,Multi
 
         const Box pbox = grow(box, num_grow);
 
-//        plot_FAB_2d(primitives[+BraginskiiStateIdx::Ion], 0, "ions[0]", false, false);
-//        plot_FAB_2d(primitives[+BraginskiiStateIdx::Electron], 0, "electrons[0]", false, true);
+        //        plot_FAB_2d(primitives[+BraginskiiStateIdx::Ion], 0, "ions[0]", false, false);
+        //        plot_FAB_2d(primitives[+BraginskiiStateIdx::Electron], 0, "electrons[0]", false, true);
 
-//        calc_ion_viscous_fluxes(box,
-//                                fluxes[+BraginskiiStateIdx::Ion],
-//                pbox,
-//                primitives[+BraginskiiStateIdx::Ion].const_array(),
-//                primitives[+BraginskiiStateIdx::Electron].const_array(),
-//                primitives[+BraginskiiStateIdx::Field].const_array(),
-//                dx);
+        //        calc_ion_viscous_fluxes(box,
+        //                                fluxes[+BraginskiiStateIdx::Ion],
+        //                pbox,
+        //                primitives[+BraginskiiStateIdx::Ion].const_array(),
+        //                primitives[+BraginskiiStateIdx::Electron].const_array(),
+        //                primitives[+BraginskiiStateIdx::Field].const_array(),
+        //                dx);
 
-//        calc_electron_viscous_fluxes(box,
-//                                     fluxes[+BraginskiiStateIdx::Electron],
-//                pbox,
-//                primitives[+BraginskiiStateIdx::Ion].const_array(),
-//                primitives[+BraginskiiStateIdx::Electron].const_array(),
-//                primitives[+BraginskiiStateIdx::Field].const_array(),
-//                dx);
+        //        calc_electron_viscous_fluxes(box,
+        //                                     fluxes[+BraginskiiStateIdx::Electron],
+        //                pbox,
+        //                primitives[+BraginskiiStateIdx::Ion].const_array(),
+        //                primitives[+BraginskiiStateIdx::Electron].const_array(),
+        //                primitives[+BraginskiiStateIdx::Field].const_array(),
+        //                dx);
 
         //---
         for (int idx=0; idx<n_states; ++idx) {
@@ -1996,30 +1996,9 @@ void BraginskiiCTU::get_alpha_beta_coefficients(Real mass_e, Real T_e, Real char
     return;
 }
 
-int BraginskiiCTU::rhs(double t, Vector<Real> &y, Vector<Real> &dydt, const int offset)
+int BraginskiiCTU::rhs(Real t, Array<Real,+VectorIdx::NUM> y, Array<Real,+VectorIdx::NUM> &dydt, Array<Real,+DataIdx::NUM>& data)
 {
     BL_PROFILE("BraginskiiSource::rhs");
-
-    /*
-     * mass ion
-     * charge ion
-     * gamma ion
-     * mass electron
-     * charge electron
-     * gamma electron
-     * data ion
-     * data electron
-     * data magnetic
-     * data slope
-     */
-
-
-    Real q_a, q_a2, m_a, gam_a;
-    Real rho_a, n_a, u_a, v_a, w_a, p_a, T_a;
-    Real q_b, q_b2, m_b, gam_b;
-    Real rho_b, n_b, u_b, v_b, w_b, p_b, T_b;
-
-    Real du, dv, dw;
 
     //TODO find away around the variable declaration in the case of isotropic - may just need to bite the bullet and hav a spearate function
     Array<Real,3> B_unit; //Magnetic field unit vector
@@ -2034,9 +2013,9 @@ int BraginskiiCTU::rhs(double t, Vector<Real> &y, Vector<Real> &dydt, const int 
 
 
     // magnetic field
-    xB = y[7 + +HydroDef::PrimIdx::NUM*2 + 0];
-    yB = y[7 + +HydroDef::PrimIdx::NUM*2 + 1];
-    zB = y[7 + +HydroDef::PrimIdx::NUM*2 + 2];
+    xB = data[+DataIdx::Bx];
+    yB = data[+DataIdx::By];
+    zB = data[+DataIdx::Bz];
 
     Real B = xB*xB + yB*yB + zB*zB;
 
@@ -2058,57 +2037,64 @@ int BraginskiiCTU::rhs(double t, Vector<Real> &y, Vector<Real> &dydt, const int 
     B_unit[0] = bx_pp; B_unit[1] = by_pp; B_unit[2] = bz_pp;
 
 
+    const Real m_e = data[+DataIdx::ElectronMass];
+    const Real q_e = data[+DataIdx::ElectronCharge];
+    const Real gam_e =  data[+DataIdx::ElectronGamma];
 
-    rho_a =   y[7 + +HydroDef::PrimIdx::NUM + +HydroDef::PrimIdx::Density];
+    const Real rho_e = data[+DataIdx::ElectronDensity];
 
-    if (rho_a <= effective_zero)
+    const Real n_e = rho_e/m_e;
+
+
+    if (rho_e <= effective_zero)
         amrex::Abort("density less than effective zero");
 
-    u_a = y[7 + +HydroDef::PrimIdx::NUM + +HydroDef::PrimIdx::Xvel];
-    v_a = y[7 + +HydroDef::PrimIdx::NUM + +HydroDef::PrimIdx::Yvel];
-    w_a = y[7 + +HydroDef::PrimIdx::NUM + +HydroDef::PrimIdx::Zvel];
-    p_a = y[7 + +HydroDef::PrimIdx::NUM + +HydroDef::PrimIdx::Prs];
-    T_a = y[7 + +HydroDef::PrimIdx::NUM + +HydroDef::PrimIdx::Temp];
+    const Real inv_rho_e = 1/rho_e;
+    const Real u_e = y[+VectorIdx::ElectronXmom]*inv_rho_e;
+    const Real v_e = y[+VectorIdx::ElectronYmom]*inv_rho_e;
+    const Real w_e = y[+VectorIdx::ElectronZmom]*inv_rho_e;
+    const Real p_e = (gam_e - 1.0)*(y[+VectorIdx::ElectronEden] - 0.5*rho_e*(u_e*u_e + v_e*v_e + w_e*w_e));
+    const Real T_e = p_e*m_e*inv_rho_e;
 
-    m_a = y[4];
-    q_a = y[5];
-    n_a = rho_a/m_a;
 
-    q_a2 = q_a*q_a;
-    gam_a= y[6];
 
-    const Real dT_dx = y[7 + +HydroDef::PrimIdx::NUM*2 + 3 + 0];
+    const Real dT_dx = y[+DataIdx::dTdx];
 
 #if AMREX_SPACEDIM >= 2
-    const Real dT_dy = y[7 + +HydroDef::PrimIdx::NUM*2 + 3 + 1];
+    const Real dT_dy = y[+DataIdx::dTdy];
 #else
     const Real dT_dy=0;
 #endif
 
 #if AMREX_SPACEDIM == 3
-    const Real dT_dz = y[7 + +HydroDef::PrimIdx::NUM*2 + 3 + 2];
+    const Real dT_dz = y[+DataIdx::dTdz];
 #else
     const Real dT_dz=0;
 #endif
 
 
-    rho_b =   y[7 + +HydroDef::PrimIdx::Density];
+    const Real m_i = data[+DataIdx::IonMass];
+    const Real q_i = data[+DataIdx::IonCharge];
+    const Real gam_i =  data[+DataIdx::IonGamma];
 
-    u_b =     y[7 + +HydroDef::PrimIdx::Xvel];
-    v_b =     y[7 + +HydroDef::PrimIdx::Yvel];
-    w_b =     y[7 + +HydroDef::PrimIdx::Zvel];
-    p_b =     y[7 + +HydroDef::PrimIdx::Prs];
-    T_b =     y[7 + +HydroDef::PrimIdx::Temp];
+    const Real rho_i = data[+DataIdx::IonDensity];
 
-    m_b = y[1];
-    q_b = y[2];
+    const Real n_i = rho_i/m_i;
 
-    n_b =   rho_b/m_b;
-    T_b =   p_b/n_b;
-    q_b2 =  q_b*q_b;
-    gam_b = y[3];
 
-    du = u_a - u_b; dv = v_a - v_b; dw = w_a - w_b; //dU2 = du*du + dv*dv + dw*dw;
+    if (rho_i <= effective_zero)
+        amrex::Abort("density less than effective zero");
+
+    const Real inv_rho_i = 1/rho_i;
+    const Real u_i = y[+VectorIdx::IonXmom]*inv_rho_i;
+    const Real v_i = y[+VectorIdx::IonYmom]*inv_rho_i;
+    const Real w_i = y[+VectorIdx::IonZmom]*inv_rho_i;
+    const Real p_i = (gam_i - 1.0)*(y[+VectorIdx::IonEden] - 0.5*rho_i*(u_i*u_i + v_i*v_i + w_i*w_i));
+    const Real T_i = p_i*m_i*inv_rho_i;
+
+    const Real du = u_e - u_i;
+    const Real dv = v_e - v_i;
+    const Real dw = w_e - w_i;
 
     //Braginskii directionality stuff.
     if (braginskii_anisotropic) {
@@ -2144,9 +2130,9 @@ int BraginskiiCTU::rhs(double t, Vector<Real> &y, Vector<Real> &dydt, const int 
 
     //---------------Braginskii Momentum source
     Real alpha_0, alpha_1, alpha_2, beta_0, beta_1, beta_2, t_c_a;
-    Real p_lambda = get_coulomb_logarithm(T_b,T_a,n_a);
+    Real p_lambda = get_coulomb_logarithm(T_i,T_e,n_e);
 
-    get_alpha_beta_coefficients(m_a, T_a, q_a, q_b, n_a, n_b, alpha_0, alpha_1, alpha_2,
+    get_alpha_beta_coefficients(m_e, T_e, q_e, q_i, n_e, n_i, alpha_0, alpha_1, alpha_2,
                                 beta_0, beta_1, beta_2, t_c_a, p_lambda, xB, yB, zB);
 
 
@@ -2172,7 +2158,7 @@ int BraginskiiCTU::rhs(double t, Vector<Real> &y, Vector<Real> &dydt, const int 
         R_T[2] = -beta_0*dT_dz;
     }
     //Thermal equilibration
-    Real Q_delta = 3*m_a/m_b*n_a/t_c_a*(T_a-T_b);
+    Real Q_delta = 3*m_e/m_i*n_e/t_c_a*(T_e-T_i);
     Real Q_fric  = (R_u[0]+R_T[0])*du + (R_u[1]+R_T[1])*dv + (R_u[2]+R_T[2])*dw;
 
     const Real d_mx = R_u[0]+R_T[0];
@@ -2180,53 +2166,48 @@ int BraginskiiCTU::rhs(double t, Vector<Real> &y, Vector<Real> &dydt, const int 
     const Real d_mz = R_u[2]+R_T[2];
     const Real d_ed = -Q_delta + Q_fric;
 
-    Real rho = rho_a;
-    Real g = gam_a;
-    Real m = m_a;
+    dydt[+VectorIdx::ElectronXmom] = d_mx;
+    dydt[+VectorIdx::ElectronYmom] = d_my;
+    dydt[+VectorIdx::ElectronZmom] = d_mz;
+    dydt[+VectorIdx::ElectronEden] = d_ed;
 
-    Real rhoinv = 1/rho;
-    Real d_u = d_mx*rhoinv;
-    Real d_v = d_my*rhoinv;
-    Real d_w = d_mz*rhoinv;
-    Real d_ke = 0.5*rho*(d_u*d_u + d_v*d_v + d_w*d_w);
-    Real d_p = (d_ed - d_ke)*(g - 1);
-    Real d_T = d_p*rhoinv*m;
+    dydt[+VectorIdx::IonXmom] = -d_mx;
+    dydt[+VectorIdx::IonYmom] = -d_my;
+    dydt[+VectorIdx::IonZmom] = -d_mz;
+    dydt[+VectorIdx::IonEden] = -d_ed;
 
-    dydt[6 + +HydroDef::PrimIdx::NUM + +HydroDef::PrimIdx::Xvel] = d_u;
-    dydt[6 + +HydroDef::PrimIdx::NUM + +HydroDef::PrimIdx::Yvel] = d_v;
-    dydt[6 + +HydroDef::PrimIdx::NUM + +HydroDef::PrimIdx::Zvel] = d_w;
-    dydt[6 + +HydroDef::PrimIdx::NUM + +HydroDef::PrimIdx::Prs] = d_ed;
-    dydt[6 + +HydroDef::PrimIdx::NUM + +HydroDef::PrimIdx::Temp] = d_T;
 
-    rho = rho_b;
-    g = gam_b;
-    m = m_b;
 
-    rhoinv = 1/rho;
-    d_u = d_mx*rhoinv;
-    d_v = d_my*rhoinv;
-    d_w = d_mz*rhoinv;
-    d_ke = 0.5*rho*(d_u*d_u + d_v*d_v + d_w*d_w);
-    d_p = (d_ed - d_ke)*(g - 1);
-    d_T = d_p*rhoinv*m;
 
-    dydt[6 + +HydroDef::PrimIdx::Xvel] = -d_u;
-    dydt[6 + +HydroDef::PrimIdx::Yvel] = -d_v;
-    dydt[6 + +HydroDef::PrimIdx::Zvel] = -d_w;
-    dydt[6 + +HydroDef::PrimIdx::Prs] = -d_ed;
-    dydt[6 + +HydroDef::PrimIdx::Temp] = -d_T;
+        for (const auto& val : dydt) {
+            if (not std::isfinite(val)) return 1;
+//            AMREX_ASSERT(std::isfinite(val));
+        }
 
-//    if (std::abs(dU[+HydroDef::ConsIdx::Xmom]) > 200) Abort();
+    //    if (std::abs(dU[+HydroDef::ConsIdx::Xmom]) > 200) Abort();
 
-//    AMREX_ASSERT(std::isfinite(dU[+HydroDef::ConsIdx::Xmom]));
-//    AMREX_ASSERT(std::isfinite(dU[+HydroDef::ConsIdx::Ymom]));
-//    AMREX_ASSERT(std::isfinite(dU[+HydroDef::ConsIdx::Zmom]));
-//    AMREX_ASSERT(std::isfinite(dU[+HydroDef::ConsIdx::Eden]));
+    //    AMREX_ASSERT(std::isfinite(dU[+HydroDef::ConsIdx::Xmom]));
+    //    AMREX_ASSERT(std::isfinite(dU[+HydroDef::ConsIdx::Ymom]));
+    //    AMREX_ASSERT(std::isfinite(dU[+HydroDef::ConsIdx::Zmom]));
+    //    AMREX_ASSERT(std::isfinite(dU[+HydroDef::ConsIdx::Eden]));
 
     return 0;
 
 }
 
+bool BraginskiiCTU::check_invalid(Array<Real,+VectorIdx::NUM> &y)
+{
+    if (y[+VectorIdx::IonEden] < effective_zero) return true;
+    if (y[+VectorIdx::ElectronEden] < effective_zero) return true;
+
+    for (const auto& val : y) {
+        if (not std::isfinite(val)) {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 void BraginskiiCTU::source(const Vector<Real>& Q_i,
                            const Vector<Real>& Q_e,
@@ -2299,7 +2280,7 @@ void BraginskiiCTU::source(const Vector<Real>& Q_i,
     n_a = rho_a/m_a;
 
     q_a2 = q_a*q_a;
-//    gam_a= electron_state->get_gamma_from_prim(Q_e);
+    //    gam_a= electron_state->get_gamma_from_prim(Q_e);
 
     const Real dT_dx = slopes[0];
 
@@ -2330,7 +2311,7 @@ void BraginskiiCTU::source(const Vector<Real>& Q_i,
     n_b =   rho_b/m_b;
     T_b =   p_b/n_b;
     q_b2 =  q_b*q_b;
-//    gam_b = ion_state->get_gamma_from_prim(Q_i);
+    //    gam_b = ion_state->get_gamma_from_prim(Q_i);
 
     du = u_a - u_b; dv = v_a - v_b; dw = w_a - w_b; //dU2 = du*du + dv*dv + dw*dw;
 
@@ -2414,6 +2395,7 @@ void BraginskiiCTU::source(const Vector<Real>& Q_i,
 }
 
 
+
 void BraginskiiCTU::calc_time_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt)
 {
     BL_PROFILE("Plasma5::explicit_solve");
@@ -2440,7 +2422,6 @@ void BraginskiiCTU::calc_time_derivative(MFP* mfp, Vector<std::pair<int,MultiFab
     Vector<Real> Q_i(np_i), Q_e(np_e);
     Array<Real,+HydroDef::ConsIdx::NUM> dU_ie;
 
-    Array<Real,3> BB;
     Array<Real,AMREX_SPACEDIM> slope;
 
     const Real* dx = mfp->Geom().CellSize();
@@ -2450,8 +2431,8 @@ void BraginskiiCTU::calc_time_derivative(MFP* mfp, Vector<std::pair<int,MultiFab
                                             +HydroDef::ConsIdx::Zmom,
                                             +HydroDef::ConsIdx::Eden};
 
-    Vector<Real> y(11 + +HydroDef::PrimIdx::NUM*2,0.0);
-    Vector<Real> yout(11 + +HydroDef::PrimIdx::NUM*2+1,0.0);
+    Array<Real,+VectorIdx::NUM> y;
+    Array<Real,+DataIdx::NUM> data;
 
 
     for (MFIter mfi(cost); mfi.isValid(); ++mfi) {
@@ -2491,73 +2472,70 @@ void BraginskiiCTU::calc_time_derivative(MFP* mfp, Vector<std::pair<int,MultiFab
                     for (size_t l=0; l<nc_i; ++l) {
                         U_i[l] = ion4(i,j,k,l);
                     }
-                    ion_state->cons2prim(U_i, Q_i);
 
                     for (size_t l=0; l<nc_e; ++l) {
                         U_e[l] = electron4(i,j,k,l);
                     }
-                    electron_state->cons2prim(U_e, Q_e);
 
-
-                    BB[0] = field4(i,j,k,+FieldDef::ConsIdx::Bx);
-                    BB[1] = field4(i,j,k,+FieldDef::ConsIdx::By);
-                    BB[2] = field4(i,j,k,+FieldDef::ConsIdx::Bz);
-
-
-                    for (size_t l=0; l<AMREX_SPACEDIM; ++l) {
-                        slope[l] = slopes4(i,j,k,l);
-                    }
-
-
-
-
-                    y[0] = ion_state->get_mass_from_cons(U_i);
-                    y[1] = ion_state->get_charge_from_cons(U_i);
-                    y[2] = ion_state->get_gamma_from_cons(U_i);
-                    y[3] = electron_state->get_mass_from_cons(U_e);
-                    y[4] = electron_state->get_charge_from_cons(U_e);
-                    y[5] = electron_state->get_gamma_from_cons(U_e);
-
-                    for (size_t l=0; l<+HydroDef::PrimIdx::NUM; ++l) {
-                        y[6 + l] = Q_i[l];
-                        y[6 + +HydroDef::PrimIdx::NUM + l] = Q_e[l];
-                    }
-
-                    y[6 + +HydroDef::PrimIdx::NUM*2 + 0] = field4(i,j,k,+FieldDef::ConsIdx::Bx);
-                    y[6 + +HydroDef::PrimIdx::NUM*2 + 1] = field4(i,j,k,+FieldDef::ConsIdx::By);
-                    y[6 + +HydroDef::PrimIdx::NUM*2 + 2] = field4(i,j,k,+FieldDef::ConsIdx::Bz);
+                    data[+DataIdx::IonMass] = ion_state->get_mass_from_cons(U_i);;
+                    data[+DataIdx::IonCharge] = ion_state->get_charge_from_cons(U_i);
+                    data[+DataIdx::IonGamma] = ion_state->get_gamma_from_cons(U_i);
+                    data[+DataIdx::IonDensity] = U_i[+HydroDef::ConsIdx::Density];
+                    data[+DataIdx::ElectronMass] = electron_state->get_mass_from_cons(U_e);
+                    data[+DataIdx::ElectronCharge] = electron_state->get_charge_from_cons(U_e);
+                    data[+DataIdx::ElectronGamma] = electron_state->get_gamma_from_cons(U_e);
+                    data[+DataIdx::ElectronDensity] = U_e[+HydroDef::ConsIdx::Density];
+                    data[+DataIdx::Bx] = field4(i,j,k,+FieldDef::ConsIdx::Bx);
+                    data[+DataIdx::By] = field4(i,j,k,+FieldDef::ConsIdx::By);
+                    data[+DataIdx::Bz] = field4(i,j,k,+FieldDef::ConsIdx::Bz);
 
                     for (size_t l=0; l<AMREX_SPACEDIM; ++l) {
-                        y[6 + +HydroDef::PrimIdx::NUM*2 + 3 + l] = slopes4(i,j,k,l);
+                        data[+DataIdx::dTdx + l] = slopes4(i,j,k,l);
                     }
+
+                    y[+VectorIdx::IonXmom] = U_i[+HydroDef::ConsIdx::Xmom];
+                    y[+VectorIdx::IonYmom] = U_i[+HydroDef::ConsIdx::Ymom];
+                    y[+VectorIdx::IonZmom] = U_i[+HydroDef::ConsIdx::Zmom];
+                    y[+VectorIdx::IonEden] = U_i[+HydroDef::ConsIdx::Eden];
+                    y[+VectorIdx::ElectronXmom] = U_e[+HydroDef::ConsIdx::Xmom];
+                    y[+VectorIdx::ElectronYmom] = U_e[+HydroDef::ConsIdx::Ymom];
+                    y[+VectorIdx::ElectronZmom] = U_e[+HydroDef::ConsIdx::Zmom];
+                    y[+VectorIdx::ElectronEden] = U_e[+HydroDef::ConsIdx::Eden];
 
                     Real t = time;
-                    Real t1 = time + dt;
-                    int flag = 1;
+                    Real h = dt;
+                    Real t_err;
+                    Real acc = 1.0;
+                    Real S = 10;
+                    int rept;
+                    int maxrept = 10;
+                    Real h_min = 1e-6;
+                    Real h_max = dt;
+                    int flag = 2;
+                    Vector<std::pair<Real,Array<Real,+VectorIdx::NUM>>> history;
+                    rk4_adaptive(t, y, data, BraginskiiCTU::rhs, BraginskiiCTU::check_invalid, h, t_err, acc, S, rept, maxrept, h_min, h_max, flag, history);
 
-                    lsoda.lsoda_update(BraginskiiCTU::rhs, y.size(), y, yout, &t, t1,
-                                          &flag, 1e-6, 1e-15, 1000);
 
 
-                    // convert back to conserved
-                    for (size_t l=0; l<+HydroDef::PrimIdx::NUM; ++l) {
-                        Q_i[l] = yout[6 + l];
-                        Q_e[l] = yout[6 + +HydroDef::PrimIdx::NUM + l];
-                    }
+                    ion_dU4(i,j,k,+HydroDef::ConsIdx::Xmom) = y[+VectorIdx::IonXmom] - U_i[+HydroDef::ConsIdx::Xmom];
+                    ion_dU4(i,j,k,+HydroDef::ConsIdx::Ymom) = y[+VectorIdx::IonYmom] - U_i[+HydroDef::ConsIdx::Ymom];
+                    ion_dU4(i,j,k,+HydroDef::ConsIdx::Zmom) = y[+VectorIdx::IonZmom] - U_i[+HydroDef::ConsIdx::Zmom];
+                    ion_dU4(i,j,k,+HydroDef::ConsIdx::Eden) = y[+VectorIdx::IonEden] - U_i[+HydroDef::ConsIdx::Eden];
+                    electron_dU4(i,j,k,+HydroDef::ConsIdx::Xmom) = y[+VectorIdx::ElectronXmom] - U_e[+HydroDef::ConsIdx::Xmom];
+                    electron_dU4(i,j,k,+HydroDef::ConsIdx::Ymom) = y[+VectorIdx::ElectronYmom] - U_e[+HydroDef::ConsIdx::Ymom];
+                    electron_dU4(i,j,k,+HydroDef::ConsIdx::Zmom) = y[+VectorIdx::ElectronZmom] - U_e[+HydroDef::ConsIdx::Zmom];
+                    electron_dU4(i,j,k,+HydroDef::ConsIdx::Eden) = y[+VectorIdx::ElectronEden] - U_e[+HydroDef::ConsIdx::Eden];
 
-                    ion_state->prim2cons(Q_i, U_i);
-                    electron_state->prim2cons(Q_e, U_e);
 
                     for (const int& l : copy_index) {
-                        ion_dU4(i,j,k,l) = U_i[l] - ion4(i,j,k,l);
-                        electron_dU4(i,j,k,l) = U_e[l] - electron4(i,j,k,l);
+//                        AMREX_ASSERT(std::isfinite(ion_dU4(i,j,k,l)));
+//                        AMREX_ASSERT(std::isfinite(electron_dU4(i,j,k,l)));
+
+                        if (not std::isfinite(ion_dU4(i,j,k,l)) || not std::isfinite(electron_dU4(i,j,k,l))) {
+                            plot_history_1d(history, "history", true);
+                        }
                     }
 
-//                    source(Q_i,Q_e,BB,slope,dU_ie);
-//                    for (const int& l : copy_index) {
-//                        ion_dU4(i,j,k,l) -= dt*dU_ie[l];
-//                        electron_dU4(i,j,k,l) += dt*dU_ie[l];
-//                    }
                 }
             }
         }

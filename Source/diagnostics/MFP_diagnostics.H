@@ -34,7 +34,8 @@ void plot_history_1d(Vector<std::pair<Real,Array<Real,N>>>& history, std::string
             y[i] = history[i].second[n];
         }
 
-        plt::plot(x,y);
+
+        plt::semilogy(x,y,".-");
     }
 
     plt::title(title);

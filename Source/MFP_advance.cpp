@@ -73,7 +73,7 @@ void MFP::apply_derivative(Vector<std::pair<int,MultiFab>>& dU)
 
         if (!dU[data_idx].first) continue;
 
-        plot_FAB_2d(dU[data_idx].second,1, 0, "dU[1] "+EulerianState::get_state(data_idx).name, false, true);
+//        plot_FAB_2d(dU[data_idx].second,1, 0, "dU[1] "+EulerianState::get_state(data_idx).name, false, true);
 
         MultiFab& new_data = get_new_data(data_idx);
 

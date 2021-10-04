@@ -199,12 +199,6 @@ public:
                                      Real& beta_0, Real& beta_1, Real& beta_2, Real& t_c_e, Real p_lambda,
                                      Real Bx, Real By, Real Bz);
 
-    void source(const Vector<Real>& Q_i,
-                const Vector<Real>& Q_e,
-                const Array<Real,3>& BB,
-                const Array<Real, AMREX_SPACEDIM> slopes,
-                Array<Real, +HydroDef::ConsIdx::NUM> &dU) const;
-
 
     enum class DataIdx {
         IonMass=0,
@@ -235,7 +229,7 @@ public:
     };
 
     static int rhs(Real t, Array<Real,+VectorIdx::NUM> y, Array<Real,+VectorIdx::NUM> &dydt, Array<Real,+DataIdx::NUM>& data);
-    static bool check_invalid(Array<Real,+VectorIdx::NUM> &y);
+    static bool check_invalid(Array<Real,+VectorIdx::NUM> &y, Array<Real,+DataIdx::NUM>& data);
     virtual void calc_time_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt) override;
 
     enum class BraginskiiStateIdx {
@@ -271,6 +265,9 @@ public:
     ElectronCoeffs electron_coeffs;
 
     bool do_CTU;
+
+    int time_refinement_factor;
+    int max_time_refinement;
 
     static bool registered;
     static std::string tag;

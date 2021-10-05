@@ -37,7 +37,7 @@ merge_fraction = 0.5
 -- if all density in a block is below effective_zero no calculations will occur for that block
 effective_zero = 1e-14
 
-time_integration_scheme = 'euler'
+time_integration_scheme = 'one_step'
 
 do_face_sources = 1 -- apply source terms to reconstructed face values
 

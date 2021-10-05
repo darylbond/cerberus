@@ -44,7 +44,7 @@ Real MFP::advance(Real time, Real dt, int iteration, int ncycle)
     }
 
     switch (time_integration_scheme) {
-    case TimeIntegrator::Euler:
+    case TimeIntegrator::OneStep:
         advance_euler(time, dt, iteration, ncycle);
         break;
     case TimeIntegrator::StrangSplitting:

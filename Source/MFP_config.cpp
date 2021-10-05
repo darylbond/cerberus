@@ -74,8 +74,8 @@ void MFP::read_config()
 
     std::string time_integrator = lua["time_integration_scheme"];
 
-    if (time_integrator == "euler") {
-        time_integration_scheme = TimeIntegrator::Euler;
+    if (time_integrator == "one_step") {
+        time_integration_scheme = TimeIntegrator::OneStep;
         need_scratch_space = true;
     } else if (time_integrator == "strang") {
         time_integration_scheme = TimeIntegrator::StrangSplitting;
@@ -84,7 +84,7 @@ void MFP::read_config()
         time_integration_scheme = TimeIntegrator::Symplectic;
         need_scratch_space = false;
     } else {
-        Abort("Time integration scheme '"+time_integrator+"' is not recognised, try ['euler', 'strang', 'symplectic']");
+        Abort("Time integration scheme '"+time_integrator+"' is not recognised, try ['one_step', 'strang', 'symplectic']");
     }
 
     linear_solver_verbosity = lua["linear_solver_verbosity"];

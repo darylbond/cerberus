@@ -659,24 +659,6 @@ void FieldState::update_boundary_cells(const Box& box,
         }
     }
 }
-#ifdef AMREX_USE_EB
-bool check_covered_stencil(Array4<const EBCellFlag> const& flag, int i, int j, int k, int d, int stencil_length)
-{
-    BL_PROFILE("State::check_covered_stencil");
-    Array<int,3> stencil_index;
-    int offset = stencil_length/2;
-    // cell that references a covered cell doesn't need calculating
-    stencil_index.fill(0);
-    for (int s=0; s<stencil_length; ++s) {
-        stencil_index[d] = s - offset;
-        // check if any of the stencil values are from a covered cell
-        if (flag(i+stencil_index[0], j+stencil_index[1], k+stencil_index[2]).isCovered()) {
-            return true;
-        }
-    }
-    return false;
-}
-#endif
 
 void FieldState::calc_reconstruction(const Box& box,
                                      FArrayBox &prim,

@@ -83,7 +83,7 @@ public:
                                 int ncycle) override;
 
     enum class TimeIntegrator {
-        Euler = 0,
+        OneStep = 0,
         StrangSplitting,
         Symplectic,
     };

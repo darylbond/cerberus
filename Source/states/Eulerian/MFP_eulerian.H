@@ -466,6 +466,7 @@ public:
                                 const Real* dx,
                                 const Real* prob_lo) const {}
 
+    static bool check_covered_stencil(Array4<const EBCellFlag> const& flag, int i, int j, int k, int d, int stencil_length);
 #endif
 
     void calc_divergence(const Box& box,

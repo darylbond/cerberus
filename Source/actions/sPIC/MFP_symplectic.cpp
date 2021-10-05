@@ -49,7 +49,7 @@ Symplectic::Symplectic(const int idx, const sol::table &def)
     return;
 }
 
-void Symplectic::apply_change(MFP* mfp, const Real time, const Real dt) const
+void Symplectic::apply_change(MFP* mfp, const Real time, const Real dt)
 {
     switch(time_order) {
     case 1:

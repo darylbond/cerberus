@@ -37,7 +37,7 @@ public:
     void Theta_E(MFP* mfp, Real time, Real dt) const;
     void Theta_R(MFP* mfp, Real time, Real dt, int comp) const;
 
-    virtual void apply_change(MFP* mfp, const Real time, const Real dt) const override;
+    virtual void apply_change(MFP* mfp, const Real time, const Real dt) override;
 
     virtual std::string get_tag() const override {return tag;}
     virtual ActionType get_type() const override {return ActionType::Symplectic;}

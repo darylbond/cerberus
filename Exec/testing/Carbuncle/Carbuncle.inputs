@@ -53,13 +53,12 @@ amr.plot_per          = 0.05
 
 mfp.lua = "
 
+lightspeed = 1
 
 verbosity = 1
 cfl = 0.8
 
 -- ======== PROBLEM ==========
-
-lightspeed = 1.0
 
 shock_x = 0.0
 

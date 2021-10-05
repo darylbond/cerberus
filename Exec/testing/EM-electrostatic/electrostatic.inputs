@@ -133,7 +133,7 @@ actions = {
     },
 
     plasma={
-        type='lorentz',
+        type='Lorentz',
         states = {'ion', 'electron', 'field'},
      },
 

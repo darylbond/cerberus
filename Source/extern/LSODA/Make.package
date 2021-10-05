@@ -1,6 +1,0 @@
-CEXE_headers += LSODA.H
-
-CEXE_sources += LSODA.cpp
-
-INCLUDE_LOCATIONS += $(TOP)/Source/extern/LSODA
-VPATH_LOCATIONS   += $(TOP)/Source/extern/LSODA

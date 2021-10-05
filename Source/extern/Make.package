@@ -12,7 +12,5 @@ include $(TOP)/Source/extern/AABB/Make.package
 
 include $(TOP)/Source/extern/rapidxml-1.13/Make.package
 
-include $(TOP)/Source/extern/LSODA/Make.package
-
 INCLUDE_LOCATIONS += $(TOP)/Source/extern
 VPATH_LOCATIONS   += $(TOP)/Source/extern

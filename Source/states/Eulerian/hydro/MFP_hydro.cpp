@@ -1423,15 +1423,26 @@ void HydroState::update_boundary_cells(const Box& box,
 #endif
 
                         // get data from closest internal cell
-                        for (int n=0; n<n_prim(); ++n) {
+                        for (int n=0; n<+HydroDef::PrimIdx::NUM; ++n) {
                             Q[prim_names[n]] = p4(grab[0],grab[1],grab[2],n);
                         }
 
+                        for (int n=0; n<n_tracers; ++n) {
+                            Q[get_multicomp_name(multicomp_prim_name,n)] = p4(grab[0],grab[1],grab[2],+HydroDef::PrimIdx::NUM+n);
+                        }
+
                         // update the primitives from our UDFs, but only those that are valid functions
-                        for (int n=0; n<n_prim(); ++n) {
+                        for (int n=0; n<+HydroDef::PrimIdx::NUM; ++n) {
                             const Optional3D1VFunction &f = boundary_conditions.get(L.lo_hi, L.dir, prim_names[n]);
                             if (f.is_valid()) {
                                 p4(i,j,k,n) = f(Q);
+                            }
+                        }
+
+                        for (int n=0; n<n_tracers; ++n) {
+                            const Optional3D1VFunction &f = boundary_conditions.get(L.lo_hi, L.dir, get_multicomp_name(multicomp_prim_name,n));
+                            if (f.is_valid()) {
+                                p4(i,j,k,+HydroDef::PrimIdx::NUM+n) = f(Q);
                             }
                         }
                     }

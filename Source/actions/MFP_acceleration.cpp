@@ -40,7 +40,45 @@ Acceleration::Acceleration(const int idx, const sol::table &def)
     return;
 }
 
-void Acceleration::calc_time_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt)
+void Acceleration::get_data(MFP* mfp, Vector<UpdateData>& update, const Real time) const
+{
+    BL_PROFILE("Collisions::get_U0");
+
+#ifdef AMREX_USE_EB
+    constexpr int num_grow_eb = 2;
+#else
+    constexpr int num_grow_eb = 0;
+#endif
+
+    // copy the species data
+    for (size_t i=0; i<species.size();++i) {
+        const HydroState& hstate = *species[i];
+
+
+        if (update[hstate.data_idx].dU_status != UpdateData::Status::Filled) {
+
+            MultiFab& species_data_ref = mfp->get_data(hstate.data_idx,time);
+
+            int ns = species_data_ref.nComp();
+            int ng = hstate.num_grow + num_grow_eb;
+
+            update[hstate.data_idx].U.define(mfp->boxArray(), mfp->DistributionMap(),
+                                ns,ng,
+                                MFInfo(),mfp->Factory());
+
+            update[hstate.data_idx].dU.define(mfp->boxArray(), mfp->DistributionMap(),
+                                ns,species_data_ref.nGrowVect(),
+                                MFInfo(),mfp->Factory());
+            update[hstate.data_idx].dU.setVal(0.0);
+
+            MultiFab::Copy(update[hstate.data_idx].U, species_data_ref, 0, 0, species_data_ref.nComp(),species_data_ref.nGrowVect());
+
+            update[hstate.data_idx].U_status = UpdateData::Status::Local;
+        }
+    }
+}
+
+void Acceleration::calc_time_derivative(MFP* mfp, Vector<UpdateData> &update, const Real time, const Real dt)
 {
     BL_PROFILE("Acceleration::calc_time_derivative");
 
@@ -49,12 +87,9 @@ void Acceleration::calc_time_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>
 
     size_t n_species = species.size();
 
-    Vector<MultiFab*> species_data;
     for (const HydroState* hstate : species) {
-        species_data.push_back(&(mfp->get_data(hstate->data_idx, time)));
-
         // mark dU components that have been touched
-        dU[hstate->data_idx].first = 1;
+        update[hstate->data_idx].dU_status = UpdateData::Status::Changed;
     }
 
     Vector<Array4<Real>> species4(n_species);
@@ -85,8 +120,8 @@ void Acceleration::calc_time_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>
 #endif
 
         for (int n=0; n<n_species; ++n) {
-            species4[n] = species_data[n]->array(mfi);
-            species_dU4[n] = dU[species[n]->data_idx].second.array(mfi);
+            species4[n] = update[species[n]->data_idx].U.array(mfi);
+            species_dU4[n] = update[species[n]->data_idx].dU.array(mfi);
         }
 
 

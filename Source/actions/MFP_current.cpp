@@ -40,7 +40,31 @@ Current::Current(const int idx, const sol::table &def)
     return;
 }
 
-void Current::calc_time_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt)
+void Current::get_data(MFP* mfp, Vector<UpdateData>& update, const Real time) const
+{
+    BL_PROFILE("UserDefined::get_data");
+
+    // copy the data
+    if (update[field->data_idx].dU_status == UpdateData::Status::Inactive) {
+        MultiFab& field_data_ref = mfp->get_data(field->data_idx,time);
+
+        update[field->data_idx].U.define(mfp->boxArray(), mfp->DistributionMap(),
+                            field_data_ref.nComp(),field_data_ref.nGrowVect(),
+                            MFInfo(),mfp->Factory());
+
+        update[field->data_idx].dU.define(mfp->boxArray(), mfp->DistributionMap(),
+                            field_data_ref.nComp(),field_data_ref.nGrowVect(),
+                            MFInfo(),mfp->Factory());
+        update[field->data_idx].dU.setVal(0.0);
+
+        MultiFab::Copy (update[field->data_idx].U, field_data_ref, 0, 0, field_data_ref.nComp(),field_data_ref.nGrowVect());
+
+        update[field->data_idx].dU_status = UpdateData::Status::Local;
+    }
+}
+
+
+void Current::calc_time_derivative(MFP* mfp, Vector<UpdateData>& update, const Real time, const Real dt)
 {
     BL_PROFILE("Current::calc_time_derivative");
 
@@ -48,7 +72,7 @@ void Current::calc_time_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU
     MultiFab& cost = mfp->get_new_data(MFP::Cost_Idx);
 
     // mark dU components that have been touched
-    dU[field->data_idx].first = 1;
+    update[field->data_idx].dU_status = UpdateData::Status::Changed;
 
     std::map<std::string, Real> Q{{"x",0.0}, {"y",0.0}, {"z",0.0}, {"t",time}};
     Real x, y, z;
@@ -76,7 +100,7 @@ void Current::calc_time_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU
 
 #endif
 
-        Array4<Real> const& field_dU4 = dU[field->data_idx].second.array(mfi);
+        Array4<Real> const& field_dU4 = update[field->data_idx].dU.array(mfi);
 
 
         for     (int k = lo.z; k <= hi.z; ++k) {

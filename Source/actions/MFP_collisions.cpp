@@ -79,7 +79,57 @@ Collisions::Collisions(const int idx, const sol::table &def)
     return;
 }
 
-void Collisions::calc_time_derivative(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, const Real time, const Real dt)
+void Collisions::get_data(MFP* mfp, Vector<UpdateData>& update, const Real time) const
+{
+    BL_PROFILE("Collisions::get_U0");
+
+#ifdef AMREX_USE_EB
+    constexpr int num_grow_eb = 2;
+#else
+    constexpr int num_grow_eb = 0;
+#endif
+
+    // copy the species data
+    for (size_t i=0; i<species.size();++i) {
+        const HydroState& hstate = *species[i];
+
+        UpdateData::Status U_status = update[hstate.data_idx].U_status;
+        UpdateData::Status dU_status = update[hstate.data_idx].dU_status;
+
+        if ((U_status != UpdateData::Status::Local) || (dU_status != UpdateData::Status::Zero)) {
+
+            MultiFab& species_data_ref = mfp->get_data(hstate.data_idx,time);
+
+            int ns = species_data_ref.nComp();
+            int ng = hstate.num_grow + num_grow_eb;
+
+            if (U_status == UpdateData::Status::Inactive) {
+                update[hstate.data_idx].U.define(mfp->boxArray(), mfp->DistributionMap(),
+                                                 ns,ng,MFInfo(),mfp->Factory());
+            }
+
+            if (U_status != UpdateData::Status::Local) {
+                MultiFab::Copy(update[hstate.data_idx].U, species_data_ref, 0, 0, species_data_ref.nComp(),species_data_ref.nGrowVect());
+                update[hstate.data_idx].U_status = UpdateData::Status::Local;
+            }
+
+
+            if (dU_status == UpdateData::Status::Inactive) {
+                update[hstate.data_idx].dU.define(mfp->boxArray(), mfp->DistributionMap(),
+                                                  ns,species_data_ref.nGrowVect(),
+                                                  MFInfo(),mfp->Factory());
+            }
+
+            if (dU_status != UpdateData::Status::Zero) {
+                update[hstate.data_idx].dU.setVal(0.0);
+                update[hstate.data_idx].dU_status = UpdateData::Status::Zero;
+            }
+        }
+    }
+}
+
+
+void Collisions::calc_time_derivative(MFP* mfp, Vector<UpdateData>& update, const Real time, const Real dt)
 {
     BL_PROFILE("Collisions::calc_time_derivative");
 
@@ -98,7 +148,7 @@ void Collisions::calc_time_derivative(MFP* mfp, Vector<std::pair<int, MultiFab> 
     Vector<MultiFab*> species_data;
     for (size_t i=0; i<n_species;++i) {
         const HydroState& hstate = *species[i];
-        species_data.push_back(&(mfp->get_data(hstate.data_idx,time)));
+        species_data.push_back(&update[hstate.data_idx].U);
         U[i].resize(hstate.n_cons());
     }
 
@@ -116,7 +166,7 @@ void Collisions::calc_time_derivative(MFP* mfp, Vector<std::pair<int, MultiFab> 
 
 
     for (int n=0; n<n_species; ++n) {
-        dU[species[n]->data_idx].first = 1;
+        update[species[n]->data_idx].dU_status = UpdateData::Status::Changed;
     }
 
     for (MFIter mfi(cost); mfi.isValid(); ++mfi) {
@@ -141,7 +191,7 @@ void Collisions::calc_time_derivative(MFP* mfp, Vector<std::pair<int, MultiFab> 
 
         for (int n=0; n<n_species; ++n) {
             species4[n] = species_data[n]->array(mfi);
-            species_dU4[n] = dU[species[n]->data_idx].second.array(mfi);
+            species_dU4[n] = update[species[n]->data_idx].dU.array(mfi);
         }
 
 

@@ -57,16 +57,60 @@ Plasma5::Plasma5(const int idx, const sol::table &def)
     return;
 }
 
-void Plasma5::calc_time_derivative(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, const Real time, const Real dt)
+void Plasma5::get_data(MFP* mfp, Vector<UpdateData>& update, const Real time) const
+{
+    BL_PROFILE("Plasma5::get_U0");
+
+    // copy the field data
+    if (update[field->data_idx].dU_status == UpdateData::Status::Inactive) {
+        MultiFab& field_data_ref = mfp->get_data(field->data_idx,time);
+
+        update[field->data_idx].U.define(mfp->boxArray(), mfp->DistributionMap(),
+                            field_data_ref.nComp(),field_data_ref.nGrowVect(),
+                            MFInfo(),mfp->Factory());
+
+        update[field->data_idx].dU.define(mfp->boxArray(), mfp->DistributionMap(),
+                            field_data_ref.nComp(),field_data_ref.nGrowVect(),
+                            MFInfo(),mfp->Factory());
+
+        MultiFab::Copy(update[field->data_idx].U, field_data_ref, 0, 0, field_data_ref.nComp(),field_data_ref.nGrowVect());
+
+        update[field->data_idx].dU_status = UpdateData::Status::Local;
+    }
+
+    // copy the species data
+    for (size_t i=0; i<species.size();++i) {
+        const HydroState& hstate = *species[i];
+
+        if (update[hstate.data_idx].dU_status == UpdateData::Status::Inactive) {
+            MultiFab& species_data_ref = mfp->get_data(hstate.data_idx,time);
+
+            update[hstate.data_idx].U.define(mfp->boxArray(), mfp->DistributionMap(),
+                                species_data_ref.nComp(),species_data_ref.nGrowVect(),
+                                MFInfo(),mfp->Factory());
+
+            update[hstate.data_idx].dU.define(mfp->boxArray(), mfp->DistributionMap(),
+                                species_data_ref.nComp(),species_data_ref.nGrowVect(),
+                                MFInfo(),mfp->Factory());
+            update[hstate.data_idx].dU.setVal(0.0);
+
+            MultiFab::Copy (update[hstate.data_idx].U, species_data_ref, 0, 0, species_data_ref.nComp(),species_data_ref.nGrowVect());
+
+            update[hstate.data_idx].dU_status = UpdateData::Status::Local;
+        }
+    }
+}
+
+void Plasma5::calc_time_derivative(MFP* mfp, Vector<UpdateData>& update, const Real time, const Real dt)
 {
     BL_PROFILE("Plasma5::solve");
 
     switch(solver) {
     case TimeIntegrator::ForwardsEuler :
-        explicit_solve(mfp, dU, time, dt);
+        explicit_solve(mfp, update, time, dt);
         break;
     case TimeIntegrator::BackwardsEuler :
-        implicit_solve(mfp, dU, time, dt);
+        implicit_solve(mfp, update, time, dt);
         break;
     default:
         Abort("How did we get here?");
@@ -75,30 +119,24 @@ void Plasma5::calc_time_derivative(MFP* mfp, Vector<std::pair<int, MultiFab> > &
 
 }
 
-void Plasma5::explicit_solve(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt)
+void Plasma5::explicit_solve(MFP* mfp, Vector<UpdateData>& update, const Real time, const Real dt)
 {
     BL_PROFILE("Plasma5::explicit_solve");
 
     // collect all of the MultiFabs that we need
     MultiFab& cost = mfp->get_new_data(MFP::Cost_Idx);
 
-    MultiFab* field_data = &(mfp->get_data(field->data_idx,time));
-
-
     size_t n_species = species.size();
 
     Vector<Vector<Real>> U(species.size());
-    Vector<MultiFab*> species_data;
     for (size_t i=0; i<species.size();++i) {
         const HydroState& hstate = *species[i];
-        species_data.push_back(&(mfp->get_data(hstate.data_idx,time)));
         U[i].resize(hstate.n_cons());
+        update[hstate.data_idx].dU_status = UpdateData::Status::Changed;
     }
 
     Vector<Array4<Real>> species4(n_species);
     Vector<Array4<Real>> species_dU4(n_species);
-
-
 
     // define some 'registers'
 
@@ -126,13 +164,6 @@ void Plasma5::explicit_solve(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, cons
     // get charge and current density
     Real charge_density, current_x, current_y, current_z;
 
-    // mark dU components that have been touched
-    dU[field->data_idx].first = 1;
-
-    for (int n=0; n<n_species; ++n) {
-        dU[species[n]->data_idx].first = 1;
-    }
-
     for (MFIter mfi(cost); mfi.isValid(); ++mfi) {
 
         Real wt = ParallelDescriptor::second();
@@ -153,12 +184,13 @@ void Plasma5::explicit_solve(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, cons
 
 #endif
 
-        Array4<Real> const& field4 = field_data->array(mfi);
-        Array4<Real> const& field_dU4 = dU[field->data_idx].second.array(mfi);
+        Array4<Real> const& field4 = update[field->data_idx].U.array(mfi);
+        Array4<Real> const& field_dU4 = update[field->data_idx].dU.array(mfi);
 
         for (int n=0; n<n_species; ++n) {
-            species4[n] = species_data[n]->array(mfi);
-            species_dU4[n] = dU[species[n]->data_idx].second.array(mfi);
+            const int data_idx = species[n]->data_idx;
+            species4[n] = update[data_idx].U.array(mfi);
+            species_dU4[n] = update[data_idx].dU.array(mfi);
         }
 
 
@@ -249,35 +281,24 @@ void Plasma5::explicit_solve(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, cons
     }
 }
 
-void Plasma5::implicit_solve(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, const Real time, const Real dt)
+void Plasma5::implicit_solve(MFP* mfp, Vector<UpdateData>& update, const Real time, const Real dt)
 {
     BL_PROFILE("Plasma5::implicit_solve");
 
     // collect all of the MultiFabs that we need
     MultiFab& cost = mfp->get_new_data(MFP::Cost_Idx);
 
-    MultiFab* field_data = &(mfp->get_data(field->data_idx,time));
-
 
     size_t n_species = species.size();
 
     Vector<Vector<Real>> U(species.size());
-    Vector<MultiFab*> species_data;
     for (size_t i=0; i<species.size();++i) {
         const HydroState& hstate = *species[i];
-        species_data.push_back(&(mfp->get_data(hstate.data_idx,time)));
         U[i].resize(hstate.n_cons());
     }
 
     Vector<Array4<Real>> species4(n_species);
     Vector<Array4<Real>> species_dU4(n_species);
-
-    // mark dU components that have been touched
-    dU[field->data_idx].first = 1;
-
-    for (int n=0; n<n_species; ++n) {
-        dU[species[n]->data_idx].first = 1;
-    }
 
 
     // define the linear system matrix/vector and the associated solver
@@ -330,12 +351,13 @@ void Plasma5::implicit_solve(MFP* mfp, Vector<std::pair<int, MultiFab> > &dU, co
 
 #endif
 
-        Array4<Real> const& field4 = field_data->array(mfi);
-        Array4<Real> const& field_dU4 = dU[field->data_idx].second.array(mfi);
+        Array4<Real> const& field4 = update[field->data_idx].U.array(mfi);
+        Array4<Real> const& field_dU4 = update[field->data_idx].dU.array(mfi);
 
         for (int n=0; n<n_species; ++n) {
-            species4[n] = species_data[n]->array(mfi);
-            species_dU4[n] = dU[species[n]->data_idx].second.array(mfi);
+            const int data_idx = species[n]->data_idx;
+            species4[n] = update[data_idx].U.array(mfi);
+            species_dU4[n] = update[data_idx].dU.array(mfi);
         }
 
 

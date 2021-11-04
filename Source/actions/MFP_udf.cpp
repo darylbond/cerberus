@@ -32,15 +32,37 @@ UserDefined::UserDefined(const int idx, const sol::table &def)
     return;
 }
 
-void UserDefined::calc_time_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>& dU, const Real time, const Real dt)
+void UserDefined::get_data(MFP* mfp, Vector<UpdateData>& update, const Real time) const
+{
+    BL_PROFILE("UserDefined::get_data");
+
+    // copy the data
+    if (update[state->data_idx].dU_status == UpdateData::Status::Inactive) {
+        MultiFab& species_data_ref = mfp->get_data(state->data_idx,time);
+
+        update[state->data_idx].U.define(mfp->boxArray(), mfp->DistributionMap(),
+                            species_data_ref.nComp(),species_data_ref.nGrowVect(),
+                            MFInfo(),mfp->Factory());
+
+        update[state->data_idx].dU.define(mfp->boxArray(), mfp->DistributionMap(),
+                            species_data_ref.nComp(),species_data_ref.nGrowVect(),
+                            MFInfo(),mfp->Factory());
+        update[state->data_idx].dU.setVal(0.0);
+
+        MultiFab::Copy (update[state->data_idx].U, species_data_ref, 0, 0, species_data_ref.nComp(),species_data_ref.nGrowVect());
+
+        update[state->data_idx].dU_status = UpdateData::Status::Local;
+    }
+}
+
+void UserDefined::calc_time_derivative(MFP* mfp, Vector<UpdateData>& update, const Real time, const Real dt)
 {
     BL_PROFILE("UserDefined::calc_time_derivative");
 
     // collect all of the MultiFabs that we need
     MultiFab& cost = mfp->get_new_data(MFP::Cost_Idx);
 
-    // mark dU components that have been touched
-    dU[state->data_idx].first = 1;
+    update[state->data_idx].dU_status = UpdateData::Status::Changed;
 
     std::map<std::string, Real> Q{{"x",0.0}, {"y",0.0}, {"z",0.0}, {"t",time}};
     Real x, y, z;
@@ -70,7 +92,7 @@ void UserDefined::calc_time_derivative(MFP* mfp, Vector<std::pair<int,MultiFab>>
 
 #endif
 
-        Array4<Real> const& dU4 = dU[state->data_idx].second.array(mfi);
+        Array4<Real> const& dU4 = update[state->data_idx].dU.array(mfi);
 
 
         for     (int k = lo.z; k <= hi.z; ++k) {

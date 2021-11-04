@@ -1,4 +1,4 @@
-#include "MFP_CTU_hydro.H"
+#include "MFP_flux_update.H"
 #include "MFP.H"
 #include "MFP_state.H"
 #include "sol.hpp"
@@ -6,18 +6,16 @@
 #include "Dense"
 #include "MFP_diagnostics.H"
 
-std::string HydroCTU::tag = "CTU";
-bool HydroCTU::registered = GetActionFactory().Register(HydroCTU::tag, ActionBuilder<HydroCTU>);
+std::string FluxUpdate::tag = "flux";
+bool FluxUpdate::registered = GetActionFactory().Register(FluxUpdate::tag, ActionBuilder<FluxUpdate>);
 
-HydroCTU::HydroCTU(){}
-HydroCTU::~HydroCTU(){}
+FluxUpdate::FluxUpdate(){}
+FluxUpdate::~FluxUpdate(){}
 
-HydroCTU::HydroCTU(const int idx, const sol::table &def)
+FluxUpdate::FluxUpdate(const int idx, const sol::table &def)
 {
     action_idx = idx;
     name = def["name"];
-
-    do_CTU = def.get_or("corner_transport", true);
 
     const sol::table state_names = def["states"];
 
@@ -38,7 +36,7 @@ HydroCTU::HydroCTU(const int idx, const sol::table &def)
     return;
 }
 
-void HydroCTU::get_data(MFP* mfp, Vector<UpdateData>& update, const Real time) const
+void FluxUpdate::get_data(MFP* mfp, Vector<UpdateData>& update, const Real time) const
 {
     BL_PROFILE("FluxUpdate::get_U0");
 
@@ -67,6 +65,7 @@ void HydroCTU::get_data(MFP* mfp, Vector<UpdateData>& update, const Real time) c
             update[estate.data_idx].dU.define(mfp->boxArray(), mfp->DistributionMap(),
                                 ns,state_data_ref.nGrowVect(),
                                 MFInfo(),mfp->Factory());
+
             update[estate.data_idx].dU.setVal(0.0);
 
 #ifdef AMREX_USE_EB
@@ -80,7 +79,9 @@ void HydroCTU::get_data(MFP* mfp, Vector<UpdateData>& update, const Real time) c
     }
 }
 
-void HydroCTU::calc_spatial_derivative(MFP* mfp, Vector<UpdateData>& update, const Real time, const Real dt, const Real flux_register_scale)
+
+
+void FluxUpdate::calc_spatial_derivative(MFP* mfp, Vector<UpdateData>& update, const Real time, const Real dt, const Real flux_register_scale)
 {
     BL_PROFILE("CTU::calc_spatial_derivative");
 
@@ -128,6 +129,7 @@ void HydroCTU::calc_spatial_derivative(MFP* mfp, Vector<UpdateData>& update, con
     for (int idx=0; idx<n_states; ++idx) {
         EulerianState &istate = *data_states[idx];
         const int data_idx = data_indexes[idx];
+
 
         if (istate.reflux && level < finest_level) {
             MFP& fine_level = mfp->getLevel(level + 1);
@@ -249,24 +251,6 @@ void HydroCTU::calc_spatial_derivative(MFP* mfp, Vector<UpdateData>& update, con
                            #endif
                                        );
 
-            // ===================================================================
-            // update the face values to time t+1/2 based on the local wave speeds
-
-            // TODO: this step currently assumes a single speed for all components and
-            // should be updated to calculate the correct characteristic speeds
-            // for each component individually
-            if (do_CTU) {
-                istate.calc_time_averaged_faces(rbox,
-                                                prim,
-                                                R_lo[idx],
-                                                R_hi[idx],
-                                #ifdef AMREX_USE_EB
-                                                flag,
-                                #endif
-                                                dx,
-                                                dt);
-            }
-
         }
 
         // 3.1 Setup for flux calculation
@@ -274,7 +258,6 @@ void HydroCTU::calc_spatial_derivative(MFP* mfp, Vector<UpdateData>& update, con
         // resize the flux arrays before any get used
         for (int idx=0; idx<n_states; ++idx) {
             EulerianState &istate = *data_states[idx];
-            const int data_idx = data_indexes[idx];
 
 
             if (active[idx] == FabType::covered)
@@ -285,7 +268,7 @@ void HydroCTU::calc_spatial_derivative(MFP* mfp, Vector<UpdateData>& update, con
                 // get a node centered box in direction d that encloses the original box
                 Box fbox = surroundingNodes(box, d);
 
-                if (do_CTU || (istate.is_viscous() && num_grow_eb > 0)) {
+                if (istate.is_viscous() && (num_grow_eb > 0)) {
                     // enlarge the fluxes for face corrections
                     // grow in all directions but that of the flux
                     IntVect expand(1);
@@ -337,59 +320,7 @@ void HydroCTU::calc_spatial_derivative(MFP* mfp, Vector<UpdateData>& update, con
                                *fab_flags[idx],
                    #endif
                                dx, dt);
-
-#if AMREX_SPACEDIM > 1
-            if (do_CTU) {
-                // now that we have done the fluxes, do we need to correct them???
-                // correction is done according to the following steps:
-                // 1. calculate the fluxes (above)
-                // 2. modify the reconstructed face states using the flux information
-                // 3. recalculate the fluxes with the updated face values
-
-                istate.correct_face_prim(grow(box,num_grow_eb),
-                                         R_lo[idx],
-                                         R_hi[idx],
-                                         fluxes[idx],
-                         #ifdef AMREX_USE_EB
-                                         *fab_flags[idx],
-                         #endif
-                                         dx, dt);
-
-                // following the update of the face values we need to update any boundary conditions
-
-                istate.update_face_prim(box,
-                                        geom,
-                                        R_lo[idx],
-                                        R_hi[idx],
-                        #ifdef AMREX_USE_EB
-                                        *fab_flags[idx],
-                        #endif
-                                        time,
-                                        true);
-            }
-#endif
         }
-
-        //---
-#if AMREX_SPACEDIM > 1
-        if (do_CTU) {
-            for (int idx=0; idx<n_states; ++idx) {
-                EulerianState &istate = *data_states[idx];
-                if (active[idx] == FabType::covered) continue;
-
-                // recalculate the fluxes
-                istate.calc_fluxes(box,
-                                   *conserved[idx],
-                                   R_lo[idx],
-                                   R_hi[idx],
-                                   fluxes[idx],
-                   #ifdef AMREX_USE_EB
-                                   *fab_flags[idx],
-                   #endif
-                                   dx, dt);
-            }
-        }
-#endif
 
         //---
         for (int idx=0; idx<n_states; ++idx) {

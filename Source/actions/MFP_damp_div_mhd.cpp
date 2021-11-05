@@ -44,25 +44,12 @@ DampDivergenceMHD::DampDivergenceMHD(const int idx, const sol::table &def)
 
 void DampDivergenceMHD::get_data(MFP* mfp, Vector<UpdateData>& update, const Real time) const
 {
-    BL_PROFILE("UserDefined::get_data");
+    BL_PROFILE("DampDivergenceMHD::get_data");
 
-    // copy the data
-    if (update[mhd->data_idx].dU_status == UpdateData::Status::Inactive) {
-        MultiFab& species_data_ref = mfp->get_data(mhd->data_idx,time);
+    Vector<Array<int,2>> options = {{mhd->global_idx, 0}};
 
-        update[mhd->data_idx].U.define(mfp->boxArray(), mfp->DistributionMap(),
-                            species_data_ref.nComp(),species_data_ref.nGrowVect(),
-                            MFInfo(),mfp->Factory());
+    Action::get_data(mfp, options, update, time);
 
-        update[mhd->data_idx].dU.define(mfp->boxArray(), mfp->DistributionMap(),
-                            species_data_ref.nComp(),species_data_ref.nGrowVect(),
-                            MFInfo(),mfp->Factory());
-        update[mhd->data_idx].dU.setVal(0.0);
-
-        MultiFab::Copy (update[mhd->data_idx].U, species_data_ref, 0, 0, species_data_ref.nComp(),species_data_ref.nGrowVect());
-
-        update[mhd->data_idx].dU_status = UpdateData::Status::Local;
-    }
 }
 
 void DampDivergenceMHD::calc_time_derivative(MFP* mfp, Vector<UpdateData>& update, const Real time, const Real dt)

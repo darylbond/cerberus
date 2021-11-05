@@ -42,40 +42,16 @@ Acceleration::Acceleration(const int idx, const sol::table &def)
 
 void Acceleration::get_data(MFP* mfp, Vector<UpdateData>& update, const Real time) const
 {
-    BL_PROFILE("Collisions::get_U0");
+    BL_PROFILE("Acceleration::get_data");
 
-#ifdef AMREX_USE_EB
-    constexpr int num_grow_eb = 2;
-#else
-    constexpr int num_grow_eb = 0;
-#endif
+    Vector<Array<int,2>> options(species.size());
 
-    // copy the species data
     for (size_t i=0; i<species.size();++i) {
-        const HydroState& hstate = *species[i];
-
-
-        if (update[hstate.data_idx].dU_status != UpdateData::Status::Filled) {
-
-            MultiFab& species_data_ref = mfp->get_data(hstate.data_idx,time);
-
-            int ns = species_data_ref.nComp();
-            int ng = hstate.num_grow + num_grow_eb;
-
-            update[hstate.data_idx].U.define(mfp->boxArray(), mfp->DistributionMap(),
-                                ns,ng,
-                                MFInfo(),mfp->Factory());
-
-            update[hstate.data_idx].dU.define(mfp->boxArray(), mfp->DistributionMap(),
-                                ns,species_data_ref.nGrowVect(),
-                                MFInfo(),mfp->Factory());
-            update[hstate.data_idx].dU.setVal(0.0);
-
-            MultiFab::Copy(update[hstate.data_idx].U, species_data_ref, 0, 0, species_data_ref.nComp(),species_data_ref.nGrowVect());
-
-            update[hstate.data_idx].U_status = UpdateData::Status::Local;
-        }
+        options[i] = {species[i]->global_idx, 0};
     }
+
+    Action::get_data(mfp, options, update, time);
+
 }
 
 void Acceleration::calc_time_derivative(MFP* mfp, Vector<UpdateData> &update, const Real time, const Real dt)

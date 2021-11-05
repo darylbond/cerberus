@@ -62,43 +62,14 @@ BraginskiiCTU::BraginskiiCTU(const int idx, const sol::table &def)
 
 void BraginskiiCTU::get_data(MFP* mfp, Vector<UpdateData>& update, const Real time) const
 {
-    BL_PROFILE("UserDefined::get_data");
+    BL_PROFILE("BraginskiiCTU::get_data");
 
-    // copy the data
+    Vector<Array<int,2>> options = {
+        {ion_state->global_idx, 1},{electron_state->global_idx, 1}, {field_state->global_idx, 1}
+    };
 
-    for (const int& data_idx : {ion_state->data_idx, electron_state->data_idx, field_state->data_idx}) {
+    Action::get_data(mfp, options, update, time);
 
-        if (update[data_idx].dU_status == UpdateData::Status::Inactive) {
-            MultiFab& species_data_ref = mfp->get_data(data_idx,time);
-
-            update[data_idx].U.define(mfp->boxArray(), mfp->DistributionMap(),
-                                      species_data_ref.nComp(),species_data_ref.nGrowVect(),
-                                      MFInfo(),mfp->Factory());
-
-            update[data_idx].dU.define(mfp->boxArray(), mfp->DistributionMap(),
-                                       species_data_ref.nComp(),species_data_ref.nGrowVect(),
-                                       MFInfo(),mfp->Factory());
-            update[data_idx].dU.setVal(0.0);
-
-            if (data_idx == electron_state->data_idx) {
-#ifdef AMREX_USE_EB
-                EB2::IndexSpace::push(const_cast<EB2::IndexSpace*>(electron_state.eb2_index));
-#endif
-
-                int ng = 1;
-
-                mfp->FillPatch(*mfp, update[data_idx].U, ng, time, data_idx, 0, electron_state->n_cons());
-
-                update[data_idx].dU_status = UpdateData::Status::Filled;
-
-            } else {
-
-                MultiFab::Copy (update[data_idx].U, species_data_ref, 0, 0, species_data_ref.nComp(),species_data_ref.nGrowVect());
-
-                update[data_idx].dU_status = UpdateData::Status::Local;
-            }
-        }
-    }
 }
 
 Real BraginskiiCTU::get_coulomb_logarithm(const Real& T_i, const Real& T_e, const Real& nd_e)
@@ -1657,10 +1628,6 @@ void BraginskiiCTU::calc_spatial_derivative(MFP* mfp, Vector<UpdateData>& update
 
         if (istate.reflux && level > 0) {
             fr_as_fine[idx] = &mfp->flux_reg[data_idx];
-        }
-
-        if (fr_as_crse[idx]) {
-            fr_as_crse[idx]->reset();
         }
     }
 

@@ -26,6 +26,16 @@ Real MFP::advance(Real time, Real dt, int iteration, int ncycle)
         MultiFab::Copy(new_data, old_data,0,0,old_data.nComp(),0);
     }
 
+    // reset any flux registers
+    const int finest_level = parent->finestLevel();
+    for (int data_idx = 0; data_idx < eulerian_states.size(); ++data_idx) {
+        EulerianState& istate = EulerianState::get_state(data_idx);
+        if (istate.reflux && level < finest_level) {
+            MFP& fine_level = getLevel(level + 1);
+            fine_level.flux_reg[data_idx].reset();
+        }
+    }
+
     switch (time_integration_scheme) {
     case TimeIntegrator::RungeKutta:
         advance_RK(time, dt, iteration, ncycle);
@@ -60,11 +70,20 @@ void MFP::advance_RK(Real time, Real dt, int iteration, int ncycle)
 
     Vector<UpdateData> RK_step(eulerian_states.size());
 
+
+    // set the proportion of contributions for refluxing
+    Real reflux_scaling;
+    if (time_integration_nsteps >= 2) {
+        reflux_scaling = 0.5*dt;
+    } else {
+        reflux_scaling = dt;
+    }
+
     for (const auto& act : actions) {
         // calculate any contributions to dU (dU += f(old))
         act->get_data(this, RK_step, time);
         act->calc_time_derivative(this, RK_step, time, dt);
-        act->calc_spatial_derivative(this, RK_step, time, dt, 0.5*dt);
+        act->calc_spatial_derivative(this, RK_step, time, dt, reflux_scaling);
     }
 
     // add dU to new data (new = old + dU)
@@ -79,6 +98,7 @@ void MFP::advance_RK(Real time, Real dt, int iteration, int ncycle)
         MultiFab::Add(new_data, RK_step[data_idx].dU, 0, 0, nc, 0);
 
         RK_step[data_idx].U_status = UpdateData::Status::Expired;
+        RK_step[data_idx].dU_status = UpdateData::Status::Expired;
     }
 
     if (time_integration_nsteps >= 2) {
@@ -92,7 +112,7 @@ void MFP::advance_RK(Real time, Real dt, int iteration, int ncycle)
             act->get_data(this, RK_step, time+dt);
 
             act->calc_time_derivative(this, RK_step, time, dt);
-            act->calc_spatial_derivative(this, RK_step, time, dt, 0.5*dt);
+            act->calc_spatial_derivative(this, RK_step, time, dt, reflux_scaling);
         }
 
         // final update
@@ -101,6 +121,9 @@ void MFP::advance_RK(Real time, Real dt, int iteration, int ncycle)
             if (RK_step[data_idx].dU_status != UpdateData::Status::Changed) continue;
 
             const int nc = RK_step[data_idx].dU.nComp();
+
+//            plot_FAB_2d(RK_step[data_idx].U, 1, 2, "U1", false,true);
+//            plot_FAB_2d(RK_step[data_idx].dU, 1, 2, "dU1", false,true);
 
             // U^2 = U^1 + dt*dU^1
             MultiFab::Add(RK_step[data_idx].U, RK_step[data_idx].dU, 0, 0, nc, 0);
@@ -149,11 +172,10 @@ void MFP::advance_strang(Real time, Real dt, int iteration, int ncycle)
         if (time_integration_nsteps >= 2) {
             MultiFab::Add(RK_step[data_idx].U, RK_step[data_idx].dU, 0, 0, nc, 0);
             RK_step[data_idx].dU.setVal(0.0);
-            RK_step[data_idx].dU_status = UpdateData::Status::Inactive;
+            RK_step[data_idx].dU_status = UpdateData::Status::Expired;
         } else {
             MultiFab& new_data = get_new_data(data_idx);
             MultiFab::Add(new_data, RK_step[data_idx].dU, 0, 0, nc, 0);
-            RK_step[data_idx].U_status = UpdateData::Status::Expired;
         }
     }
 
@@ -186,6 +208,7 @@ void MFP::advance_strang(Real time, Real dt, int iteration, int ncycle)
             //       = U^0 + 0.5*dt*dU^0 + 0.5*dt*dU^1
             MultiFab::LinComb(new_data, 0.5, old_data, 0, 0.5, RK_step[data_idx].U, 0, 0, nc, 0);
             RK_step[data_idx].U_status = UpdateData::Status::Expired;
+            RK_step[data_idx].dU_status = UpdateData::Status::Expired;
         }
     }
 
@@ -219,6 +242,9 @@ void MFP::advance_strang(Real time, Real dt, int iteration, int ncycle)
 
         MultiFab& new_data = get_new_data(data_idx);
         MultiFab::Add(new_data, RK_step[data_idx].dU, 0, 0, nc, 0);
+
+        RK_step[data_idx].U_status = UpdateData::Status::Expired;
+        RK_step[data_idx].dU_status = UpdateData::Status::Expired;
 
     }
 
@@ -280,5 +306,7 @@ void MFP::advance_strang(Real time, Real dt, int iteration, int ncycle)
         // update new data with any one-shot updates based on old data (new* = f(old))
         act->apply_time_derivative(this, time+dt, 0.5*dt);
     }
+
+    ParallelDescriptor::Barrier();
 
 }

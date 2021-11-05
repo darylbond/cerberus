@@ -36,23 +36,10 @@ void UserDefined::get_data(MFP* mfp, Vector<UpdateData>& update, const Real time
 {
     BL_PROFILE("UserDefined::get_data");
 
-    // copy the data
-    if (update[state->data_idx].dU_status == UpdateData::Status::Inactive) {
-        MultiFab& species_data_ref = mfp->get_data(state->data_idx,time);
+    Vector<Array<int,2>> options = {{state->global_idx, 0}};
 
-        update[state->data_idx].U.define(mfp->boxArray(), mfp->DistributionMap(),
-                            species_data_ref.nComp(),species_data_ref.nGrowVect(),
-                            MFInfo(),mfp->Factory());
+    Action::get_data(mfp, options, update, time);
 
-        update[state->data_idx].dU.define(mfp->boxArray(), mfp->DistributionMap(),
-                            species_data_ref.nComp(),species_data_ref.nGrowVect(),
-                            MFInfo(),mfp->Factory());
-        update[state->data_idx].dU.setVal(0.0);
-
-        MultiFab::Copy (update[state->data_idx].U, species_data_ref, 0, 0, species_data_ref.nComp(),species_data_ref.nGrowVect());
-
-        update[state->data_idx].dU_status = UpdateData::Status::Local;
-    }
 }
 
 void UserDefined::calc_time_derivative(MFP* mfp, Vector<UpdateData>& update, const Real time, const Real dt)

@@ -12,8 +12,6 @@ class MFP;
 
 using namespace amrex;
 
-
-
 struct UpdateData {
 
     enum class Status {
@@ -57,6 +55,7 @@ public:
     Vector<int> state_indexes;
 
     // copy state data
+    void get_data(MFP* mfp, Vector<Array<int,2>>& options, Vector<UpdateData>& update, const Real time) const;
     virtual void get_data(MFP* mfp, Vector<UpdateData>& update, const Real time) const {}
 
     // calculate time and space derivatives for situations where we can accumulate the effects

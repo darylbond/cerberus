@@ -59,46 +59,18 @@ Plasma5::Plasma5(const int idx, const sol::table &def)
 
 void Plasma5::get_data(MFP* mfp, Vector<UpdateData>& update, const Real time) const
 {
-    BL_PROFILE("Plasma5::get_U0");
+    BL_PROFILE("Plasma5::get_data");
 
-    // copy the field data
-    if (update[field->data_idx].dU_status == UpdateData::Status::Inactive) {
-        MultiFab& field_data_ref = mfp->get_data(field->data_idx,time);
+    Vector<Array<int,2>> options(species.size()+1);
 
-        update[field->data_idx].U.define(mfp->boxArray(), mfp->DistributionMap(),
-                            field_data_ref.nComp(),field_data_ref.nGrowVect(),
-                            MFInfo(),mfp->Factory());
+    options[0] = {field->global_idx, 0};
 
-        update[field->data_idx].dU.define(mfp->boxArray(), mfp->DistributionMap(),
-                            field_data_ref.nComp(),field_data_ref.nGrowVect(),
-                            MFInfo(),mfp->Factory());
-
-        MultiFab::Copy(update[field->data_idx].U, field_data_ref, 0, 0, field_data_ref.nComp(),field_data_ref.nGrowVect());
-
-        update[field->data_idx].dU_status = UpdateData::Status::Local;
-    }
-
-    // copy the species data
     for (size_t i=0; i<species.size();++i) {
-        const HydroState& hstate = *species[i];
-
-        if (update[hstate.data_idx].dU_status == UpdateData::Status::Inactive) {
-            MultiFab& species_data_ref = mfp->get_data(hstate.data_idx,time);
-
-            update[hstate.data_idx].U.define(mfp->boxArray(), mfp->DistributionMap(),
-                                species_data_ref.nComp(),species_data_ref.nGrowVect(),
-                                MFInfo(),mfp->Factory());
-
-            update[hstate.data_idx].dU.define(mfp->boxArray(), mfp->DistributionMap(),
-                                species_data_ref.nComp(),species_data_ref.nGrowVect(),
-                                MFInfo(),mfp->Factory());
-            update[hstate.data_idx].dU.setVal(0.0);
-
-            MultiFab::Copy (update[hstate.data_idx].U, species_data_ref, 0, 0, species_data_ref.nComp(),species_data_ref.nGrowVect());
-
-            update[hstate.data_idx].dU_status = UpdateData::Status::Local;
-        }
+        options[i+1] = {species[i]->global_idx, 0};
     }
+
+    Action::get_data(mfp, options, update, time);
+
 }
 
 void Plasma5::calc_time_derivative(MFP* mfp, Vector<UpdateData>& update, const Real time, const Real dt)

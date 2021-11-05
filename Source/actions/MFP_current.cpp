@@ -42,25 +42,12 @@ Current::Current(const int idx, const sol::table &def)
 
 void Current::get_data(MFP* mfp, Vector<UpdateData>& update, const Real time) const
 {
-    BL_PROFILE("UserDefined::get_data");
+    BL_PROFILE("Current::get_data");
 
-    // copy the data
-    if (update[field->data_idx].dU_status == UpdateData::Status::Inactive) {
-        MultiFab& field_data_ref = mfp->get_data(field->data_idx,time);
+    Vector<Array<int,2>> options = {{field->global_idx, 0}};
 
-        update[field->data_idx].U.define(mfp->boxArray(), mfp->DistributionMap(),
-                            field_data_ref.nComp(),field_data_ref.nGrowVect(),
-                            MFInfo(),mfp->Factory());
+    Action::get_data(mfp, options, update, time);
 
-        update[field->data_idx].dU.define(mfp->boxArray(), mfp->DistributionMap(),
-                            field_data_ref.nComp(),field_data_ref.nGrowVect(),
-                            MFInfo(),mfp->Factory());
-        update[field->data_idx].dU.setVal(0.0);
-
-        MultiFab::Copy (update[field->data_idx].U, field_data_ref, 0, 0, field_data_ref.nComp(),field_data_ref.nGrowVect());
-
-        update[field->data_idx].dU_status = UpdateData::Status::Local;
-    }
 }
 
 

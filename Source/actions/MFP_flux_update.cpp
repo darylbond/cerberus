@@ -38,45 +38,16 @@ FluxUpdate::FluxUpdate(const int idx, const sol::table &def)
 
 void FluxUpdate::get_data(MFP* mfp, Vector<UpdateData>& update, const Real time) const
 {
-    BL_PROFILE("FluxUpdate::get_U0");
+    BL_PROFILE("FluxUpdate::get_data");
 
-#ifdef AMREX_USE_EB
-    constexpr int num_grow_eb = 2;
-#else
-    constexpr int num_grow_eb = 0;
-#endif
+    Vector<Array<int,2>> options(states.size());
 
-    // copy the species data
     for (size_t i=0; i<states.size();++i) {
-        const EulerianState& estate = *states[i];
-
-
-        if (update[estate.data_idx].dU_status != UpdateData::Status::Filled) {
-
-            MultiFab& state_data_ref = mfp->get_data(estate.data_idx,time);
-
-            int ns = state_data_ref.nComp();
-            int ng = estate.num_grow + num_grow_eb;
-
-            update[estate.data_idx].U.define(mfp->boxArray(), mfp->DistributionMap(),
-                                ns,ng,
-                                MFInfo(),mfp->Factory());
-
-            update[estate.data_idx].dU.define(mfp->boxArray(), mfp->DistributionMap(),
-                                ns,state_data_ref.nGrowVect(),
-                                MFInfo(),mfp->Factory());
-
-            update[estate.data_idx].dU.setVal(0.0);
-
-#ifdef AMREX_USE_EB
-            EB2::IndexSpace::push(const_cast<EB2::IndexSpace*>(estate.eb2_index));
-#endif
-
-            mfp->FillPatch(*mfp, update[estate.data_idx].U, ng, time, estate.data_idx, 0, ns);
-
-            update[estate.data_idx].dU_status = UpdateData::Status::Filled;
-        }
+        options[i] = {states[i]->global_idx, 1};
     }
+
+    Action::get_data(mfp, options, update, time);
+
 }
 
 
@@ -140,9 +111,6 @@ void FluxUpdate::calc_spatial_derivative(MFP* mfp, Vector<UpdateData>& update, c
             fr_as_fine[idx] = &mfp->flux_reg[data_idx];
         }
 
-        if (fr_as_crse[idx]) {
-            fr_as_crse[idx]->reset();
-        }
     }
 
     // ==========================================================================
@@ -308,6 +276,7 @@ void FluxUpdate::calc_spatial_derivative(MFP* mfp, Vector<UpdateData>& update, c
         //---
         for (int idx=0; idx<n_states; ++idx) {
             EulerianState &istate = *data_states[idx];
+            const int data_idx = data_indexes[idx];
 
             if (active[idx] == FabType::covered) continue;
 
@@ -320,15 +289,7 @@ void FluxUpdate::calc_spatial_derivative(MFP* mfp, Vector<UpdateData>& update, c
                                *fab_flags[idx],
                    #endif
                                dx, dt);
-        }
 
-        //---
-        for (int idx=0; idx<n_states; ++idx) {
-            EulerianState &istate = *data_states[idx];
-            const int data_idx = data_indexes[idx];
-
-
-            if (active[idx] == FabType::covered) continue;
 
             if (istate.is_viscous()) {
 

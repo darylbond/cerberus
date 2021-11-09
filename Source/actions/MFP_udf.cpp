@@ -100,7 +100,8 @@ void UserDefined::calc_time_derivative(MFP* mfp, Vector<UpdateData>& update, con
 #endif
 
                     for (int d = 0; d<n_cons; ++d) {
-                        dU4(i,j,k,d) += dt*terms[d](Q);
+                        const Real udf = dt*terms[d](Q);
+                        dU4(i,j,k,d) += udf;
                     }
                 }
             }

@@ -88,7 +88,6 @@ void Plasma5::calc_time_derivative(MFP* mfp, Vector<UpdateData>& update, const R
         Abort("How did we get here?");
     }
 
-
 }
 
 void Plasma5::explicit_solve(MFP* mfp, Vector<UpdateData>& update, const Real time, const Real dt)
@@ -99,6 +98,8 @@ void Plasma5::explicit_solve(MFP* mfp, Vector<UpdateData>& update, const Real ti
     MultiFab& cost = mfp->get_new_data(MFP::Cost_Idx);
 
     size_t n_species = species.size();
+
+    update[field->data_idx].dU_status = UpdateData::Status::Changed;
 
     Vector<Vector<Real>> U(species.size());
     for (size_t i=0; i<species.size();++i) {
@@ -263,10 +264,13 @@ void Plasma5::implicit_solve(MFP* mfp, Vector<UpdateData>& update, const Real ti
 
     size_t n_species = species.size();
 
+    update[field->data_idx].dU_status = UpdateData::Status::Changed;
+
     Vector<Vector<Real>> U(species.size());
     for (size_t i=0; i<species.size();++i) {
         const HydroState& hstate = *species[i];
         U[i].resize(hstate.n_cons());
+        update[hstate.data_idx].dU_status = UpdateData::Status::Changed;
     }
 
     Vector<Array4<Real>> species4(n_species);
@@ -429,9 +433,9 @@ void Plasma5::implicit_solve(MFP* mfp, Vector<UpdateData>& update, const Real ti
                     // the updates for the D field
                     // note that the linear system has solved for the updated field but we want the delta value
                     // hence we calculate delta = new - old
-                    field_dU4(i,j,k,+FieldDef::ConsIdx::Dx) = c(n_species*3 + 0)*ep - field4(i,j,k,+FieldDef::ConsIdx::Dx);
-                    field_dU4(i,j,k,+FieldDef::ConsIdx::Dy) = c(n_species*3 + 1)*ep - field4(i,j,k,+FieldDef::ConsIdx::Dy);
-                    field_dU4(i,j,k,+FieldDef::ConsIdx::Dz) = c(n_species*3 + 2)*ep - field4(i,j,k,+FieldDef::ConsIdx::Dz);
+                    field_dU4(i,j,k,+FieldDef::ConsIdx::Dx) += c(n_species*3 + 0)*ep - field4(i,j,k,+FieldDef::ConsIdx::Dx);
+                    field_dU4(i,j,k,+FieldDef::ConsIdx::Dy) += c(n_species*3 + 1)*ep - field4(i,j,k,+FieldDef::ConsIdx::Dy);
+                    field_dU4(i,j,k,+FieldDef::ConsIdx::Dz) += c(n_species*3 + 2)*ep - field4(i,j,k,+FieldDef::ConsIdx::Dz);
 
                     // new electric field
                     Ex = c(n_species*3 + 0);

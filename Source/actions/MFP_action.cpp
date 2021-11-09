@@ -41,7 +41,7 @@ void Action::get_data(MFP* mfp, Vector<Array<int,2>>& options, Vector<UpdateData
 
                 int ng = state.get_num_grow() + num_grow_eb;
 
-                if (U_status == UpdateData::Status::Inactive) {
+                if ((U_status == UpdateData::Status::Inactive) || (update[data_idx].U.nGrow() < ng)) {
                     update[data_idx].U.define(mfp->boxArray(), mfp->DistributionMap(),
                                               ns,ng,MFInfo(),mfp->Factory());
                 }

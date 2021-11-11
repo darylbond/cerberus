@@ -16,7 +16,7 @@ public:
     virtual void calc_time_derivative(MFP* mfp, Vector<UpdateData>& update,  const Real time, const Real dt) override;
 
     virtual std::string get_tag() const override {return tag;}
-    virtual ActionType get_type() const override {return ActionType::Lorentz;}
+    virtual ActionType get_type() const override {return ActionType::Collisions;}
 
     Vector<HydroState*> species;
     Vector<Vector<Real> > ccs;

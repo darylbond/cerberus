@@ -322,6 +322,7 @@ void HydroState::init_from_lua()
     set_values(state_def["mass"], mass);
     set_values(state_def["charge"], charge);
     set_values(state_def["gamma"], gamma);
+    set_values(state_def.get_or("names", sol::object()), comp_names);
 
     if (any_equal(mass.begin(), mass.end(), 0.0) or any_equal(gamma.begin(), gamma.end(), 0.0))
         Abort("State: "+name+"; mass and gamma cannot be 0");
@@ -337,6 +338,11 @@ void HydroState::init_from_lua()
     n_species = mass.size();
     n_tracers = n_species - 1;
 
+    if (comp_names.empty()) {
+        for (int i=0; i<n_species; ++i) {
+            comp_names.push_back("species_"+num2str(i));
+        }
+    }
 
     //
     // user defined functions
@@ -590,6 +596,38 @@ void HydroState::init_data(MFP* mfp, const Real time)
     }
 }
 
+void HydroState::get_alpha_fractions_from_prim(const Vector<Real> &Q, Vector<Real> &alpha, const int tracer_idx) const
+{
+    alpha.resize(n_species, 0.0);
+
+    std::copy(Q.begin()+tracer_idx, Q.begin()+tracer_idx+n_tracers, alpha.begin());
+
+    Real sum_alpha = 0.0;
+    for (size_t i=0; i<n_tracers; ++i) {
+        sum_alpha += alpha[i];
+    }
+
+    alpha[n_species-1] = 1.0 - sum_alpha;
+}
+
+void HydroState::get_alpha_fractions_from_cons(const Vector<Real> &U,
+                                               Vector<Real> &alpha,
+                                               const int density_idx,
+                                               const int tracer_idx) const
+{
+    alpha.resize(n_species, 0.0);
+
+    std::copy(U.begin()+tracer_idx, U.begin()+tracer_idx+n_tracers, alpha.begin());
+
+    Real rho = U[density_idx];
+    Real sum_alpha = 0.0;
+    for (size_t i=0; i<n_tracers; ++i) {
+        alpha[i] /= rho;
+        sum_alpha += alpha[i];
+    }
+
+    alpha[n_species-1] = 1.0 - sum_alpha;
+}
 
 Real HydroState::get_mass_from_prim(const Vector<Real> &Q, const int tracer_idx) const
 {

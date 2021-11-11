@@ -423,6 +423,8 @@ void MFP::update_ref()
         Abort("Either ref_temp or lightspeed need to be set, only set one");
     }
 
+    prs_ref = n_ref*m_ref*u_ref*u_ref;
+
     // need Larmor and Debye, can set these explicitly or via dS and beta
     int set = 0;
     if ((Larmor > 0) && (Debye > 0)) {

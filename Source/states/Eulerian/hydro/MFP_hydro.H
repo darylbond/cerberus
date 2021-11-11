@@ -35,6 +35,7 @@ public:
 
     bool mass_const, charge_const, gamma_const;
     Vector<Real> mass, charge, gamma;
+    Vector<std::string> comp_names;
     int n_species;
     int n_tracers;
     static std::string multicomp_prim_name;
@@ -87,7 +88,8 @@ public:
     virtual void init_data(MFP* mfp, const Real time) override;
     virtual void init_from_lua() override;
 
-
+    void get_alpha_fractions_from_prim(const Vector<Real> &Q, Vector<Real> &alpha, const int tracer_idx=+HydroDef::PrimIdx::NUM) const;
+    void get_alpha_fractions_from_cons(const Vector<Real> &U, Vector<Real> &alpha, const int density_idx=+HydroDef::ConsIdx::Density, const int tracer_idx=+HydroDef::ConsIdx::NUM) const;
 
     Real get_mass_from_cons(const Vector<Real> &U, const int density_idx=+HydroDef::ConsIdx::Density, const int tracer_idx=+HydroDef::ConsIdx::NUM) const;
     Real get_charge_from_cons(const Vector<Real> &U, const int density_idx=+HydroDef::ConsIdx::Density, const int tracer_idx=+HydroDef::ConsIdx::NUM) const;
@@ -95,7 +97,7 @@ public:
     Real get_cp_from_cons(const Vector<Real> &U, const int density_idx=+HydroDef::ConsIdx::Density, const int tracer_idx=+HydroDef::ConsIdx::NUM) const;
 
     Real get_mass_from_prim(const Vector<Real> &Q, const int idx=+HydroDef::PrimIdx::NUM) const;
-    Real get_charge_from_prim(const Vector<Real> &Q, const int tracer_idx=+HydroDef::PrimIdx::Density) const;
+    Real get_charge_from_prim(const Vector<Real> &Q, const int tracer_idx=+HydroDef::PrimIdx::NUM) const;
     Real get_gamma_from_prim(const Vector<Real> &Q, const int idx=+HydroDef::PrimIdx::NUM) const;
     Real get_cp_from_prim(const Vector<Real> &Q, const int tracer_idx=+HydroDef::PrimIdx::NUM) const;
 

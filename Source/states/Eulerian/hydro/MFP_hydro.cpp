@@ -1135,19 +1135,20 @@ void HydroState::get_plot_output(const Box& box,
                     for (int i = lo.x; i <= hi.x; ++i) {
 
 #ifdef AMREX_USE_EB
-                if (vf4(i,j,k) == 0.0) {
-                    continue;
-                }
+                if (vf4(i,j,k) == 0.0) continue;
 #endif
 
                 for (int n=0; n<n_cons(); ++n) {
                     S[n] = src4(i,j,k,n);
 
-                    if (std::isnan(S[n])) {
-                        Abort();
-                    }
+//                    if (std::isnan(S[n])) {
+//                        Abort();
+//                    }
 
                 }
+
+                if (S[+HydroDef::ConsIdx::Density] < effective_zero) continue;
+
 
                 if (load_charge) out4[charge_name](i,j,k) = get_charge_from_cons(S);
                 if (load_mass)   out4[mass_name](i,j,k)   = get_mass_from_cons(S);
@@ -1209,14 +1210,14 @@ Real HydroState::get_allowed_time_step(MFP* mfp) const
                         for (int i = lo.x; i <= hi.x; ++i) {
 
 #ifdef AMREX_USE_EB
-                    if (vf4(i,j,k) == 0.0) {
-                        continue;
-                    }
+                    if (vf4(i,j,k) == 0.0) continue;
 #endif
 
                     for (int n = 0; n<n_cons(); ++n) {
                         U[n] = data4(i,j,k,n);
                     }
+
+                    if (U[+HydroDef::ConsIdx::Density] < effective_zero) continue;
 
                     const RealArray speed = get_speed_from_cons(U);
 
@@ -2942,6 +2943,7 @@ void HydroState::write_info(nlohmann::json &js) const
     js["mass"] = mass;
     js["charge"] = charge;
     js["gamma"] = gamma;
+    js["comp_names"] = comp_names;
 
     if (viscous) {
 

@@ -3,6 +3,7 @@
 #include "MFP.H"
 #include "MFP_state.H"
 #include "sol.hpp"
+#include <algorithm>
 
 std::string GasKinetics::tag = "gas";
 bool GasKinetics::registered = GetActionFactory().Register(GasKinetics::tag, ActionBuilder<GasKinetics>);
@@ -32,27 +33,22 @@ GasKinetics::GasKinetics(const int idx, const sol::table &def)
 
     const sol::table state_names = def["states"];
 
-    neutrals = &HydroState::get_state(state_names["neutral"]);
-    if (neutrals->get_type() != State::StateType::Hydro)
-        Abort("An invalid neutral state has been defined for the 'gas' action "+name);
-    state_indexes.push_back(neutrals->global_idx);
-    neutrals->associated_actions.push_back(action_idx);
-    species[+SpeciesIdx::Neutral] = neutrals;
+    for (const auto& key_value_pair : state_names) {
+        std::string state_name = key_value_pair.second.as<std::string>();
+        State& istate = MFP::get_state(state_name);
 
-    ions = &HydroState::get_state(state_names["ion"]);
-    if (ions->get_type() != State::StateType::Hydro)
-        Abort("An invalid ion state has been defined for the 'gas' action "+name);
-    state_indexes.push_back(ions->global_idx);
-    ions->associated_actions.push_back(action_idx);
-    species[+SpeciesIdx::Ion] = ions;
+        switch (istate.get_type()) {
+        case State::StateType::Hydro:
+            states.push_back(static_cast<HydroState*>(&istate));
+            state_indexes.push_back(istate.global_idx);
+            istate.associated_actions.push_back(action_idx);
+            break;
+        default:
+            Abort("An invalid state has been defined for the 'gas' action '"+name+"'");
+        }
+    }
 
-    electrons = &HydroState::get_state(state_names["electron"]);
-    if (electrons->get_type() != State::StateType::Hydro)
-        Abort("An invalid electron state has been defined for the 'gas' action "+name);
-    state_indexes.push_back(electrons->global_idx);
-    electrons->associated_actions.push_back(action_idx);
-    species[+SpeciesIdx::Electron] = electrons;
-
+    num_states = states.size();
 
     // gas construction
 
@@ -78,8 +74,8 @@ GasKinetics::GasKinetics(const int idx, const sol::table &def)
         sname.resize(n);
 
         // search through the neutrals and ions to get where it is located (neutral/ion, idx)
-        for (const int& s : {+SpeciesIdx::Neutral, +SpeciesIdx::Ion}) {
-            found = findInVector(species[s]->comp_names, sname);
+        for (int s=0; s<num_states; ++s) {
+            found = findInVector(states[s]->comp_names, sname);
             if (found.first) {
                 species_info[i].species_idx = s;
                 species_info[i].alpha_idx = found.second;
@@ -90,9 +86,6 @@ GasKinetics::GasKinetics(const int idx, const sol::table &def)
         if (!found.first)
             Abort("Couldn't find sub-component for '"+sname+"'");
     }
-
-    if (neutrals->n_species + ions->n_species < n_species)
-        Abort("Number of species in '"+neutrals->name+"' + '"+ions->name+"' ("+num2str(neutrals->n_species + ions->n_species)+") is less than in the gas model in '"+name+"' ("+num2str(n_species)+")");
 
     gas_state_id = gas_state_new(gas_model_id);
 
@@ -116,11 +109,11 @@ void GasKinetics::get_data(MFP* mfp, Vector<UpdateData>& update, const Real time
 {
     BL_PROFILE("Collisions::get_data");
 
-    Vector<Array<int,2>> options = {
-        {neutrals->global_idx, 0},
-        {ions->global_idx, 0},
-        {electrons->global_idx, 0}
-    };
+    Vector<Array<int,2>> options(states.size());
+
+    for (size_t s=0; s<num_states; ++s) {
+        options.push_back({states[s]->global_idx, 0});
+    }
 
     Action::get_data(mfp, options, update, time);
 
@@ -138,23 +131,22 @@ void GasKinetics::calc_time_derivative(MFP* mfp, Vector<UpdateData>& update, con
     // collect all of the MultiFabs that we need
     MultiFab& cost = mfp->get_new_data(MFP::Cost_Idx);
 
+    Vector<Array4<const Real>> U4(num_states);
+    Vector<Array4<Real>> dU4(num_states);
+    Vector<Vector<Real>> U(num_states), alpha(num_states), accounting(num_states);
 
-    Array<Array4<const Real>,+SpeciesIdx::NUM> U4;
-    Array<Array4<Real>,+SpeciesIdx::NUM> dU4;
-    Array<Vector<Real>,+SpeciesIdx::NUM> U, alpha, accounting;
-
-    for (int si=0; si<+SpeciesIdx::NUM; ++si) {
-        update[species[si]->data_idx].dU_status = UpdateData::Status::Changed;
-        U[si].resize(species[si]->n_cons());
-        alpha[si].resize(species[si]->n_species);
-        accounting[si].resize(species[si]->n_species);
+    for (int si=0; si<num_states; ++si) {
+        update[states[si]->data_idx].dU_status = UpdateData::Status::Changed;
+        U[si].resize(states[si]->n_cons());
+        alpha[si].resize(states[si]->n_species);
+        accounting[si].resize(states[si]->n_species);
     }
 
     // overall gas state
     Real rho_sum, nrg_sum; // note that u is the specific internal energy
     Vector<Real> massf(n_species);
 
-    Array<Real,+SpeciesIdx::NUM> s_rho, s_u, s_massf, s_alpha;
+    Vector<Real> s_massf(num_states), s_T(num_states);
 
     Real dt_suggest;
 
@@ -170,16 +162,16 @@ void GasKinetics::calc_time_derivative(MFP* mfp, Vector<UpdateData>& update, con
 #ifdef AMREX_USE_EB
         // get the EB data required for later calls and check if we can skip this FAB entirely
 
-        EBData& eb = mfp->get_eb_data(neutrals->global_idx);
+        EBData& eb = mfp->get_eb_data(states[0]->global_idx);
         const FArrayBox& vfrac = eb.volfrac[mfi];
         if (vfrac.getType() == FabType::covered) continue;
 
         Array4<const Real> const& vf4 = vfrac.array();
 
 #endif
-        for (int si=0; si<+SpeciesIdx::NUM; ++si) {
-            U4[si] = update[species[si]->data_idx].U.array(mfi);
-            dU4[si] = update[species[si]->data_idx].dU.array(mfi);
+        for (int si=0; si<num_states; ++si) {
+            U4[si] = update[states[si]->data_idx].U.array(mfi);
+            dU4[si] = update[states[si]->data_idx].dU.array(mfi);
         }
 
         for     (int k = lo.z; k <= hi.z; ++k) {
@@ -188,57 +180,67 @@ void GasKinetics::calc_time_derivative(MFP* mfp, Vector<UpdateData>& update, con
                         for (int i = lo.x; i <= hi.x; ++i) {
 
 #ifdef AMREX_USE_EB
-                    if (vf4(i,j,k) == 0.0) {
-                        continue;
-                    }
+                    if (vf4(i,j,k) == 0.0) continue;
 #endif
 
                     // get the conserved quantities and the alpha values
-                    for (int si=0; si<+SpeciesIdx::NUM; ++si) {
+                    for (int si=0; si<num_states; ++si) {
                         Vector<Real>& UU = U[si];
                         const Array4<const Real>& UU4 = U4[si];
                         for (size_t l=0; l<UU.size(); ++l) {
                             UU[l] = UU4(i,j,k,l);
                         }
-                        species[si]->get_alpha_fractions_from_cons(UU, alpha[si]);
+
+                        if (UU[+HydroDef::ConsIdx::Density] < states[si]->effective_zero) {
+                            std::fill(alpha[si].begin(), alpha[si].end(), 0.0);
+                            s_T[si] = 0.0;
+                        } else {
+                            states[si]->get_alpha_fractions_from_cons(UU, alpha[si]);
+                            s_T[si] = states[si]->get_temperature_from_cons(UU);
+                        }
                     }
 
                     // get the overall sum of mass and energy held by the gas state
                     nrg_sum = 0.0;
-                    s_alpha.fill(0.0);
+                    std::fill(s_massf.begin(), s_massf.end(), 0.0);
                     for (int isp=0; isp<n_species; ++isp) {
                         SpeciesInfo& si = species_info[isp];
-                        s_alpha[si.species_idx] += alpha[si.species_idx][si.alpha_idx];
-                        nrg_sum   += alpha[si.species_idx][si.alpha_idx]*U[si.species_idx][+HydroDef::ConsIdx::Eden];
+                        s_massf[si.species_idx] += alpha[si.species_idx][si.alpha_idx]*U[si.species_idx][+HydroDef::ConsIdx::Density];
+                        nrg_sum                 += alpha[si.species_idx][si.alpha_idx]*U[si.species_idx][+HydroDef::ConsIdx::Eden];
                     }
 
-                    for (int si=0; si<+SpeciesIdx::NUM; ++si) {
-                        s_massf[si] = s_alpha[si]*U[si][+HydroDef::ConsIdx::Density];
-                    }
-
-                    rho_sum = sum_arr(s_massf);
+                    rho_sum = sum_vec(s_massf);
 
                     // get the mass fractions
                     for (int isp=0; isp<n_species; ++isp) {
                         SpeciesInfo& si = species_info[isp];
-                        massf[isp] = alpha[si.species_idx][si.alpha_idx] / s_alpha[si.species_idx];
+                        massf[isp] = alpha[si.species_idx][si.alpha_idx]*U[si.species_idx][+HydroDef::ConsIdx::Density]/rho_sum;
                     }
 
-                    // set properties
+                    // calculate the mass weighted temperature
+                    for (int si=0; si<num_states; ++si) {
+                        s_massf[si] /= rho_sum;
+                        s_T[si] *= s_massf[si];
+                    }
+                    const Real guess_T = sum_vec(s_T);
+
+
+
+                    // set properties - note the conversion to dimensional values
                     gas_state_set_scalar_field(gas_model_id, "rho", rho_sum*MFP::rho_ref);
                     gas_state_set_scalar_field(gas_model_id, "u", nrg_sum*MFP::prs_ref/(rho_sum*MFP::rho_ref));
-                    gas_state_set_scalar_field(gas_model_id, "T", 4000.0); // HACK!!
+                    gas_state_set_scalar_field(gas_model_id, "T", guess_T*MFP::T_ref); // need an initial guess at the temperature
                     gas_state_set_array_field(gas_state_id, "massf", massf.data(), n_species);
 
                     // update model and solve for update
                     gas_model_gas_state_update_thermo_from_rhou(gas_model_id, gas_state_id);
-                    thermochemical_reactor_gas_state_update(thermochemical_reactor_id, gas_state_id, dt, &dt_suggest);
+                    thermochemical_reactor_gas_state_update(thermochemical_reactor_id, gas_state_id, dt*MFP::t_ref, &dt_suggest);
 
                     // retrieve mass fraction data
                     gas_state_get_array_field(gas_state_id, "massf", massf.data(), n_species);
 
                     // accounting for changes in mass and tracers (mass fractions)
-                    for (int si=0; si<+SpeciesIdx::NUM; ++si) {
+                    for (int si=0; si<num_states; ++si) {
                         for (int ci=0; ci<alpha[si].size(); ++ci) {
                             accounting[si][ci] = U[si][+HydroDef::ConsIdx::Density]*alpha[si][ci]; // original mass
                         }
@@ -249,16 +251,16 @@ void GasKinetics::calc_time_derivative(MFP* mfp, Vector<UpdateData>& update, con
                         accounting[si.species_idx][si.alpha_idx] = massf[isp]*rho_sum;
                     }
 
-                    for (int si=0; si<+SpeciesIdx::NUM; ++si) {
+                    for (int si=0; si<num_states; ++si) {
                         const Real rho = sum_vec(accounting[si]);
                         dU4[si](i,j,k,+HydroDef::ConsIdx::Density) += rho - U4[si](i,j,k,+HydroDef::ConsIdx::Density);
-                        for (int ci=0; ci<species[si]->n_tracers; ++ci) {
+                        for (int ci=0; ci<states[si]->n_tracers; ++ci) {
                             dU4[si](i,j,k,+HydroDef::ConsIdx::NUM + ci) += accounting[si][ci]  - U4[si](i,j,k,+HydroDef::ConsIdx::NUM + ci);
                         }
                     }
 
                     // accounting for changes in energy density
-                    for (int si=0; si<+SpeciesIdx::NUM; ++si) {
+                    for (int si=0; si<num_states; ++si) {
                         for (int ci=0; ci<alpha[si].size(); ++ci) {
                             accounting[si][ci] = U[si][+HydroDef::ConsIdx::Eden]*alpha[si][ci]; // original energy density
                         }
@@ -269,7 +271,7 @@ void GasKinetics::calc_time_derivative(MFP* mfp, Vector<UpdateData>& update, con
                         accounting[si.species_idx][si.alpha_idx] = massf[isp]*nrg_sum;
                     }
 
-                    for (int si=0; si<+SpeciesIdx::NUM; ++si) {
+                    for (int si=0; si<num_states; ++si) {
                         const Real u = sum_vec(accounting[si]);
                         dU4[si](i,j,k,+HydroDef::ConsIdx::Eden) += u - U4[si](i,j,k,+HydroDef::ConsIdx::Eden);
                     }

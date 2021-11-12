@@ -1,0 +1,152 @@
+#======== AMREX ==========
+amrex.fpe_trap_invalid=1
+amrex.fpe_trap_zero=1
+fpe_trap_overflow=1
+amr.v = 0
+
+# ======== TIME ==========
+max_step  = 1000000
+stop_time = 10.0
+
+# ======== DOMAIN ==========
+geometry.is_periodic = 1 1 1
+geometry.coord_sys   = 0  # 0 => cart, 1 => RZ  2=>spherical
+
+# lo. res.
+geometry.prob_lo     =     -1.0 -1.0
+geometry.prob_hi     =     1.0 1.0
+amr.n_cell           =     4 4
+
+# ======== LOAD BALANCE ==========
+amr.loadbalance_with_workestimates = 0
+amr.loadbalance_level0_int = 10
+
+# ======== GRID ==========
+amr.max_level       = 0      # maximum level number allowed
+amr.ref_ratio       = 4 4 4 2 1 # refinement ratio
+amr.regrid_int      = 2 2 2 2 2 # how often to regrid
+amr.blocking_factor = 2
+amr.max_grid_size   = 32
+amr.n_error_buf     = 4 4 4 4 4 # number of buffer cells in error est
+amr.grid_eff        = 0.99     # what constitutes an efficient grid
+amr.subcycling_mode = Auto # time sub-cycling (Auto, None, Manual, Optimal)
+
+# ======== GEOMETRY ==========
+eb2.geom_type = all_regular
+
+# ======== PARTICLES ==========
+particles.do_particles = 0
+
+# ======== OUTPUT ==========
+
+# CHECKPOINT FILES
+amr.checkpoint_files_output = 0
+amr.check_file              = gas.chk    # root name of checkpoint file
+amr.check_int               = -1    # number of timesteps between checkpoints
+amr.check_per               = 0.005
+
+# PLOTFILES
+amr.plot_files_output = 1
+amr.plot_file         = gas.plt     # root name of plotfile
+amr.plot_int          = 1      # number of timesteps between plotfiles
+amr.plot_per          = -1
+
+
+# ======== PROBLEM DESCRIPTION ==========
+# Note that the problem description is defined as a lua script
+# Everything within the double quotes "..." must conform to lua standards
+# Note that any strings should therefore be defined by single quotes '...'
+
+mfp.lua = "
+
+time_integration_scheme = 'RK2'
+
+verbosity = 2
+cfl = 0.5
+
+--force_dt = 0.5
+
+-- === DEFINE PROBLEM ===
+
+kB = 1.38064852e-23
+
+ref_temp = 4000.0 -- K
+ref_prs = 1.0e5
+
+ref_length = 1 --m
+ref_mass =  2.3258671e-26 -- kg
+ref_vel = math.sqrt(kB*ref_temp/ref_mass);
+ref_density = ref_prs/(ref_vel^2) -- kg/m^3
+
+
+Larmor = 1.0
+Debye = 1.0
+
+
+-- === DEFINE STATES ===
+
+states = {
+    
+    N = {
+        type='hydro',
+        mass=1,  
+        charge= 0, 
+        gamma=5/3,
+        names='N',
+        reconstruction='centre', 
+        flux='HLLE',
+        value = {
+            rho = 0.0,
+            p  = 0.0,
+        },
+    },
+
+        N2 = {
+        type='hydro',
+        mass=2,  
+        charge= 0, 
+        gamma=1.4,
+        names='N2',
+        reconstruction='centre', 
+        flux='HLLE',
+        value = {
+            rho = 1.0,
+            p  = 1.0,
+        },
+    },
+
+    combined = {
+        type='hydro',
+        mass={1,2},  
+        charge= {0, 0}, 
+        gamma={5/3, 1.4},
+        names={'N','N2'},
+        reconstruction='centre', 
+        flux='HLLE',
+        value = {
+            rho = 1.0,
+            p  = 1.0,
+            alpha = {0.005},
+        },
+    },
+}
+
+
+actions = {
+    gas={
+        type='gas',
+        states = {'N', 'N2'},
+        --states = {'combined'},
+        gas_model='nitrogen-2sp.lua',
+        chemistry_update='chem.lua',
+    },
+
+    gas2={
+        type='gas',
+        states = {'combined'},
+        gas_model='nitrogen-2sp.lua',
+        chemistry_update='chem.lua',
+    },
+}
+
+"

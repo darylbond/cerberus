@@ -589,6 +589,7 @@ class ReadBoxLib:
             self.data["hydro_mass"] = []
             self.data["hydro_charge"] = []
             self.data["hydro_gamma"] = []
+            self.data["hydro_comp_names"] = []
 
             for i in range(self.data["num_state"]):
                 istate = self.data["state_%i"%i]
@@ -599,6 +600,7 @@ class ReadBoxLib:
                     self.data["hydro_mass"].append(istate["mass"])
                     self.data["hydro_charge"].append(istate["charge"])
                     self.data["hydro_gamma"].append(istate["gamma"])
+                    self.data["hydro_comp_names"].append(istate["comp_names"])
 
         self.flat_data = {}
         self.retrieval_sites = []

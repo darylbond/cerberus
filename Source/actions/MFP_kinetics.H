@@ -21,25 +21,21 @@ public:
     virtual std::string get_tag() const override {return tag;}
     virtual ActionType get_type() const override {return ActionType::GasKinetics;}
 
-    enum class SpeciesIdx {
-        Neutral=0,
-        Ion,
-        Electron,
-        NUM
-    };
-
     struct SpeciesInfo {
         std::string name;
         int species_idx;
         int alpha_idx;
     };
 
-    Array<HydroState*,3> species;
-    HydroState *neutrals, *ions, *electrons;
+    Vector<HydroState*> states;
+    int num_states;
+
+    Vector<SpeciesInfo> species_info;
+    int n_species;
 
     int gas_model_id, gas_state_id, thermochemical_reactor_id;
-    int n_species;
-    Vector<SpeciesInfo> species_info;
+
+
 
     static bool registered;
     static std::string tag;

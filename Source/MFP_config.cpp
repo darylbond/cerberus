@@ -424,6 +424,7 @@ void MFP::update_ref()
     }
 
     prs_ref = n_ref*m_ref*u_ref*u_ref;
+    t_ref = x_ref/u_ref;
 
     // need Larmor and Debye, can set these explicitly or via dS and beta
     int set = 0;

@@ -65,6 +65,7 @@ Real MFP::T_ref = 1.0;
 Real MFP::u_ref = 1.0;
 Real MFP::n0 = 1.0;
 Real MFP::prs_ref = 1.0;
+Real MFP::t_ref = 1.0;
 Real MFP::lightspeed = 1.0;
 Real MFP::beta = 1.0;
 Real MFP::skin_depth = 1.0;

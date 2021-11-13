@@ -106,7 +106,8 @@ public:
 
     bool prim_valid(const Vector<Real>& Q) const;
     bool cons_valid(const Vector<Real>& U) const;
-    Real get_energy_from_cons(const Vector<Real>& U) const;
+    static Real get_energy_from_cons(const Vector<Real>& U);
+    static Real get_internal_energy_density_from_cons(const Vector<Real>& U);
     Real get_temperature_from_cons(const Vector<Real>& U) const;
     Real get_temperature_from_prim(const Vector<Real>& Q) const;
     RealArray get_speed_from_cons(const Vector<Real>& U) const;

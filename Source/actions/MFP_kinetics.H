@@ -23,7 +23,7 @@ public:
 
     struct SpeciesInfo {
         std::string name;
-        int species_idx;
+        int state_idx;
         int alpha_idx;
     };
 

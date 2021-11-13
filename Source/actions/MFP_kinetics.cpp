@@ -77,7 +77,7 @@ GasKinetics::GasKinetics(const int idx, const sol::table &def)
         for (int s=0; s<num_states; ++s) {
             found = findInVector(states[s]->comp_names, sname);
             if (found.first) {
-                species_info[i].species_idx = s;
+                species_info[i].state_idx = s;
                 species_info[i].alpha_idx = found.second;
                 break;
             }
@@ -124,16 +124,13 @@ void GasKinetics::calc_time_derivative(MFP* mfp, Vector<UpdateData>& update, con
 {
     BL_PROFILE("Collisions::calc_time_derivative");
 
-    const Real* dx = mfp->Geom().CellSize();
-
-    Real volume = AMREX_D_TERM(dx[0]*MFP::x_ref,*dx[1]*MFP::x_ref,*dx[2]*MFP::x_ref);
-
     // collect all of the MultiFabs that we need
     MultiFab& cost = mfp->get_new_data(MFP::Cost_Idx);
 
     Vector<Array4<const Real>> U4(num_states);
     Vector<Array4<Real>> dU4(num_states);
-    Vector<Vector<Real>> U(num_states), alpha(num_states), accounting(num_states);
+    Vector<Vector<Real>> U(num_states), alpha(num_states);
+    Vector<Vector<Array<Real,+HydroDef::ConsIdx::NUM>>> accounting(num_states);
 
     for (int si=0; si<num_states; ++si) {
         update[states[si]->data_idx].dU_status = UpdateData::Status::Changed;
@@ -143,10 +140,15 @@ void GasKinetics::calc_time_derivative(MFP* mfp, Vector<UpdateData>& update, con
     }
 
     // overall gas state
-    Real rho_sum, nrg_sum; // note that u is the specific internal energy
     Vector<Real> massf(n_species);
 
-    Vector<Real> s_massf(num_states), s_T(num_states);
+    // somewhere to put the contributions to the gas from each state
+    Array<Vector<Real>,+HydroDef::ConsIdx::NUM> s_conserved;
+    for (int i=0; i<+HydroDef::ConsIdx::NUM; ++i) {
+        s_conserved[i].resize(num_states);
+    }
+
+    Vector<Real> s_T(num_states);
 
     Real dt_suggest;
 
@@ -200,27 +202,42 @@ void GasKinetics::calc_time_derivative(MFP* mfp, Vector<UpdateData>& update, con
                         }
                     }
 
-                    // get the overall sum of mass and energy held by the gas state
-                    nrg_sum = 0.0;
-                    std::fill(s_massf.begin(), s_massf.end(), 0.0);
+                    // get the overall sum of mass, momentum and energy held by the gas state
+                    for (int ci=0; ci<+HydroDef::ConsIdx::NUM; ++ci) {
+                        std::fill(s_conserved[ci].begin(), s_conserved[ci].end(), 0.0);
+                    }
                     for (int isp=0; isp<n_species; ++isp) {
-                        SpeciesInfo& si = species_info[isp];
-                        s_massf[si.species_idx] += alpha[si.species_idx][si.alpha_idx]*U[si.species_idx][+HydroDef::ConsIdx::Density];
-                        nrg_sum                 += alpha[si.species_idx][si.alpha_idx]*U[si.species_idx][+HydroDef::ConsIdx::Eden];
+                        const int sid = species_info[isp].state_idx;
+                        const int aid = species_info[isp].alpha_idx;
+                        for (int ci=0; ci<+HydroDef::ConsIdx::NUM; ++ci) {
+                            s_conserved[ci][sid] += alpha[sid][aid]*U[sid][ci];
+                        }
                     }
 
-                    rho_sum = sum_vec(s_massf);
+                    Array<Real, +HydroDef::ConsIdx::NUM> cons_sum;
+                    for (int ci=0; ci<+HydroDef::ConsIdx::NUM; ++ci) {
+                        cons_sum[ci] = sum_vec(s_conserved[ci]);
+                    }
+
+                    const Real rho_sum = cons_sum[+HydroDef::ConsIdx::Density];
+                    const Real mx_sum  = cons_sum[+HydroDef::ConsIdx::Xmom];
+                    const Real my_sum  = cons_sum[+HydroDef::ConsIdx::Ymom];
+                    const Real mz_sum  = cons_sum[+HydroDef::ConsIdx::Zmom];
+                    const Real nrg_sum = cons_sum[+HydroDef::ConsIdx::Eden];
+
+                    const Real int_nrg_sum = nrg_sum - 0.5*(mx_sum*mx_sum + my_sum*my_sum + mz_sum*mz_sum)/rho_sum;
+                    const Real specific_internal_nrg = int_nrg_sum/rho_sum;
 
                     // get the mass fractions
                     for (int isp=0; isp<n_species; ++isp) {
-                        SpeciesInfo& si = species_info[isp];
-                        massf[isp] = alpha[si.species_idx][si.alpha_idx]*U[si.species_idx][+HydroDef::ConsIdx::Density]/rho_sum;
+                        const int sid = species_info[isp].state_idx;
+                        const int aid = species_info[isp].alpha_idx;
+                        massf[isp] = alpha[sid][aid]*U[sid][+HydroDef::ConsIdx::Density]/rho_sum;
                     }
 
                     // calculate the mass weighted temperature
                     for (int si=0; si<num_states; ++si) {
-                        s_massf[si] /= rho_sum;
-                        s_T[si] *= s_massf[si];
+                        s_T[si] *= s_conserved[+HydroDef::ConsIdx::Density][si]/rho_sum;
                     }
                     const Real guess_T = sum_vec(s_T);
 
@@ -228,7 +245,7 @@ void GasKinetics::calc_time_derivative(MFP* mfp, Vector<UpdateData>& update, con
 
                     // set properties - note the conversion to dimensional values
                     gas_state_set_scalar_field(gas_model_id, "rho", rho_sum*MFP::rho_ref);
-                    gas_state_set_scalar_field(gas_model_id, "u", nrg_sum*MFP::prs_ref/(rho_sum*MFP::rho_ref));
+                    gas_state_set_scalar_field(gas_model_id, "u", specific_internal_nrg*MFP::prs_ref/MFP::rho_ref);
                     gas_state_set_scalar_field(gas_model_id, "T", guess_T*MFP::T_ref); // need an initial guess at the temperature
                     gas_state_set_array_field(gas_state_id, "massf", massf.data(), n_species);
 
@@ -236,47 +253,48 @@ void GasKinetics::calc_time_derivative(MFP* mfp, Vector<UpdateData>& update, con
                     gas_model_gas_state_update_thermo_from_rhou(gas_model_id, gas_state_id);
                     thermochemical_reactor_gas_state_update(thermochemical_reactor_id, gas_state_id, dt*MFP::t_ref, &dt_suggest);
 
-                    // retrieve mass fraction data
+                    // retrieve mass fraction data - is this is all we can get out ???
                     gas_state_get_array_field(gas_state_id, "massf", massf.data(), n_species);
 
-                    // accounting for changes in mass and tracers (mass fractions)
+                    // get the original amount of stuff across all states
                     for (int si=0; si<num_states; ++si) {
-                        for (int ci=0; ci<alpha[si].size(); ++ci) {
-                            accounting[si][ci] = U[si][+HydroDef::ConsIdx::Density]*alpha[si][ci]; // original mass
+                        for (int ai=0; ai<alpha[si].size(); ++ai) {
+                            for (int ci=0; ci<+HydroDef::ConsIdx::NUM; ++ci) {
+                                accounting[si][ai][ci] = U[si][ci]*alpha[si][ai]; // original amount
+                            }
                         }
                     }
 
+                    // get the updated amounts of stuff for all sub-components that have been updated by the reactor
+                    // this approach does not accommodate differing momentum and energy, it is all lumped together!!
                     for (int isp=0; isp<n_species; ++isp) {
                         SpeciesInfo& si = species_info[isp];
-                        accounting[si.species_idx][si.alpha_idx] = massf[isp]*rho_sum;
-                    }
-
-                    for (int si=0; si<num_states; ++si) {
-                        const Real rho = sum_vec(accounting[si]);
-                        dU4[si](i,j,k,+HydroDef::ConsIdx::Density) += rho - U4[si](i,j,k,+HydroDef::ConsIdx::Density);
-                        for (int ci=0; ci<states[si]->n_tracers; ++ci) {
-                            dU4[si](i,j,k,+HydroDef::ConsIdx::NUM + ci) += accounting[si][ci]  - U4[si](i,j,k,+HydroDef::ConsIdx::NUM + ci);
+                        for (int ci=0; ci<+HydroDef::ConsIdx::NUM; ++ci) {
+                            accounting[si.state_idx][si.alpha_idx][ci] = massf[isp]*cons_sum[ci]; // updated amount
                         }
                     }
 
-                    // accounting for changes in energy density
                     for (int si=0; si<num_states; ++si) {
-                        for (int ci=0; ci<alpha[si].size(); ++ci) {
-                            accounting[si][ci] = U[si][+HydroDef::ConsIdx::Eden]*alpha[si][ci]; // original energy density
+
+                        // apply update for all conserved quantities
+                        for (int ci=0; ci<+HydroDef::ConsIdx::NUM; ++ci) {
+
+                            // accumulate how much stuff is held by all the sub-components in this state
+                            Real sum = 0.0;
+                            for (const auto& acc : accounting[si]) {
+                                sum += acc[ci];
+                            }
+
+                            // now apply update
+                            dU4[si](i,j,k,ci) += sum - U4[si](i,j,k,ci);
+                        }
+
+                        // apply the update for tracers
+                        // note that we can simply use the density of the sub-component which we have already calculated
+                        for (int ti=0; ti<states[si]->n_tracers; ++ti) {
+                            dU4[si](i,j,k,+HydroDef::ConsIdx::NUM + ti) += accounting[si][ti][+HydroDef::ConsIdx::Density]  - U4[si](i,j,k,+HydroDef::ConsIdx::NUM + ti);
                         }
                     }
-
-                    for (int isp=0; isp<n_species; ++isp) {
-                        SpeciesInfo& si = species_info[isp];
-                        accounting[si.species_idx][si.alpha_idx] = massf[isp]*nrg_sum;
-                    }
-
-                    for (int si=0; si<num_states; ++si) {
-                        const Real u = sum_vec(accounting[si]);
-                        dU4[si](i,j,k,+HydroDef::ConsIdx::Eden) += u - U4[si](i,j,k,+HydroDef::ConsIdx::Eden);
-                    }
-
-
                 }
             }
         }

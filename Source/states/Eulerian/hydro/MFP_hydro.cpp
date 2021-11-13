@@ -940,9 +940,31 @@ bool HydroState::cons_valid(const Vector<Real> &U) const
     return true;
 }
 
-Real HydroState::get_energy_from_cons(const Vector<Real> &U) const
+Real HydroState::get_energy_from_cons(const Vector<Real> &U)
 {
     return U[+HydroDef::ConsIdx::Eden];
+}
+
+Real HydroState::get_internal_energy_density_from_cons(const Vector<Real>& U)
+{
+
+    BL_PROFILE("HydroState::get_specific_internal_energy_from_cons");
+
+    Real rho = U[+HydroDef::ConsIdx::Density];
+    Real mx = U[+HydroDef::ConsIdx::Xmom];
+    Real my = U[+HydroDef::ConsIdx::Ymom];
+    Real mz = U[+HydroDef::ConsIdx::Zmom];
+    Real ed = U[+HydroDef::ConsIdx::Eden];
+
+    Real rhoinv = 1/rho;
+    Real u = mx*rhoinv;
+    Real v = my*rhoinv;
+    Real w = mz*rhoinv;
+    Real ke = 0.5*rho*(u*u + v*v + w*w);
+
+    Real ied = ed - ke; // internal energy density
+
+    return ied;
 }
 
 Real HydroState::get_temperature_from_cons(const Vector<Real> &U) const

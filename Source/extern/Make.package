@@ -1,4 +1,4 @@
-include $(TOP)/Source/extern/lua-5.3.5/Make.package
+include $(TOP)/Source/extern/lua-5.4.3/Make.package
 
 include $(TOP)/Source/extern/eigen-3.3.7/Make.package
 

@@ -25,8 +25,8 @@ CEXE_sources += MFP_elliptic.cpp
 CEXE_headers += MFP_collisions.H
 CEXE_sources += MFP_collisions.cpp
 
-CEXE_headers += MFP_kinetics.H
-CEXE_sources += MFP_kinetics.cpp
+CEXE_headers += MFP_gas_kinetics.H
+CEXE_sources += MFP_gas_kinetics.cpp
 
 CEXE_headers += MFP_current.H
 CEXE_sources += MFP_current.cpp

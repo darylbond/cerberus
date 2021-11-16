@@ -193,7 +193,7 @@ void MFP::read_config()
     // miscellaneous
     //
 
-    zero_dimensional = lua["zero_dimensional"];
+    zero_dimensional = lua.get_or("zero_dimensional", false);
 
     for (int i = 0; i < AMREX_SPACEDIM; i++) {
         tile_size[i] = lua["tile_size"][i + 1];

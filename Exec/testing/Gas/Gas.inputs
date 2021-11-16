@@ -134,7 +134,7 @@ states = {
 
 actions = {
     gas={
-        type='gas',
+        type='gas_kinetics',
         states = {'N', 'N2'},
         --states = {'combined'},
         gas_model='nitrogen-2sp.lua',
@@ -142,7 +142,7 @@ actions = {
     },
 
     gas2={
-        type='gas',
+        type='gas_kinetics',
         states = {'combined'},
         gas_model='nitrogen-2sp.lua',
         chemistry_update='chem.lua',

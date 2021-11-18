@@ -1,6 +1,6 @@
 #ifdef EILMER_GAS
-#ifndef KINETICS_H
-#define KINETICS_H
+#ifndef GAS_KINETICS_H
+#define GAS_KINETICS_H
 
 #include "MFP_action.H"
 #include "MFP_hydro.H"

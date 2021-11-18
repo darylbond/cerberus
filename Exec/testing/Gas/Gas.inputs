@@ -71,11 +71,11 @@ cfl = 0.5
 kB = 1.38064852e-23
 
 ref_temp = 4000.0 -- K
-ref_prs = 1.0e5
+ref_prs = 1.0e5 -- Pa
 
-ref_length = 1 --m
+ref_length = 1 -- m
 ref_mass =  2.3258671e-26 -- kg
-ref_vel = math.sqrt(kB*ref_temp/ref_mass);
+ref_vel = math.sqrt(kB*ref_temp/ref_mass) -- m/s
 ref_density = ref_prs/(ref_vel^2) -- kg/m^3
 
 
@@ -96,8 +96,8 @@ states = {
         reconstruction='centre', 
         flux='HLLE',
         value = {
-            rho = 0.0,
-            p  = 0.0,
+            rho = 0.2,
+            p  = 0.2/1,
         },
     },
 
@@ -110,8 +110,8 @@ states = {
         reconstruction='centre', 
         flux='HLLE',
         value = {
-            rho = 1.0,
-            p  = 1.0,
+            rho = 0.8,
+            p  = 0.8/2,
         },
     },
 
@@ -124,15 +124,16 @@ states = {
         reconstruction='centre', 
         flux='HLLE',
         value = {
-            rho = 1.0,
             p  = 1.0,
-            alpha = {0.005},
+            T = 1.0,
+            alpha = {0.2},
         },
     },
 }
 
 
 actions = {
+    --[[
     gas={
         type='gas_kinetics',
         states = {'N', 'N2'},
@@ -140,6 +141,7 @@ actions = {
         gas_model='nitrogen-2sp.lua',
         chemistry_update='chem.lua',
     },
+    --]]
 
     gas2={
         type='gas_kinetics',

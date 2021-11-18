@@ -131,10 +131,10 @@ states = {
 
 actions = {
     collisions={
-        type='collisions',
+        type='udf_collisions',
         states = {'A', 'B'},
         cross_sections={
-            A={B=1.0, C=1.0},
+            A={B=1.0},
         },
     },
 }

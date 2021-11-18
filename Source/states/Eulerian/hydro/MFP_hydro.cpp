@@ -208,9 +208,6 @@ void HydroState::set_udf()
 
                 check = value["nd"].valid();
 
-                if (!check)
-                    Abort("State "+name+" does not have 'rho' or 'nd' defined for initial conditions");
-
                 Optional3D1VFunction nd;
                 success = get_udf(value["nd"], nd, 0.0);
 
@@ -338,11 +335,17 @@ void HydroState::init_from_lua()
     n_species = mass.size();
     n_tracers = n_species - 1;
 
+    // handle the names of the sub components if they haven't been provided
     if (comp_names.empty()) {
-        for (int i=0; i<n_species; ++i) {
-            comp_names.push_back("species_"+num2str(i));
+        if (n_species == 1) {
+            comp_names.push_back(name);
+        } else {
+            for (int i=0; i<n_species; ++i) {
+                comp_names.push_back(name+"_"+num2str(i));
+            }
         }
     }
+
 
     //
     // user defined functions
@@ -582,6 +585,10 @@ void HydroState::init_data(MFP* mfp, const Real time)
                         Q[icomp] = f(x, y, z);
 
                     }
+
+                    define_rho_p_T(Q);
+
+                    prim_valid(Q);
 
                     // convert primitive to conserved
                     prim2cons(Q, U);
@@ -920,11 +927,34 @@ void HydroState::prim2cons(Vector<Real>& Q, Vector<Real>& U) const
 
 }
 
+void HydroState::define_rho_p_T(Vector<Real>& Q) const
+{
+    BL_PROFILE("HydroState::prim2cons");
+
+    Real rho = Q[+HydroDef::PrimIdx::Density];
+    Real p = Q[+HydroDef::PrimIdx::Prs];
+    Real T = Q[+HydroDef::PrimIdx::Temp];
+
+    Real m = get_mass_from_prim(Q);
+
+    if ((rho > 0.0) && (p > 0.0)) {
+        T = p*m/rho;
+    } else if ((p > 0.0) && (T > 0.0)) {
+        rho = p*m/T;
+    }
+
+    Q[+HydroDef::PrimIdx::Density] = rho;
+    Q[+HydroDef::PrimIdx::Prs] = p;
+    Q[+HydroDef::PrimIdx::Temp] = T;
+
+}
+
 bool HydroState::prim_valid(const Vector<Real> &Q) const
 {
     if ((Q[+HydroDef::PrimIdx::Density] <= 0.0) ||  (Q[+HydroDef::PrimIdx::Prs] <= 0.0)
+            ||  (Q[+HydroDef::PrimIdx::Temp] <= 0.0)
             ) {
-        //        amrex::Abort("Primitive values outside of physical bounds!!");
+        amrex::Abort("Primitive values outside of physical bounds!!");
         return false;
     }
     return true;
@@ -934,7 +964,7 @@ bool HydroState::cons_valid(const Vector<Real> &U) const
 {
     if ((U[+HydroDef::ConsIdx::Density] <= 0.0) ||  (U[+HydroDef::ConsIdx::Eden] <= 0.0)
             ) {
-        //        amrex::Abort("Primitive values outside of physical bounds!!");
+        amrex::Abort("Primitive values outside of physical bounds!!");
         return false;
     }
     return true;
@@ -1163,9 +1193,9 @@ void HydroState::get_plot_output(const Box& box,
                 for (int n=0; n<n_cons(); ++n) {
                     S[n] = src4(i,j,k,n);
 
-//                    if (std::isnan(S[n])) {
-//                        Abort();
-//                    }
+                    //                    if (std::isnan(S[n])) {
+                    //                        Abort();
+                    //                    }
 
                 }
 

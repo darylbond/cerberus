@@ -103,6 +103,7 @@ public:
 
     bool cons2prim(Vector<Real>& U, Vector<Real>& Q) const;
     void prim2cons(Vector<Real>& Q, Vector<Real>& U) const;
+    void define_rho_p_T(Vector<Real>& Q) const;
 
     bool prim_valid(const Vector<Real>& Q) const;
     bool cons_valid(const Vector<Real>& U) const;

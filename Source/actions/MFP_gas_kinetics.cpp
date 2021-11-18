@@ -1,11 +1,11 @@
 #ifdef EILMER_GAS
-#include "MFP_kinetics.H"
+#include "MFP_gas_kinetics.H"
 #include "MFP.H"
 #include "MFP_state.H"
 #include "sol.hpp"
 #include <algorithm>
 
-std::string GasKinetics::tag = "gas";
+std::string GasKinetics::tag = "gas_kinetics";
 bool GasKinetics::registered = GetActionFactory().Register(GasKinetics::tag, ActionBuilder<GasKinetics>);
 
 
@@ -13,7 +13,7 @@ bool GasKinetics::registered = GetActionFactory().Register(GasKinetics::tag, Act
 extern "C" int cwrap_gas_init();
 extern "C" int gas_model_new(const char* file_name);
 extern "C" int gas_model_n_species(int gm_i);
-extern "C" int gas_model_species_name(int gm_i, int isp, char* dest_name, int* n);
+extern "C" int gas_model_species_name_and_length(int gm_i, int isp, char* dest_name, int* n);
 extern "C" int gas_state_new(int gm_i);
 extern "C" int thermochemical_reactor_new(int gm_i, const char* filename1, const char* filename2);
 extern "C" int gas_state_set_scalar_field(int gs_i, const char* field_name, double value);
@@ -70,7 +70,7 @@ GasKinetics::GasKinetics(const int idx, const sol::table &def)
     for (int i=0; i<n_species; ++i) {
         std::string& sname = species_info[i].name;
         sname.resize(10);
-        gas_model_species_name(gas_model_id, i, sname.data(), &n);
+        gas_model_species_name_and_length(gas_model_id, i, sname.data(), &n);
         sname.resize(n);
 
         // search through the neutrals and ions to get where it is located (neutral/ion, idx)
@@ -149,8 +149,6 @@ void GasKinetics::calc_time_derivative(MFP* mfp, Vector<UpdateData>& update, con
     for (int i=0; i<+HydroDef::ConsIdx::NUM; ++i) {
         s_conserved[i].resize(num_states);
     }
-
-    Vector<Real> s_T(num_states);
 
     Real dt_suggest;
 
@@ -314,15 +312,17 @@ void GasKinetics::calc_time_derivative(MFP* mfp, Vector<UpdateData>& update, con
                     }
 
                     // calculate and apply the conservative updates
-                    for (int csi=+HydroDef::ConsIdx::Density; csi<+HydroDef::ConsIdx::NUM; ++csi) {
-                        const Real factor = cons_sums_old[csi]/cons_sums_new[csi] ;
-                        if (factor != 1.0) {
-                            for (int si=0; si<num_states; ++si) {
-                                U_new[si][csi] *= factor;
+                    for (int csi=+HydroDef::ConsIdx::Xmom; csi<+HydroDef::ConsIdx::NUM; ++csi) {
+                        if (cons_sums_new[csi] > 0) {
+                            const Real factor = cons_sums_old[csi]/cons_sums_new[csi] ;
+                            if (factor != 1.0) {
+                                for (int si=0; si<num_states; ++si) {
+                                    U_new[si][csi] *= factor;
+                                }
                             }
-                        }
-                        for (int si=0; si<num_states; ++si) {
-                            dU4[si](i,j,k,csi) += U_new[si][csi] - U4[si](i,j,k,csi);
+                            for (int si=0; si<num_states; ++si) {
+                                dU4[si](i,j,k,csi) += U_new[si][csi] - U4[si](i,j,k,csi);
+                            }
                         }
                     }
                 }

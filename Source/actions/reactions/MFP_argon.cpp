@@ -75,22 +75,64 @@ void CollisionsArgon::calc_update()
 
 
     // momentum transfer
-    Array<Real,+SpeciesIndex::NUM> Qu;
-    Real nu, sigma, r, cr;
+
 
     constexpr Real kB = 1.38064852e-23;
+    constexpr Real e2c = 2.5669699665355694e-38; // charge electron ^2 (Coulombs^2) ???
+    constexpr Real epsilon_0 = 8.85418782e-12; // m-3 kg-1 s4 A2
+
+    const Real T_n = MFP::T_ref*species_info[index[+SpeciesIndex::Ar]].T;
+    const Real T_i = MFP::T_ref*species_info[index[+SpeciesIndex::Ar_plus]].T;
+    const Real T_e = MFP::T_ref*species_info[index[+SpeciesIndex::Ar]].T;
+
+    const Real m_n = m[+SpeciesIndex::Ar];
+    const Real m_i = m[+SpeciesIndex::Ar_plus];
+    const Real m_e = m[+SpeciesIndex::e_minus];
+
+    const Real rho_n = rho[+SpeciesIndex::Ar];
+    const Real rho_i = rho[+SpeciesIndex::Ar_plus];
+    const Real rho_e = rho[+SpeciesIndex::e_minus];
+
+    const Real c2_n = 8*kB*T_n/(PI*m_n);
+    const Real c2_i = 8*kB*T_i/(PI*m_i);
+    const Real c2_e = 8*kB*T_e/(PI*m_e);
+
+    // Argon & ions
+    const Real r_ni = 0.5*(d[+SpeciesIndex::Ar] + d[+SpeciesIndex::Ar_plus]);
+    const Real sigma_ni = PI*r_ni*r_ni;
+    const Real cr_ni = c2_n + c2_i;
+    const Real nu_ni = rho_i*sigma_ni*cr_ni/(m_n + m_i);
+    const Real nu_in = rho_n*sigma_ni*cr_ni/(m_n + m_i);
 
     // Argon & electrons
     const Real r_ne = 0.5*(d[+SpeciesIndex::Ar] + d[+SpeciesIndex::e_minus]);
-    const Real sigma_ne = PI*r*r;
-    const Real T_n = species_info[index[+SpeciesIndex::Ar]].T;
-    const Real c2_n = 8*kB*T_n/(PI*m[+SpeciesIndex::Ar]);
-    const Real T_e = species_info[index[+SpeciesIndex::Ar]].T;
-    const Real c2_e = 8*kB*T_e/(PI*m[+SpeciesIndex::e_minus]);
-    nu = rho[+SpeciesIndex::Ar]*sigma*cr
+    const Real sigma_ne = PI*r_ne*r_ne;
+    const Real cr_ne = c2_n + c2_e;
+    const Real nu_ne = rho_e*sigma_ne*cr_ne/(m_n + m_e);
+    const Real nu_en = rho_n*sigma_ne*cr_ne/(m_n + m_e);
 
-    Qu[+SpeciesIndex::Ar] = rho[+SpeciesIndex::Ar]*nu
+    // ions & electrons
+    const Real r_ie = e2c/(32*epsilon_0*kB*T_e);
+    const Real sigma_ie = PI*r_ie*r_ie;
+    const Real cr_ie = c2_i + c2_e;
+    const Real nu_ie = rho_e*sigma_ie*cr_ie/(m_n + m_e);
+    const Real nu_ei = rho_i*sigma_ie*cr_ie/(m_n + m_e);
 
+    Array<Array<Real,3>,+SpeciesIndex::NUM> Qu;
+
+
+    for (int i = 0; i <3; ++i) {
+        const Real u_n = species_info[index[+SpeciesIndex::Ar]].vel[i];
+        const Real u_i = species_info[index[+SpeciesIndex::Ar_plus]].vel[i];
+        const Real u_e = species_info[index[+SpeciesIndex::e_minus]].vel[i];
+
+        Qu[+SpeciesIndex::Ar][i]      = rho_n*(nu_ni*(u_i - u_n) + nu_ne*(u_e - u_n));
+        Qu[+SpeciesIndex::Ar_plus][i] = rho_i*(nu_in*(u_n - u_i) + nu_ie*(u_e - u_i));
+        Qu[+SpeciesIndex::e_minus][i] = rho_e*(nu_en*(u_n - u_e) + nu_ei*(u_i - u_e));
+    }
+
+    Array<Real,+SpeciesIndex::NUM> QT;
+    QT[+SpeciesIndex::Ar] = 2*rho_i*Cv
 
 
 

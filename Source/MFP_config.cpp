@@ -208,7 +208,7 @@ void MFP::read_config()
     //
 
 #ifdef AMREX_USE_EB
-    refine_cutcells = lua["refine_cutcells"];
+    refine_cutcells = (bool) lua["refine_cutcells"];
 
     // get a sorted list of keys so that we have consistent tagging of boundaries
     sol::table eb_keys = lua.script("return get_sorted_keys(embedded_boundaries)");

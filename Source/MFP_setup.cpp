@@ -17,6 +17,8 @@ void MFP::variableSetUp()
         state->variable_setup(periodic);
     }
 
+    read_params_2();
+
     //===================
     // cost state
 

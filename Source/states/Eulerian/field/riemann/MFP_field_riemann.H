@@ -25,6 +25,7 @@ public:
                        Array<Real,+FieldDef::ConsIdx::NUM> &F) const = 0;
 
     virtual const std::string& get_tag() const = 0;
+    virtual int get_n_flux() const = 0;
 };
 
 template <typename D>

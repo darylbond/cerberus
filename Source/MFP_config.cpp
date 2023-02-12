@@ -208,7 +208,7 @@ void MFP::read_config()
     //
 
 #ifdef AMREX_USE_EB
-    refine_cutcells = (bool) lua["refine_cutcells"];
+    refine_cutcells = lua.get<bool>("refine_cutcells");
 
     // get a sorted list of keys so that we have consistent tagging of boundaries
     sol::table eb_keys = lua.script("return get_sorted_keys(embedded_boundaries)");
@@ -253,14 +253,10 @@ void MFP::read_config()
         const sol::table &bcs = eb_desc["bcs"];
         for (const auto& bc : bcs) {
             const sol::object &state = bc.first;
-            const sol::object &bc_def = bc.second;
             std::string state_name = state.as<std::string>();
             if (state_name != "func") {
                 State &istate = get_state(state_name);
                 eb_dat.states.push_back({istate.global_idx,istate.get_eb_bc_size()});
-
-                // define bc
-                istate.set_eb_bc(bc_def);
             }
             ++j;
         }
@@ -354,7 +350,6 @@ void MFP::read_config()
         plot_variables["cost"][0] = 0;
 
         for (const auto& state : states) {
-            int idx = state->data_idx;
             for (auto& name : state->get_plot_output_names()) {
                 plot_variables[name+"-"+state->name][0] = 0;
             }
@@ -381,6 +376,45 @@ void MFP::read_config()
         const std::string name = key_value_pair.second.as<std::string>();
         plot_functions.push_back(std::make_pair(name, get_udf(plot_funcs[name])));
     }
+}
+
+void MFP::read_config_2()
+{
+    BL_PROFILE("MFP::read_config_2");
+
+#ifdef AMREX_USE_EB
+
+    // get a sorted list of keys so that we have consistent tagging of boundaries
+    sol::table eb_keys = lua.script("return get_sorted_keys(embedded_boundaries)");
+    sol::table eb_list = lua["embedded_boundaries"];
+
+    std::size_t i = 0;
+    for (const auto& eb_key : eb_keys) {
+        //        const sol::object &eb_name = eb_item.first;
+        const sol::table &eb_desc = eb_list[eb_key.second.as<std::string>()];
+
+
+        // get the names of the states that this geometry is interacting with
+        // and the type of boundary condition that state uses to interact with
+        // the embedded boundary
+        std::size_t j = 0;
+        const sol::table &bcs = eb_desc["bcs"];
+        for (const auto& bc : bcs) {
+            const sol::object &state = bc.first;
+            const sol::object &bc_def = bc.second;
+            std::string state_name = state.as<std::string>();
+            if (state_name != "func") {
+                State &istate = get_state(state_name);
+                // define bc
+                istate.set_eb_bc(bc_def);
+            }
+            ++j;
+        }
+
+        ++i;
+    }
+#endif
+
 }
 
 void MFP::update_ref()
@@ -500,4 +534,9 @@ void MFP::read_params()
     // pass off to global data routine
     read_config();
 
+}
+
+void MFP::read_params_2()
+{
+  read_config_2();
 }

@@ -21,6 +21,8 @@ public:
 
     EBType type;
 
+    Vector<int> state_idx;
+
     virtual const EBType get_type() const = 0;
 
     virtual bool get_slope() const { return false;}
@@ -29,10 +31,9 @@ public:
 
     virtual void solve(Array<Array<Real,3>,3> &wall_coord,
                        Array<Real,AMREX_SPACEDIM> wall_centre,
-                       Array<Real,+MHDDef::PrimIdx::NUM> &cell_state,
-                       Array4<const Real> const &prim4,
+                       const Vector<Array4<const Real>>& all_prim,
                        const int i, const int j, const int k, const Real *dx,
-                       Array<Vector<Real>,AMREX_SPACEDIM> &F) const = 0;
+                       Array<Vector<Real>,AMREX_SPACEDIM> &F) = 0;
 
 
 };
@@ -45,22 +46,20 @@ class DirichletWallMHD : public MHDBoundaryEB
 {
 public:
     DirichletWallMHD();
-    DirichletWallMHD(MHDRiemannSolver* flux,
+    DirichletWallMHD(int idx, MHDRiemannSolver* flux,
                   const sol::table &bc_def);
     ~DirichletWallMHD();
 
     virtual void solve(Array<Array<Real,3>,3> &wall_coord,
                        Array<Real,AMREX_SPACEDIM> wall_centre,
-                       Array<Real,+MHDDef::PrimIdx::NUM> &cell_state,
-                       Array4<const Real> const &prim4,
+                       const Vector<Array4<const Real>>& all_prim,
                        const int i, const int j, const int k, const Real *dx,
-                       Array<Vector<Real>,AMREX_SPACEDIM> &F) const override;
+                       Array<Vector<Real>,AMREX_SPACEDIM> &F) override;
 
 
     virtual const EBType get_type() const override {return EBType::Dirichlet;}
 
     Vector<std::pair<int, Real>> wall_value;
-
     static std::string tag;
 };
 
@@ -73,15 +72,14 @@ class MHDSlipWall : public MHDBoundaryEB
 {
 public:
     MHDSlipWall();
-    MHDSlipWall(MHDRiemannSolver* flux);
+    MHDSlipWall(int idx, MHDRiemannSolver* flux);
     ~MHDSlipWall();
 
     virtual void solve(Array<Array<Real,3>,3> &wall_coord,
                        Array<Real,AMREX_SPACEDIM> wall_centre,
-                       Array<Real,+MHDDef::PrimIdx::NUM> &cell_state,
-                       Array4<const Real> const &prim4,
+                       const Vector<Array4<const Real>>& all_prim,
                        const int i, const int j, const int k, const Real *dx,
-                       Array<Vector<Real>,AMREX_SPACEDIM> &F) const override;
+                       Array<Vector<Real>,AMREX_SPACEDIM> &F) override;
 
     virtual const EBType get_type() const override {return type;}
 

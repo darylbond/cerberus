@@ -12,15 +12,15 @@ void FieldState::set_eb_bc(const sol::table &bc_def)
     std::string bc_type = bc_def.get_or<std::string>("type", CollectionWall::tag);
 
     if (bc_type == ConductingWall::tag) {
-        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new ConductingWall(flux_solver.get(), bc_def)));
+        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new ConductingWall(data_idx, flux_solver.get(), bc_def)));
     } else if (bc_type == ScalarPotentialWall::tag) {
-        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new ScalarPotentialWall(bc_def)));
+        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new ScalarPotentialWall(data_idx, bc_def)));
     } else if (bc_type == SurfaceChargeWall::tag) {
-        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new SurfaceChargeWall(bc_def)));
+        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new SurfaceChargeWall(data_idx, bc_def)));
     } else if (bc_type == CollectionWall::tag) {
-        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new CollectionWall(bc_def)));
+        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new CollectionWall(data_idx, bc_def)));
     } else if (bc_type == DefinedWall::tag) {
-        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new DefinedWall(flux_solver.get(), bc_def)));
+        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new DefinedWall(data_idx, flux_solver.get(), bc_def)));
     } else {
         Abort("Requested EB bc of type '" + bc_type + "' which is not compatible with state '" + name + "'");
     }
@@ -38,9 +38,9 @@ std::string DefinedWall::tag = "defined";
 DefinedWall::DefinedWall(){}
 DefinedWall::~DefinedWall(){}
 
-DefinedWall::DefinedWall(FieldRiemannSolver *flux, const sol::table &bc_def)
+DefinedWall::DefinedWall(int idx, FieldRiemannSolver *flux, const sol::table &bc_def)
 {
-
+    state_idx.push_back(idx);
     flux_solver = flux;
 
     // grab the wall state from the lua definition
@@ -98,9 +98,9 @@ std::string ConductingWall::tag = "conductor";
 ConductingWall::ConductingWall(){}
 ConductingWall::~ConductingWall(){}
 
-ConductingWall::ConductingWall(FieldRiemannSolver* flux, const sol::table &bc_def)
+ConductingWall::ConductingWall(int idx, FieldRiemannSolver* flux, const sol::table &bc_def)
 {
-
+    state_idx.push_back(idx);
     flux_solver = flux;
 
     // grab any specified normal and tangential fields
@@ -194,8 +194,9 @@ std::string ScalarPotentialWall::tag = "scalar_potential";
 ScalarPotentialWall::ScalarPotentialWall(){}
 ScalarPotentialWall::~ScalarPotentialWall(){}
 
-ScalarPotentialWall::ScalarPotentialWall(const sol::table &bc_def)
+ScalarPotentialWall::ScalarPotentialWall(int idx, const sol::table &bc_def)
 {
+    state_idx.push_back(idx);
     get_udf(bc_def["phi"], phi, 0.0);
 }
 
@@ -217,8 +218,9 @@ std::string SurfaceChargeWall::tag = "surface_charge";
 SurfaceChargeWall::SurfaceChargeWall(){}
 SurfaceChargeWall::~SurfaceChargeWall(){}
 
-SurfaceChargeWall::SurfaceChargeWall(const sol::table &bc_def)
+SurfaceChargeWall::SurfaceChargeWall(int idx, const sol::table &bc_def)
 {
+    state_idx.push_back(idx);
     get_udf(bc_def["charge"], charge_density, 0.0);
 }
 
@@ -239,8 +241,9 @@ std::string SurfaceCurrentWall::tag = "surface_current";
 SurfaceCurrentWall::SurfaceCurrentWall(){}
 SurfaceCurrentWall::~SurfaceCurrentWall(){}
 
-SurfaceCurrentWall::SurfaceCurrentWall(const sol::table &bc_def)
+SurfaceCurrentWall::SurfaceCurrentWall(int idx, const sol::table &bc_def)
 {
+    state_idx.push_back(idx);
     get_udf(bc_def["j1"], current_1, 0.0);
     get_udf(bc_def["j2"], current_2, 0.0);
 }
@@ -269,8 +272,9 @@ std::string VectorPotentialWall::tag = "vector_potential";
 VectorPotentialWall::VectorPotentialWall(){}
 VectorPotentialWall::~VectorPotentialWall(){}
 
-VectorPotentialWall::VectorPotentialWall(const sol::table &bc_def)
+VectorPotentialWall::VectorPotentialWall(int idx, const sol::table &bc_def)
 {
+    state_idx.push_back(idx);
     align_with_boundary = bc_def.get_or("align_with_boundary", false);
     get_udf(bc_def["A0"], A_0, 0.0);
     get_udf(bc_def["A1"], A_1, 0.0);
@@ -325,21 +329,22 @@ std::string CollectionWall::tag = "collection";
 CollectionWall::CollectionWall(){}
 CollectionWall::~CollectionWall(){}
 
-CollectionWall::CollectionWall(const sol::table &bc_def)
+CollectionWall::CollectionWall(int idx, const sol::table &bc_def)
 {
+    state_idx.push_back(idx);
     sol::table types = bc_def["types"];
 
     for (const auto& type : types) {
         std::string bc_type = type.second.as<std::string>();
 
         if (bc_type == ScalarPotentialWall::tag) {
-            bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new ScalarPotentialWall(bc_def)));
+            bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new ScalarPotentialWall(idx, bc_def)));
         } else if (bc_type == VectorPotentialWall::tag) {
-            bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new VectorPotentialWall(bc_def)));
+            bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new VectorPotentialWall(idx, bc_def)));
         } else if (bc_type == SurfaceChargeWall::tag) {
-            bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new SurfaceChargeWall(bc_def)));
+            bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new SurfaceChargeWall(idx, bc_def)));
         } else if (bc_type == SurfaceCurrentWall::tag) {
-            bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new SurfaceCurrentWall(bc_def)));
+            bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new SurfaceCurrentWall(idx, bc_def)));
         } else {
             Abort("Requested EB bc of type '" + bc_type + "' which is not compatible with 'collection'");
         }

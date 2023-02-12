@@ -25,6 +25,7 @@ public:
                        Real* shk) {}
 
     virtual std::string get_tag() const {return "";}
+    virtual int get_n_flux() const = 0;
     virtual bool requires_shock_detector() const {return false;}
 };
 

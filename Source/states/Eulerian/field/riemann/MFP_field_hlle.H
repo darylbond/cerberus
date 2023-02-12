@@ -16,6 +16,7 @@ public:
 
     static bool valid_state(const int idx);
     virtual const std::string& get_tag() const override {return tag;}
+    virtual int get_n_flux() const override {return +FieldDef::ConsIdx::NUM;}
     static std::string tag;
     static bool registered;
 

@@ -64,27 +64,6 @@ HydroState::HydroState(const sol::table& def)
 
 HydroState::~HydroState(){}
 
-#ifdef AMREX_USE_EB
-void HydroState::set_eb_bc(const sol::table &bc_def)
-{
-
-    std::string bc_type = bc_def.get<std::string>("type");
-
-    if (bc_type == HydroSlipWall::tag) {
-        eb_bcs.push_back(std::unique_ptr<HydroBoundaryEB>(new HydroSlipWall(flux_solver.get())));
-    } else if (bc_type == HydroNoSlipWall::tag) {
-        if (!viscous) {
-            Abort("Requested EB bc of type '" + bc_type + "' without defining 'viscosity' for state '" + name + "'");
-        }
-        eb_bcs.push_back(std::unique_ptr<HydroBoundaryEB>(new HydroNoSlipWall(flux_solver.get(), viscous.get(), bc_def)));
-    } else if (bc_type == DirichletWall::tag) {
-        eb_bcs.push_back(std::unique_ptr<HydroBoundaryEB>(new DirichletWall(flux_solver.get(), bc_def)));
-    } else {
-        Abort("Requested EB bc of type '" + bc_type + "' which is not compatible with state '" + name + "'");
-    }
-}
-#endif
-
 void HydroState::set_gas()
 {
 
@@ -2342,7 +2321,7 @@ void HydroState::calc_viscous_fluxes_eb(const Box& box, Array<FArrayBox,
 
 
 void HydroState::calc_wall_fluxes(const Box& box,
-                                  const FArrayBox &prim,
+                                  const Vector<FArrayBox> &all_prim,
                                   Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
                                   const EBCellFlagFab& flag,
                                   const CutFab &bc_idx,
@@ -2357,7 +2336,14 @@ void HydroState::calc_wall_fluxes(const Box& box,
     const Dim3 lo = amrex::lbound(box);
     const Dim3 hi = amrex::ubound(box);
 
-    Array4<const Real> const& p4 = prim.array();
+    Vector<Array4<const Real>> p4(all_prim.size());
+
+    for (size_t i=0; i<all_prim.size(); ++i) {
+      p4[i] = all_prim[i].array();
+    }
+
+    //FArrayBox& prim = all_prim[idx]; // primitives for *this* state
+
     Array4<const Real> const& bcent4 = bcent.array();
     Array4<const Real> const& bnorm4 = bnorm.array();
 
@@ -2378,8 +2364,6 @@ void HydroState::calc_wall_fluxes(const Box& box,
 
     const Array4<const Real>& bc_idx4 = bc_idx.array();
 
-    Vector<Real> cell_state(n_prim());
-
     Array<Array<Real,3>,3> wall_coord = {{{0,0,0},{0,0,0},{0,0,0}}};
     Array<Real,AMREX_SPACEDIM> wall_centre;
 
@@ -2392,9 +2376,9 @@ void HydroState::calc_wall_fluxes(const Box& box,
 
                 if (cflag.isSingleValued()) {
 
-
-                    // grab a vector of the local state
-                    load_state_for_flux(p4, i, j, k, cell_state);
+                  // the boundary condition
+                  const int ebi = (int)nearbyint(bc_idx4(i,j,k));
+                  HydroBoundaryEB& bc = *eb_bcs[ebi];
 
                     for (int d=0; d<AMREX_SPACEDIM; ++d) {
 
@@ -2408,12 +2392,8 @@ void HydroState::calc_wall_fluxes(const Box& box,
                     // get a local coordinate system with x- aligned with the wall normal
                     expand_coord(wall_coord);
 
-                    // the boundary condition
-                    const int ebi = (int)nearbyint(bc_idx4(i,j,k));
-                    const HydroBoundaryEB& bc = *eb_bcs[ebi];
-
                     // calculate the wall flux
-                    bc.solve(wall_coord, wall_centre, cell_state, p4, i, j, k, dx, wall_flux);
+                    bc.solve(wall_coord, wall_centre, p4, i, j, k, dx, wall_flux);
 
                     // load the flux into the fab
                     for (int d=0; d<AMREX_SPACEDIM; ++d) {

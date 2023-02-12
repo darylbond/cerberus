@@ -67,23 +67,6 @@ MHDState::MHDState(const sol::table& def)
 
 MHDState::~MHDState(){}
 
-#ifdef AMREX_USE_EB
-void MHDState::set_eb_bc(const sol::table &bc_def)
-{
-
-    std::string bc_type = bc_def.get<std::string>("type");
-
-    if (bc_type == MHDSlipWall::tag) {
-        eb_bcs.push_back(std::unique_ptr<MHDBoundaryEB>(new MHDSlipWall(flux_solver.get())));
-    } else if (bc_type == DirichletWallMHD::tag) {
-        eb_bcs.push_back(std::unique_ptr<MHDBoundaryEB>(new DirichletWallMHD(flux_solver.get(), bc_def)));
-    } else {
-        Abort("Requested EB bc of type '" + bc_type + "' which is not compatible with state '" + name + "'");
-    }
-}
-#endif
-
-
 void MHDState::set_udf()
 {
     using namespace std::placeholders;
@@ -1585,7 +1568,7 @@ void MHDState::correct_face_prim(const Box& box,
 #ifdef AMREX_USE_EB
 
 void MHDState::calc_wall_fluxes(const Box& box,
-                                  const FArrayBox &prim,
+                                  const Vector<FArrayBox> &all_prim,
                                   Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
                                   const EBCellFlagFab& flag,
                                   const CutFab &bc_idx,
@@ -1600,7 +1583,12 @@ void MHDState::calc_wall_fluxes(const Box& box,
     const Dim3 lo = amrex::lbound(box);
     const Dim3 hi = amrex::ubound(box);
 
-    Array4<const Real> const& p4 = prim.array();
+    Vector<Array4<const Real>> p4(all_prim.size());
+
+    for (size_t i=0; i<all_prim.size(); ++i) {
+      p4[i] = all_prim[i].array();
+    }
+
     Array4<const Real> const& bcent4 = bcent.array();
     Array4<const Real> const& bnorm4 = bnorm.array();
 
@@ -1635,9 +1623,9 @@ void MHDState::calc_wall_fluxes(const Box& box,
 
                 if (cflag.isSingleValued()) {
 
-
-                    // grab a vector of the local state
-                    load_state_for_flux(p4, i, j, k, cell_state);
+                  // the boundary condition
+                  const int ebi = (int)nearbyint(bc_idx4(i,j,k));
+                  MHDBoundaryEB& bc = *eb_bcs[ebi];
 
                     for (int d=0; d<AMREX_SPACEDIM; ++d) {
 
@@ -1651,12 +1639,10 @@ void MHDState::calc_wall_fluxes(const Box& box,
                     // get a local coordinate system with x- aligned with the wall normal
                     expand_coord(wall_coord);
 
-                    // the boundary condition
-                    const int ebi = (int)nearbyint(bc_idx4(i,j,k));
-                    const MHDBoundaryEB& bc = *eb_bcs[ebi];
+
 
                     // calculate the wall flux
-                    bc.solve(wall_coord, wall_centre, cell_state, p4, i, j, k, dx, wall_flux);
+                    bc.solve(wall_coord, wall_centre, p4, i, j, k, dx, wall_flux);
 
                     // load the flux into the fab
                     for (int d=0; d<AMREX_SPACEDIM; ++d) {

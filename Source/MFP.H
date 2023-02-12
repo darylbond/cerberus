@@ -139,6 +139,7 @@ public:
     virtual int WorkEstType() override { return 0; }
 
     static void read_params();
+    static void read_params_2();
 
     int get_level() {return level;}
     Amr* get_parent() {return parent;}
@@ -168,6 +169,7 @@ public:
     static void set_lua_script(const std::string &script);
     static void save_lua_script();
     static void read_config();
+    static void read_config_2();
     static void update_ref();
 
     void write_info(nlohmann::json &js) const;

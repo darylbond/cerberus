@@ -23,6 +23,8 @@ public:
         NUM
     };
 
+    Vector<int> state_idx;
+
     virtual const EBType get_type() const = 0;
     virtual const bool has_charge() const {return false;}
     virtual const bool time_varying() const {return false;}
@@ -44,7 +46,7 @@ class DefinedWall : public FieldBoundaryEB
 {
 public:
     DefinedWall();
-    DefinedWall(FieldRiemannSolver* flux, const sol::table &bc_def);
+    DefinedWall(int idx, FieldRiemannSolver* flux, const sol::table &bc_def);
     ~DefinedWall();
 
 
@@ -70,7 +72,7 @@ class ConductingWall : public FieldBoundaryEB
 {
 public:
     ConductingWall();
-    ConductingWall(FieldRiemannSolver* flux, const sol::table &bc_def);
+    ConductingWall(int idx, FieldRiemannSolver* flux, const sol::table &bc_def);
     ~ConductingWall();
 
 
@@ -100,7 +102,7 @@ class ScalarPotentialWall : public FieldBoundaryEB
 {
 public:
     ScalarPotentialWall();
-    ScalarPotentialWall(const sol::table &bc_def);
+    ScalarPotentialWall(int idx, const sol::table &bc_def);
     ~ScalarPotentialWall();
 
     virtual Vector<Vector<Real>> get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const override;
@@ -122,7 +124,7 @@ class SurfaceChargeWall : public FieldBoundaryEB
 {
 public:
     SurfaceChargeWall();
-    SurfaceChargeWall(const sol::table &bc_def);
+    SurfaceChargeWall(int idx, const sol::table &bc_def);
     ~SurfaceChargeWall();
 
     virtual Vector<Vector<Real>> get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const override;
@@ -143,7 +145,7 @@ class SurfaceCurrentWall : public FieldBoundaryEB
 {
 public:
     SurfaceCurrentWall();
-    SurfaceCurrentWall(const sol::table &bc_def);
+    SurfaceCurrentWall(int idx, const sol::table &bc_def);
     ~SurfaceCurrentWall();
 
     virtual Vector<Vector<Real> > get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const override;
@@ -164,7 +166,7 @@ class VectorPotentialWall : public FieldBoundaryEB
 {
 public:
     VectorPotentialWall();
-    VectorPotentialWall(const sol::table &bc_def);
+    VectorPotentialWall(int idx, const sol::table &bc_def);
     ~VectorPotentialWall();
 
     virtual Vector<Vector<Real> > get_wall_state(const Array<Real, AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const override;
@@ -187,7 +189,7 @@ class CollectionWall : public FieldBoundaryEB
 {
 public:
     CollectionWall();
-    CollectionWall(const sol::table &bc_def);
+    CollectionWall(int idx, const sol::table &bc_def);
     ~CollectionWall();
 
     virtual Vector<Vector<Real> > get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const override;

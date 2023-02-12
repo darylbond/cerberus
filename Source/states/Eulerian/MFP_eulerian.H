@@ -420,7 +420,7 @@ public:
     }
 
     virtual void calc_wall_fluxes(const Box& box,
-                                  const FArrayBox &prim,
+                                  const Vector<FArrayBox> &all_prim,
                                   Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
                                   const EBCellFlagFab& flag,
                                   const CutFab &bc_idx,

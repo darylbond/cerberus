@@ -11,15 +11,32 @@ MHDBoundaryEB::~MHDBoundaryEB(){}
 
 //-----------------------------------------------------------------------------
 
+void MHDState::set_eb_bc(const sol::table &bc_def)
+{
+
+    std::string bc_type = bc_def.get<std::string>("type");
+
+    if (bc_type == MHDSlipWall::tag) {
+        eb_bcs.push_back(std::unique_ptr<MHDBoundaryEB>(new MHDSlipWall(data_idx, flux_solver.get())));
+    } else if (bc_type == DirichletWallMHD::tag) {
+        eb_bcs.push_back(std::unique_ptr<MHDBoundaryEB>(new DirichletWallMHD(data_idx, flux_solver.get(), bc_def)));
+    } else {
+        Abort("Requested EB bc of type '" + bc_type + "' which is not compatible with state '" + name + "'");
+    }
+}
+
+//-----------------------------------------------------------------------------
+
 std::string DirichletWallMHD::tag = "dirichlet";
 
 DirichletWallMHD::DirichletWallMHD(){}
 DirichletWallMHD::~DirichletWallMHD(){}
 
-DirichletWallMHD::DirichletWallMHD(MHDRiemannSolver *flux,
+DirichletWallMHD::DirichletWallMHD(int idx, MHDRiemannSolver *flux,
                              const sol::table &bc_def)
 {
     BL_PROFILE("DirichletWall::DirichletWall");
+    state_idx.push_back(idx);
     flux_solver = flux;
 
     // grab the wall state from the lua definition
@@ -33,31 +50,40 @@ DirichletWallMHD::DirichletWallMHD(MHDRiemannSolver *flux,
         }
         ++i;
     }
+
 }
 
 void DirichletWallMHD::solve(Array<Array<Real,3>,3> &wall_coord,
-                          Array<Real,AMREX_SPACEDIM> wall_centre,
-                          Array<Real,+MHDDef::PrimIdx::NUM> &cell_state,
-                          Array4<const Real> const &prim4,
-                          const int i, const int j, const int k, const Real *dx,
-                          Array<Vector<Real>,AMREX_SPACEDIM> &F) const
+                             Array<Real,AMREX_SPACEDIM> wall_centre,
+                             const Vector<Array4<const Real>>& all_prim,
+                             const int i, const int j, const int k, const Real *dx,
+                             Array<Vector<Real>,AMREX_SPACEDIM> &F)
 {
     BL_PROFILE("DirichletWall::solve");
     //
     // get the inviscid flux
     //
 
+    const int this_idx = state_idx[0];
+    const Array4<const Real>& p4 = all_prim[this_idx];
+
+    // grab the values we need
+    Array<Real,+MHDDef::PrimIdx::NUM> cell_state;
+    for (size_t n=0; n<+MHDDef::PrimIdx::NUM; ++n) {
+        cell_state[n] = p4(i,j,k,n);
+    }
+
     transform_global2local(cell_state, wall_coord, MHDState::prim_vector_idx);
 
     // fabricate a state for inside the wall based on the provided state
-    Array<Real,+MHDDef::PrimIdx::NUM> W = cell_state;
+    Array<Real,+MHDDef::PrimIdx::NUM> wall_state = cell_state;
 
     for (const auto& pair : wall_value) {
-        W[pair.first] = pair.second;
+        wall_state[pair.first] = pair.second;
     }
 
     Array<Real,+MHDDef::ConsIdx::NUM> normal_flux;
-    flux_solver->solve(cell_state, W, normal_flux, nullptr);
+    flux_solver->solve(cell_state, wall_state, normal_flux, nullptr);
 
     // convert back to global coordinate system
     transform_local2global(normal_flux, wall_coord, MHDState::cons_vector_idx);
@@ -80,34 +106,42 @@ std::string MHDSlipWall::tag = "slip_wall";
 MHDSlipWall::MHDSlipWall(){}
 MHDSlipWall::~MHDSlipWall(){}
 
-MHDSlipWall::MHDSlipWall(MHDRiemannSolver *flux)
+MHDSlipWall::MHDSlipWall(int idx, MHDRiemannSolver *flux)
 {
+    state_idx.push_back(idx);
     flux_solver = flux;
 }
 
 void MHDSlipWall::solve(Array<Array<Real,3>,3> &wall_coord,
-                          Array<Real,AMREX_SPACEDIM> wall_centre,
-                          Array<Real,+MHDDef::PrimIdx::NUM> &cell_state,
-                          Array4<const Real> const &prim4,
-                          const int i, const int j, const int k, const Real *dx,
-                          Array<Vector<Real>,AMREX_SPACEDIM> &F) const
+                        Array<Real,AMREX_SPACEDIM> wall_centre,
+                        const Vector<Array4<const Real>>& all_prim,
+                        const int i, const int j, const int k, const Real *dx,
+                        Array<Vector<Real>,AMREX_SPACEDIM> &F)
 {
     BL_PROFILE("MHDSlipWall::solve");
     //
     // get the inviscid flux
     //
 
-    transform_global2local(cell_state, wall_coord, MHDState::cons_vector_idx);
+    const int this_idx = state_idx[0];
+    const Array4<const Real>& p4 = all_prim[this_idx];
+
+    // grab the values we need
+    Array<Real,+MHDDef::PrimIdx::NUM> cell_state;
+    for (size_t n=0; n<+MHDDef::PrimIdx::NUM; ++n) {
+        cell_state[n] = p4(i,j,k,n);
+    }
+
+    transform_global2local(cell_state, wall_coord, MHDState::prim_vector_idx);
 
     // fabricate a state for inside the wall based on the provided state
-    Array<Real,+MHDDef::PrimIdx::NUM> W = cell_state;
+    Array<Real,+MHDDef::PrimIdx::NUM> wall_state = cell_state;
 
-    W[+MHDDef::PrimIdx::Xvel] *= -1;
-
-    Array<Real,+MHDDef::ConsIdx::NUM> normal_flux;
+    wall_state[+MHDDef::PrimIdx::Xvel] *= -1;
 
     Real shk = 1.0; // consider there to be a shock present if we have a switching flux
-    flux_solver->solve(cell_state, W, normal_flux, &shk);
+    Array<Real,+MHDDef::ConsIdx::NUM> normal_flux;
+    flux_solver->solve(cell_state, wall_state, normal_flux, &shk);
 
     // convert back to global coordinate system
     transform_local2global(normal_flux, wall_coord, MHDState::cons_vector_idx);
@@ -118,7 +152,6 @@ void MHDSlipWall::solve(Array<Array<Real,3>,3> &wall_coord,
             F[d][n] = wall_coord[0][d]*normal_flux[n];
         }
     }
-
     return;
 }
 

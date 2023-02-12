@@ -17,6 +17,9 @@ public:
 
     virtual std::string get_tag() const override {return tag;}
     static std::string tag;
+
+    virtual int get_n_flux() const override {return +MHDDef::ConsIdx::NUM;}
+
     static bool registered;
 
     Real gamma;

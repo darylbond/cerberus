@@ -407,7 +407,7 @@ void HydroCTU::calc_spatial_derivative(MFP* mfp, Vector<UpdateData>& update, con
                 // calculate the flux through cut cell faces
 
                 istate.calc_wall_fluxes(box,
-                                        primitives[idx],
+                                        primitives,
                                         wall_fluxes[idx],
                                         *fab_flags[idx],
                                         bc_idx,

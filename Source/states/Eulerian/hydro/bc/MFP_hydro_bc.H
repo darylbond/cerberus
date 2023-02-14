@@ -23,7 +23,7 @@ public:
 
     EBType type;
 
-    Vector<int> state_idx;
+    int state_idx;
 
     virtual const EBType get_type() const = 0;
 
@@ -132,6 +132,9 @@ public:
 //-----------------------------------------------------------------------------
 
 // a wall that needs other states info
+// NOTE: When defining this BC in the input script, the state that is being
+// remotely accessed must be one of the states included by the action within which
+// the EB BC functions are called (i.e 'CTU')
 
 class MultiStateWall : public HydroBoundaryEB
 {
@@ -152,8 +155,10 @@ public:
 
     static std::string tag;
     Vector<Real> normal_flux;
-    Vector<Real> cell_state;
+    Vector<Real> cell_hydro_state;
+    Vector<Real> cell_em_state;
     Vector<Real> wall_state;
+    int em_state_idx;
 };
 
 #endif

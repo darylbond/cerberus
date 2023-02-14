@@ -1277,7 +1277,7 @@ void FieldState::correct_face_prim(const Box& box,
 #ifdef AMREX_USE_EB
 
 void FieldState::calc_wall_fluxes(const Box& box,
-                                  const Vector<FArrayBox> &all_prim,
+                                  const Vector<FArrayBox*> &all_prim,
                                   Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
                                   const EBCellFlagFab& flag,
                                   const CutFab &bc_idx,
@@ -1293,11 +1293,11 @@ void FieldState::calc_wall_fluxes(const Box& box,
     const Dim3 hi = amrex::ubound(box);
 
     Vector<Array4<const Real>> p4(all_prim.size());
-    Vector<Vector<Real>> cell_states(all_prim.size());
 
     for (size_t i=0; i<all_prim.size(); ++i) {
-      p4[i] = all_prim[i].array();
-      cell_states[i].resize(all_prim[i].nComp());
+        if (all_prim[i]) {
+            p4[i] = all_prim[i]->array();
+        }
     }
 
     Array4<const Real> const& bcent4 = bcent.array();
@@ -1306,7 +1306,8 @@ void FieldState::calc_wall_fluxes(const Box& box,
     Array<Array4<Real>,AMREX_SPACEDIM> flux4;
     Array<Array4<const Real>,AMREX_SPACEDIM> afrac4;
 
-    Array<Array<Real,+FieldDef::ConsIdx::NUM>,AMREX_SPACEDIM> wall_flux;
+    Array<Vector<Real>,AMREX_SPACEDIM> wall_flux;
+    for (int i=0; i<AMREX_SPACEDIM;++i) { wall_flux[i].resize(+FieldDef::ConsIdx::NUM);}
 
     Array4<const EBCellFlag> const& flag4 = flag.array();
     for (int d=0; d<AMREX_SPACEDIM; ++d) {
@@ -1318,8 +1319,6 @@ void FieldState::calc_wall_fluxes(const Box& box,
     }
 
     const Array4<const Real>& bc_idx4 = bc_idx.array();
-
-    Array<Real,+FieldDef::ConsIdx::NUM> cell_state;
 
     Array<Array<Real,3>,3> wall_coord = {{{0,0,0},{0,0,0},{0,0,0}}};
     Array<Real,AMREX_SPACEDIM> wall_centre;
@@ -1335,17 +1334,7 @@ void FieldState::calc_wall_fluxes(const Box& box,
 
                   // the boundary condition
                   const int ebi = (int)nearbyint(bc_idx4(i,j,k));
-                  const FieldBoundaryEB& bc = *eb_bcs[ebi];
-
-                  // grab the primitive values for the states that we need
-                  // use the buffer defined for all primitives, but only load the data
-                  // needed by THIS bc.
-                  for (const auto& prim_idx : bc.state_idx) {
-                    Vector<Real>& cstate = cell_states[prim_idx];
-                    for (size_t n=0; n<cstate.size(); ++n) {
-                        cstate[n] = p4[prim_idx](i,j,k,n);
-                    }
-                  }
+                  FieldBoundaryEB& bc = *eb_bcs[ebi];
 
                     for (int d=0; d<AMREX_SPACEDIM; ++d) {
 
@@ -1362,7 +1351,7 @@ void FieldState::calc_wall_fluxes(const Box& box,
 
 
                     // calculate the wall flux
-                    bc.solve(wall_coord, cell_state, wall_flux, dx);
+                    bc.solve(wall_coord, wall_centre, p4, i, j, k, dx, wall_flux);
 
                     // load the flux into the fab
                     for (int d=0; d<AMREX_SPACEDIM; ++d) {

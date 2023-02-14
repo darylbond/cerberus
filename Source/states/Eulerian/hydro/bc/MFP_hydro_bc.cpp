@@ -2,6 +2,7 @@
 
 #include "MFP_hydro_bc.H"
 #include "MFP_hydro.H"
+#include "MFP_field.H"
 #include "MFP_transforms.H"
 
 //-----------------------------------------------------------------------------
@@ -56,7 +57,7 @@ DirichletWall::DirichletWall(int idx, HydroRiemannSolver *flux,
                              const sol::table &bc_def)
 {
     BL_PROFILE("DirichletWall::DirichletWall");
-    state_idx.push_back(idx);
+    state_idx = idx;
     flux_solver = flux;
 
     // grab the wall state from the lua definition
@@ -87,8 +88,7 @@ void DirichletWall::solve(Array<Array<Real,3>,3> &wall_coord,
     // get the inviscid flux
     //
 
-    const int this_idx = state_idx[0];
-    const Array4<const Real>& p4 = all_prim[this_idx];
+    const Array4<const Real>& p4 = all_prim[state_idx];
 
     // grab the values we need
     for (size_t n=0; n<+HydroDef::PrimIdx::NUM; ++n) {
@@ -128,7 +128,7 @@ HydroSlipWall::~HydroSlipWall(){}
 HydroSlipWall::HydroSlipWall(int idx,
                              HydroRiemannSolver *flux)
 {
-  state_idx.push_back(idx);
+  state_idx = idx;
   flux_solver = flux;
 
   normal_flux.resize(flux->get_n_flux());
@@ -147,8 +147,7 @@ void HydroSlipWall::solve(Array<Array<Real,3>,3> &wall_coord,
     // get the inviscid flux
     //
 
-    const int this_idx = state_idx[0];
-    const Array4<const Real>& p4 = all_prim[this_idx];
+    const Array4<const Real>& p4 = all_prim[state_idx];
 
     // grab the values we need
     for (size_t n=0; n<+HydroDef::PrimIdx::NUM; ++n) {
@@ -191,7 +190,7 @@ HydroNoSlipWall::HydroNoSlipWall(int idx,
                                  const sol::table &bc_def)
 {
     BL_PROFILE("HydroNoSlipWall::HydroNoSlipWall");
-    state_idx.push_back(idx);
+    state_idx = idx;
     flux_solver = flux;
     viscous = visc;
 
@@ -221,9 +220,7 @@ void HydroNoSlipWall::solve(Array<Array<Real,3>,3> &wall_coord,
     //
     // get the inviscid flux
     //
-
-    const int this_idx = state_idx[0];
-    const Array4<const Real>& p4 = all_prim[this_idx];
+    const Array4<const Real>& p4 = all_prim[state_idx];
 
     // grab the values we need
     for (size_t n=0; n<+HydroDef::PrimIdx::NUM; ++n) {
@@ -373,12 +370,13 @@ MultiStateWall::~MultiStateWall(){}
 
 MultiStateWall::MultiStateWall(const int idx, const int em_idx, HydroRiemannSolver* flux, const sol::table &bc_def)
 {
-    state_idx.push_back(idx);
-    state_idx.push_back(em_idx);
+    state_idx = idx;
+    em_state_idx = em_idx;
     flux_solver = flux;
 
     normal_flux.resize(flux->get_n_flux());
-    cell_state.resize(+HydroDef::PrimIdx::NUM);
+    cell_hydro_state.resize(+HydroDef::PrimIdx::NUM);
+    cell_em_state.resize(+FieldDef::ConsIdx::NUM);
     wall_state.resize(+HydroDef::PrimIdx::NUM);
 }
 
@@ -393,23 +391,38 @@ void MultiStateWall::solve(Array<Array<Real,3>,3> &wall_coord,
     // get the inviscid flux
     //
 
-    const int this_idx = state_idx[0];
-    const Array4<const Real>& p4 = all_prim[this_idx];
-
-    // grab the values we need
-    for (size_t n=0; n<+HydroDef::PrimIdx::NUM; ++n) {
-        cell_state[n] = p4(i,j,k,n);
+    // grab the em values we need and transform them to local coords
+    const Array4<const Real>& em_p4 = all_prim[em_state_idx];
+    for (size_t n=0; n<+FieldDef::ConsIdx::NUM; ++n) {
+        cell_em_state[n] = em_p4(i,j,k,n);
     }
+    transform_global2local(cell_em_state, wall_coord, FieldState::vector_idx);
 
-    transform_global2local(cell_state, wall_coord, HydroState::prim_vector_idx);
+    // grab the hydro values we need and transform them to local coords
+    const Array4<const Real>& hydro_p4 = all_prim[state_idx];
+    for (size_t n=0; n<+HydroDef::PrimIdx::NUM; ++n) {
+        cell_hydro_state[n] = hydro_p4(i,j,k,n);
+    }
+    transform_global2local(cell_hydro_state, wall_coord, HydroState::prim_vector_idx);
 
     // fabricate a state for inside the wall based on the provided state
-    std::copy(cell_state.begin(), cell_state.end(), wall_state.begin());
+    std::copy(cell_hydro_state.begin(), cell_hydro_state.end(), wall_state.begin());
 
-    wall_state[+HydroDef::PrimIdx::Xvel] *= -1;
+
+    // HACK!
+    // adjust the proportion of velocity reversal and hence flow into/out of the wall
+    // based on the local x-electric field strength
+
+    const Real local_Dx = cell_em_state[+FieldDef::ConsIdx::Dx];
+    const Real local_Dy = cell_em_state[+FieldDef::ConsIdx::Dy];
+    const Real local_Dz = cell_em_state[+FieldDef::ConsIdx::Dz];
+
+    const Real local_D = sqrt(local_Dx*local_Dx + local_Dy*local_Dy + local_Dz*local_Dz);
+
+    wall_state[+HydroDef::PrimIdx::Xvel] *= -1*fabs(local_Dx)/local_D;
 
     Real shk = 1.0; // consider there to be a shock present if we have a switching flux
-    flux_solver->solve(cell_state, wall_state, normal_flux, &shk);
+    flux_solver->solve(cell_hydro_state, wall_state, normal_flux, &shk);
 
     // convert back to global coordinate system
     transform_local2global(normal_flux, wall_coord, HydroState::cons_vector_idx);

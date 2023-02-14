@@ -2321,7 +2321,7 @@ void HydroState::calc_viscous_fluxes_eb(const Box& box, Array<FArrayBox,
 
 
 void HydroState::calc_wall_fluxes(const Box& box,
-                                  const Vector<FArrayBox> &all_prim,
+                                  const Vector<FArrayBox*> &all_prim,
                                   Array<FArrayBox, AMREX_SPACEDIM> &fluxes,
                                   const EBCellFlagFab& flag,
                                   const CutFab &bc_idx,
@@ -2339,10 +2339,11 @@ void HydroState::calc_wall_fluxes(const Box& box,
     Vector<Array4<const Real>> p4(all_prim.size());
 
     for (size_t i=0; i<all_prim.size(); ++i) {
-      p4[i] = all_prim[i].array();
+        if (all_prim[i]) {
+            p4[i] = all_prim[i]->array();
+        }
     }
 
-    //FArrayBox& prim = all_prim[idx]; // primitives for *this* state
 
     Array4<const Real> const& bcent4 = bcent.array();
     Array4<const Real> const& bnorm4 = bnorm.array();

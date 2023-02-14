@@ -23,7 +23,7 @@ public:
         NUM
     };
 
-    Vector<int> state_idx;
+    int state_idx;
 
     virtual const EBType get_type() const = 0;
     virtual const bool has_charge() const {return false;}
@@ -31,9 +31,10 @@ public:
     virtual Vector<Vector<Real>> get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const { return {};}
 
     virtual void solve(Array<Array<Real,3>,3> &wall_coord,
-                       Array<Real,+FieldDef::ConsIdx::NUM> &state,
-                       Array<Array<Real,+FieldDef::ConsIdx::NUM>,AMREX_SPACEDIM> &F,
-                       const Real* dx) const {}
+                       Array<Real,AMREX_SPACEDIM> wall_centre,
+                       const Vector<Array4<const Real>>& all_prim,
+                       const int i, const int j, const int k, const Real *dx,
+                       Array<Vector<Real>,AMREX_SPACEDIM> &F) {}
 
     FieldRiemannSolver* flux_solver = nullptr;
 
@@ -52,9 +53,10 @@ public:
 
 
     void solve(Array<Array<Real,3>,3> &wall_coord,
-               Array<Real,+FieldDef::ConsIdx::NUM> &state,
-               Array<Array<Real,+FieldDef::ConsIdx::NUM>,AMREX_SPACEDIM> &F,
-               const Real* dx) const override;
+               Array<Real,AMREX_SPACEDIM> wall_centre,
+               const Vector<Array4<const Real>>& all_prim,
+               const int i, const int j, const int k, const Real *dx,
+               Array<Vector<Real>,AMREX_SPACEDIM> &F) override;
 
     virtual const EBType get_type() const override {return type;}
 
@@ -78,9 +80,10 @@ public:
 
 
     void solve(Array<Array<Real,3>,3> &wall_coord,
-                Array<Real,+FieldDef::ConsIdx::NUM> &state,
-                Array<Array<Real,+FieldDef::ConsIdx::NUM>,AMREX_SPACEDIM> &F,
-                const Real* dx) const override;
+               Array<Real,AMREX_SPACEDIM> wall_centre,
+               const Vector<Array4<const Real>>& all_prim,
+               const int i, const int j, const int k, const Real *dx,
+               Array<Vector<Real>,AMREX_SPACEDIM> &F) override;
 
     virtual const bool has_charge() const override {return true;}
     virtual const EBType get_type() const override {return type;}

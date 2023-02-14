@@ -18,14 +18,14 @@ void HydroState::set_eb_bc(const sol::table &bc_def)
     std::string bc_type = bc_def.get<std::string>("type");
 
     if (bc_type == HydroSlipWall::tag) {
-        eb_bcs.push_back(std::unique_ptr<HydroBoundaryEB>(new HydroSlipWall(data_idx, flux_solver.get())));
+        eb_bcs.push_back(std::unique_ptr<HydroBoundaryEB>(new HydroSlipWall(global_idx, flux_solver.get())));
     } else if (bc_type == HydroNoSlipWall::tag) {
         if (!viscous) {
             Abort("Requested EB bc of type '" + bc_type + "' without defining 'viscosity' for state '" + name + "'");
         }
-        eb_bcs.push_back(std::unique_ptr<HydroBoundaryEB>(new HydroNoSlipWall(data_idx, flux_solver.get(), viscous.get(), bc_def)));
+        eb_bcs.push_back(std::unique_ptr<HydroBoundaryEB>(new HydroNoSlipWall(global_idx, flux_solver.get(), viscous.get(), bc_def)));
     } else if (bc_type == DirichletWall::tag) {
-        eb_bcs.push_back(std::unique_ptr<HydroBoundaryEB>(new DirichletWall(data_idx, flux_solver.get(), bc_def)));
+        eb_bcs.push_back(std::unique_ptr<HydroBoundaryEB>(new DirichletWall(global_idx, flux_solver.get(), bc_def)));
     } else if (bc_type == MultiStateWall::tag) {
 
       const std::string& em_name = bc_def["em_state"].get_or<std::string>("");
@@ -40,7 +40,7 @@ void HydroState::set_eb_bc(const sol::table &bc_def)
         Abort("Requested EB bc of type '" + bc_type + "' for state '"+name+"', but '"+em_state.name+"' is not of type 'StateType::Field'");
       }
 
-      eb_bcs.push_back(std::unique_ptr<HydroBoundaryEB>(new MultiStateWall(data_idx, em_state.data_idx, flux_solver.get(), bc_def)));
+      eb_bcs.push_back(std::unique_ptr<HydroBoundaryEB>(new MultiStateWall(global_idx, em_state.global_idx, flux_solver.get(), bc_def)));
     } else {
         Abort("Requested EB bc of type '" + bc_type + "' which is not compatible with state '" + name + "'");
     }

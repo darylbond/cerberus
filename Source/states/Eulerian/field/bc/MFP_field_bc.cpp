@@ -12,15 +12,15 @@ void FieldState::set_eb_bc(const sol::table &bc_def)
     std::string bc_type = bc_def.get_or<std::string>("type", CollectionWall::tag);
 
     if (bc_type == ConductingWall::tag) {
-        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new ConductingWall(data_idx, flux_solver.get(), bc_def)));
+        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new ConductingWall(global_idx, flux_solver.get(), bc_def)));
     } else if (bc_type == ScalarPotentialWall::tag) {
-        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new ScalarPotentialWall(data_idx, bc_def)));
+        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new ScalarPotentialWall(global_idx, bc_def)));
     } else if (bc_type == SurfaceChargeWall::tag) {
-        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new SurfaceChargeWall(data_idx, bc_def)));
+        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new SurfaceChargeWall(global_idx, bc_def)));
     } else if (bc_type == CollectionWall::tag) {
-        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new CollectionWall(data_idx, bc_def)));
+        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new CollectionWall(global_idx, bc_def)));
     } else if (bc_type == DefinedWall::tag) {
-        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new DefinedWall(data_idx, flux_solver.get(), bc_def)));
+        eb_bcs.push_back(std::unique_ptr<FieldBoundaryEB>(new DefinedWall(global_idx, flux_solver.get(), bc_def)));
     } else {
         Abort("Requested EB bc of type '" + bc_type + "' which is not compatible with state '" + name + "'");
     }

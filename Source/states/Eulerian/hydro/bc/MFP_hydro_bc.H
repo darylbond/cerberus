@@ -29,6 +29,8 @@ public:
 
     virtual bool get_slope() const { return false;}
 
+    virtual void update_data_idx(Vector<size_t>& glob2dat) {state_idx = glob2dat[state_idx];}
+
     HydroRiemannSolver* flux_solver = nullptr;
 
     virtual void solve(Array<Array<Real,3>,3> &wall_coord,
@@ -144,6 +146,12 @@ public:
     ~MultiStateWall();
 
     virtual bool get_slope() const override { return true;}
+
+    virtual void update_data_idx(Vector<size_t>& glob2dat) override
+    {
+        state_idx = glob2dat[state_idx];
+        em_state_idx = glob2dat[em_state_idx];
+    }
 
     virtual void solve(Array<Array<Real,3>,3> &wall_coord,
                        Array<Real,AMREX_SPACEDIM> wall_centre,

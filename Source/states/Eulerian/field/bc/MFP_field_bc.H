@@ -28,6 +28,9 @@ public:
     virtual const EBType get_type() const = 0;
     virtual const bool has_charge() const {return false;}
     virtual const bool time_varying() const {return false;}
+
+    void update_data_idx(Vector<size_t>& glob2dat) {state_idx = glob2dat[state_idx];}
+
     virtual Vector<Vector<Real>> get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const { return {};}
 
     virtual void solve(Array<Array<Real,3>,3> &wall_coord,
@@ -35,6 +38,8 @@ public:
                        const Vector<Array4<const Real>>& all_prim,
                        const int i, const int j, const int k, const Real *dx,
                        Array<Vector<Real>,AMREX_SPACEDIM> &F) {}
+
+    void update_state_idx(int idx) {state_idx = idx;}
 
     FieldRiemannSolver* flux_solver = nullptr;
 

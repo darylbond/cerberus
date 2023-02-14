@@ -17,9 +17,9 @@ void MHDState::set_eb_bc(const sol::table &bc_def)
     std::string bc_type = bc_def.get<std::string>("type");
 
     if (bc_type == MHDSlipWall::tag) {
-        eb_bcs.push_back(std::unique_ptr<MHDBoundaryEB>(new MHDSlipWall(data_idx, flux_solver.get())));
+        eb_bcs.push_back(std::unique_ptr<MHDBoundaryEB>(new MHDSlipWall(global_idx, flux_solver.get())));
     } else if (bc_type == DirichletWallMHD::tag) {
-        eb_bcs.push_back(std::unique_ptr<MHDBoundaryEB>(new DirichletWallMHD(data_idx, flux_solver.get(), bc_def)));
+        eb_bcs.push_back(std::unique_ptr<MHDBoundaryEB>(new DirichletWallMHD(global_idx, flux_solver.get(), bc_def)));
     } else {
         Abort("Requested EB bc of type '" + bc_type + "' which is not compatible with state '" + name + "'");
     }
@@ -36,7 +36,7 @@ DirichletWallMHD::DirichletWallMHD(int idx, MHDRiemannSolver *flux,
                              const sol::table &bc_def)
 {
     BL_PROFILE("DirichletWall::DirichletWall");
-    state_idx.push_back(idx);
+    state_idx = idx;
     flux_solver = flux;
 
     // grab the wall state from the lua definition
@@ -64,8 +64,7 @@ void DirichletWallMHD::solve(Array<Array<Real,3>,3> &wall_coord,
     // get the inviscid flux
     //
 
-    const int this_idx = state_idx[0];
-    const Array4<const Real>& p4 = all_prim[this_idx];
+    const Array4<const Real>& p4 = all_prim[state_idx];
 
     // grab the values we need
     Array<Real,+MHDDef::PrimIdx::NUM> cell_state;
@@ -108,7 +107,7 @@ MHDSlipWall::~MHDSlipWall(){}
 
 MHDSlipWall::MHDSlipWall(int idx, MHDRiemannSolver *flux)
 {
-    state_idx.push_back(idx);
+    state_idx = idx;
     flux_solver = flux;
 }
 
@@ -123,8 +122,7 @@ void MHDSlipWall::solve(Array<Array<Real,3>,3> &wall_coord,
     // get the inviscid flux
     //
 
-    const int this_idx = state_idx[0];
-    const Array4<const Real>& p4 = all_prim[this_idx];
+    const Array4<const Real>& p4 = all_prim[state_idx];
 
     // grab the values we need
     Array<Real,+MHDDef::PrimIdx::NUM> cell_state;

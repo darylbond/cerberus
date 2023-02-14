@@ -21,11 +21,13 @@ public:
 
     EBType type;
 
-    Vector<int> state_idx;
+    int state_idx;
 
     virtual const EBType get_type() const = 0;
 
     virtual bool get_slope() const { return false;}
+
+    void update_data_idx(Vector<size_t>& glob2dat) {state_idx = glob2dat[state_idx];}
 
     MHDRiemannSolver* flux_solver = nullptr;
 

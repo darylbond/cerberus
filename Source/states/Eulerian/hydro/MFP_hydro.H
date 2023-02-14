@@ -55,6 +55,7 @@ public:
     Vector<std::unique_ptr<HydroBoundaryEB>> eb_bcs;
     virtual void set_eb_bc(const sol::table &bc_def) override;
     virtual size_t get_eb_bc_size() const override {return eb_bcs.size();}
+    virtual void update_eb_bc(Vector<size_t>& glob2dat) override {for (auto& bc : eb_bcs) {bc->update_data_idx(glob2dat);}}
 #endif
 
     virtual int get_num_grow() const override {return num_grow;}

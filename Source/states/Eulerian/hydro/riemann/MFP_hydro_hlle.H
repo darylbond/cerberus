@@ -15,7 +15,7 @@ public:
                        Vector<Real> &F,
                        Real* shk) override;
 
-    virtual std::string get_tag() const override {return tag;}
+    virtual const std::string get_tag() const override {return tag;}
     static std::string tag;
 
     virtual int get_n_flux() const override {return n_flux;}

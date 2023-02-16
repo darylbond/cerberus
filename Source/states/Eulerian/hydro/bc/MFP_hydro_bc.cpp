@@ -53,7 +53,7 @@ std::string DirichletWall::tag = "dirichlet";
 DirichletWall::DirichletWall(){}
 DirichletWall::~DirichletWall(){}
 
-DirichletWall::DirichletWall(int idx, HydroRiemannSolver *flux,
+DirichletWall::DirichletWall(int idx, RiemannSolver *flux,
                              const sol::table &bc_def)
 {
     BL_PROFILE("DirichletWall::DirichletWall");
@@ -126,7 +126,7 @@ HydroSlipWall::HydroSlipWall(){}
 HydroSlipWall::~HydroSlipWall(){}
 
 HydroSlipWall::HydroSlipWall(int idx,
-                             HydroRiemannSolver *flux)
+                             RiemannSolver *flux)
 {
   state_idx = idx;
   flux_solver = flux;
@@ -185,7 +185,7 @@ HydroNoSlipWall::HydroNoSlipWall(){}
 HydroNoSlipWall::~HydroNoSlipWall(){}
 
 HydroNoSlipWall::HydroNoSlipWall(int idx,
-                                 HydroRiemannSolver *flux,
+                                 RiemannSolver *flux,
                                  HydroViscous *visc,
                                  const sol::table &bc_def)
 {
@@ -368,7 +368,7 @@ std::string MultiStateWall::tag = "multi_state_wall";
 MultiStateWall::MultiStateWall(){}
 MultiStateWall::~MultiStateWall(){}
 
-MultiStateWall::MultiStateWall(const int idx, const int em_idx, HydroRiemannSolver* flux, const sol::table &bc_def)
+MultiStateWall::MultiStateWall(const int idx, const int em_idx, RiemannSolver* flux, const sol::table &bc_def)
 {
     state_idx = idx;
     em_state_idx = em_idx;

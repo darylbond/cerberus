@@ -6,8 +6,9 @@
 #include "map"
 #include "MFP_hydro_viscous.H"
 #include "MFP_hydro_riemann.H"
+#include "MFP_eulerian_bc.H"
 
-class HydroBoundaryEB
+class HydroBoundaryEB : public EulerianBoundaryEB
 {
 public:
     HydroBoundaryEB();
@@ -20,25 +21,9 @@ public:
       MultiState
     };
 
-
     EBType type;
 
-    int state_idx;
-
-    virtual const EBType get_type() const = 0;
-
-    virtual bool get_slope() const { return false;}
-
-    virtual void update_data_idx(Vector<size_t>& glob2dat) {state_idx = glob2dat[state_idx];}
-
-    HydroRiemannSolver* flux_solver = nullptr;
-
-    virtual void solve(Array<Array<Real,3>,3> &wall_coord,
-                       Array<Real,AMREX_SPACEDIM> wall_centre,
-                       const Vector<Array4<const Real>>& all_prim,
-                       const int i, const int j, const int k, const Real *dx,
-                       Array<Vector<Real>,AMREX_SPACEDIM> &F) = 0;
-
+    RiemannSolver* flux_solver = nullptr;
 
 };
 
@@ -50,7 +35,7 @@ class DirichletWall : public HydroBoundaryEB
 {
 public:
     DirichletWall();
-    DirichletWall(int idx, HydroRiemannSolver* flux,
+    DirichletWall(int idx, RiemannSolver* flux,
                   const sol::table &bc_def);
     ~DirichletWall();
 
@@ -61,7 +46,7 @@ public:
                        Array<Vector<Real>,AMREX_SPACEDIM> &F) override;
 
 
-    virtual const EBType get_type() const override {return EBType::Dirichlet;}
+    virtual const int get_type() const override {return EBType::Dirichlet;}
 
     Vector<std::pair<int, Real>> wall_value;
     Vector<Real> normal_flux;
@@ -80,7 +65,7 @@ class HydroSlipWall : public HydroBoundaryEB
 {
 public:
     HydroSlipWall();
-    HydroSlipWall(int idx, HydroRiemannSolver* flux);
+    HydroSlipWall(int idx, RiemannSolver* flux);
     ~HydroSlipWall();
 
     virtual void solve(Array<Array<Real,3>,3> &wall_coord,
@@ -89,7 +74,7 @@ public:
                        const int i, const int j, const int k, const Real *dx,
                        Array<Vector<Real>,AMREX_SPACEDIM> &F) override;
 
-    virtual const EBType get_type() const override {return type;}
+    virtual const int get_type() const override {return type;}
 
     EBType type = EBType::Slip;
     static std::string tag;
@@ -108,7 +93,7 @@ class HydroNoSlipWall : public HydroBoundaryEB
 {
 public:
     HydroNoSlipWall();
-    HydroNoSlipWall(int idx, HydroRiemannSolver* flux, HydroViscous* visc, const sol::table &bc_def);
+    HydroNoSlipWall(int idx, RiemannSolver* flux, HydroViscous* visc, const sol::table &bc_def);
     ~HydroNoSlipWall();
 
     virtual bool get_slope() const override { return true;}
@@ -119,7 +104,7 @@ public:
                        const int i, const int j, const int k, const Real *dx,
                        Array<Vector<Real>,AMREX_SPACEDIM> &F) override;
 
-    virtual const EBType get_type() const override {return EBType::NoSlip;}
+    virtual const int get_type() const override {return EBType::NoSlip;}
 
     HydroViscous* viscous = nullptr;
     Array<Real,3> wall_velocity;
@@ -142,7 +127,7 @@ class MultiStateWall : public HydroBoundaryEB
 {
 public:
     MultiStateWall();
-    MultiStateWall(const int idx, const int em_idx, HydroRiemannSolver* flux, const sol::table &bc_def);
+    MultiStateWall(const int idx, const int em_idx, RiemannSolver* flux, const sol::table &bc_def);
     ~MultiStateWall();
 
     virtual bool get_slope() const override { return true;}
@@ -159,7 +144,7 @@ public:
                        const int i, const int j, const int k, const Real *dx,
                        Array<Vector<Real>,AMREX_SPACEDIM> &F) override;
 
-    virtual const EBType get_type() const override {return EBType::MultiState;}
+    virtual const int get_type() const override {return EBType::MultiState;}
 
     static std::string tag;
     Vector<Real> normal_flux;

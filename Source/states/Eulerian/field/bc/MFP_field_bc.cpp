@@ -55,6 +55,10 @@ DefinedWall::DefinedWall(int idx, FieldRiemannSolver *flux, const sol::table &bc
         ++i;
     }
 
+    cell_state.resize(+FieldDef::ConsIdx::NUM);
+    wall_state.resize(+FieldDef::ConsIdx::NUM);
+    normal_flux.resize(+FieldDef::ConsIdx::NUM);
+
 }
 
 void DefinedWall::solve(Array<Array<Real,3>,3> &wall_coord,
@@ -63,9 +67,6 @@ void DefinedWall::solve(Array<Array<Real,3>,3> &wall_coord,
                         const int i, const int j, const int k, const Real *dx,
                         Array<Vector<Real>,AMREX_SPACEDIM> &F)
 {
-
-    Array<Real,+FieldDef::ConsIdx::NUM> cell_state;
-    Array<Real,+FieldDef::ConsIdx::NUM> wall_state;
 
     const Array4<const Real>& p4 = all_prim[state_idx];
 
@@ -83,8 +84,8 @@ void DefinedWall::solve(Array<Array<Real,3>,3> &wall_coord,
         wall_state[pair.first] = pair.second;
     }
 
-    Array<Real,+FieldDef::ConsIdx::NUM> normal_flux;
-    flux_solver->solve(cell_state, wall_state, normal_flux);
+    Real shock = 0;
+    flux_solver->solve(cell_state, wall_state, normal_flux, &shock);
 
     // convert back to global coordinate system
     transform_local2global(normal_flux, wall_coord, FieldState::vector_idx);
@@ -140,6 +141,10 @@ ConductingWall::ConductingWall(int idx, FieldRiemannSolver* flux, const sol::tab
     } else {
         wall_D = 0.0;
     }
+
+    cell_state.resize(+FieldDef::ConsIdx::NUM);
+    wall_state.resize(+FieldDef::ConsIdx::NUM);
+    normal_flux.resize(+FieldDef::ConsIdx::NUM);
 }
 
 void ConductingWall::solve(Array<Array<Real,3>,3> &wall_coord,
@@ -152,9 +157,6 @@ void ConductingWall::solve(Array<Array<Real,3>,3> &wall_coord,
     //
     // get the inviscid flux
     //
-
-    Array<Real,+FieldDef::ConsIdx::NUM> cell_state;
-    Array<Real,+FieldDef::ConsIdx::NUM> wall_state;
 
     const Array4<const Real>& p4 = all_prim[state_idx];
 
@@ -191,8 +193,8 @@ void ConductingWall::solve(Array<Array<Real,3>,3> &wall_coord,
     if (D_defined)
         wall_state[+FieldDef::ConsIdx::Dx] = wall_D;
 
-    Array<Real, +FieldDef::ConsIdx::NUM> normal_flux;
-    flux_solver->solve(cell_state, wall_state, normal_flux);
+    Real shock = 0;
+    flux_solver->solve(cell_state, wall_state, normal_flux, &shock);
 
     // convert back to global coordinate system
     transform_local2global(normal_flux, wall_coord, FieldState::vector_idx);

@@ -447,6 +447,9 @@ void EulerianState::update_boundary_cells(const Box& box,
                                        const Real time) const
 {
     BL_PROFILE("MHDState::update_boundary_cells");
+
+    // NOTE: This function could be skipped if a check is done at init.
+
     Vector<BoundaryInfo> limits = get_bc_limits(box, geom);
 
     if (limits.empty())
@@ -505,12 +508,12 @@ void EulerianState::update_boundary_cells(const Box& box,
 #endif
 
                         // get data from closest internal cell
-                        for (int n=0; n<n_prim(); ++n) {
+                        for (int n=0; n<prim_names.size(); ++n) {
                             Q[prim_names[n]] = p4(grab[0],grab[1],grab[2],n);
                         }
 
                         // update the primitives from our UDFs, but only those that are valid functions
-                        for (int n=0; n<n_prim(); ++n) {
+                        for (int n=0; n<prim_names.size(); ++n) {
                             const Optional3D1VFunction &f = boundary_conditions.get(L.lo_hi, L.dir, prim_names[n]);
                             if (f.is_valid()) {
                                 p4(i,j,k,n) = f(Q);
@@ -889,12 +892,12 @@ void EulerianState::face_bc(const int dir,
 #endif
 
                         // load data from the other side of the face
-                        for (int n=0; n<n_prim(); ++n) {
+                        for (int n=0; n<prim_names.size(); ++n) {
                             Q[prim_names[n]] = s4(i,j,k,n);
                         }
 
                         // update the primitives from our UDFs, but only those that are valid functions
-                        for (int n=0; n<n_prim(); ++n) {
+                        for (int n=0; n<prim_names.size(); ++n) {
                             const Optional3D1VFunction &f = boundary_conditions.get(L.lo_hi, dir, prim_names[n]);
                             if (f.is_valid()) {
                                 d4(i,j,k,n) = f(Q);
@@ -1000,9 +1003,12 @@ void EulerianState::calc_fluxes(const Box& box,
 {
     BL_PROFILE("EulerianState::calc_fluxes");
 
+    size_t ncons = n_cons();
+    size_t nprim = n_prim();
+
     Array<int, 3> index;
-    Vector<Real> L(n_prim()), R(n_prim());
-    Vector<Real> F(n_cons());
+    Vector<Real> L(nprim), R(nprim);
+    Vector<Real> F(ncons);
 
 #ifdef AMREX_USE_EB
     Array4<const EBCellFlag> const& f4 = flag.array();
@@ -1043,7 +1049,7 @@ void EulerianState::calc_fluxes(const Box& box,
 #endif
 
                     // get left and right states
-                    for (size_t n=0; n<n_prim(); ++n) {
+                    for (size_t n=0; n<nprim; ++n) {
                         L[n] = hi4(i-index[0],j-index[1],k-index[2],n);
                         R[n] = lo4(i,j,k,n);
                     }
@@ -1066,7 +1072,7 @@ void EulerianState::calc_fluxes(const Box& box,
                     transform_local2global(F, d, cons_vector_idx);
 
                     // load the flux into the array
-                    for (int n=0; n<n_cons(); ++n) {
+                    for (int n=0; n<ncons; ++n) {
                         flux4(i,j,k,n) += F[n];
 
                         AMREX_ASSERT(std::isfinite(flux4(i,j,k,n)));

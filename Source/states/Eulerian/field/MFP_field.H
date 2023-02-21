@@ -31,8 +31,6 @@ public:
     Real div_speed, div_damping;
     Real relative_div_speed;
 
-    std::unique_ptr<FieldRiemannSolver> flux_solver;
-
     virtual StateType get_type() const override {return StateType::Field;}
     virtual size_t n_cons() const override {return +FieldDef::ConsIdx::NUM;}
     virtual size_t n_prim() const override {return +FieldDef::ConsIdx::NUM;}
@@ -65,13 +63,13 @@ public:
 
 #ifdef AMREX_USE_EB
     virtual void set_eb_bc(const sol::table &bc_def) override;
-    virtual size_t get_eb_bc_size() const override {return eb_bcs.size();}
-    Vector<std::unique_ptr<FieldBoundaryEB>> eb_bcs;
-    virtual void update_eb_bc(Vector<size_t>& glob2dat) override {for (auto& bc : eb_bcs) {bc->update_data_idx(glob2dat);}}
 #endif
 
     virtual bool cons2prim(Vector<Real>& U, Vector<Real> &Q) const override;
     virtual void prim2cons(Vector<Real> &Q, Vector<Real> &U) const override;
+
+    virtual RealArray get_speed_from_cons(const Vector<Real> &U) const {return {AMREX_D_DECL(fastest_speed,fastest_speed,fastest_speed)};}
+    virtual RealArray get_speed_from_prim(const Vector<Real> &Q) const {return {AMREX_D_DECL(fastest_speed,fastest_speed,fastest_speed)};}
 
     virtual Real get_allowed_time_step(MFP* mfp) const override;
 

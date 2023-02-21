@@ -40,7 +40,7 @@ void HydroState::set_eb_bc(const sol::table &bc_def)
         Abort("Requested EB bc of type '" + bc_type + "' for state '"+name+"', but '"+em_state.name+"' is not of type 'StateType::Field'");
       }
 
-      eb_bcs.push_back(std::unique_ptr<HydroBoundaryEB>(new MultiStateWall(global_idx, em_state.global_idx, flux_solver.get(), bc_def)));
+      eb_bcs.push_back(std::unique_ptr<HydroBoundaryEB>(new MultiStateWall(*this, em_state, flux_solver.get(), bc_def)));
     } else {
         Abort("Requested EB bc of type '" + bc_type + "' which is not compatible with state '" + name + "'");
     }
@@ -368,11 +368,17 @@ std::string MultiStateWall::tag = "multi_state_wall";
 MultiStateWall::MultiStateWall(){}
 MultiStateWall::~MultiStateWall(){}
 
-MultiStateWall::MultiStateWall(const int idx, const int em_idx, RiemannSolver* flux, const sol::table &bc_def)
+MultiStateWall::MultiStateWall(const State& this_state,
+                               const State& em_state,
+                               RiemannSolver* flux,
+                               const sol::table &bc_def)
 {
-    state_idx = idx;
-    em_state_idx = em_idx;
+    // these idx get changed to data idx later
+    state_idx = this_state.global_idx;
+    em_state_idx = em_state.global_idx;
     flux_solver = flux;
+
+    // you should grab any state information that you need here!
 
     normal_flux.resize(flux->get_n_flux());
     cell_hydro_state.resize(+HydroDef::PrimIdx::NUM);

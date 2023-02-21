@@ -34,6 +34,10 @@ public:
                        const Vector<Array4<const Real>>& all_prim,
                        const int i, const int j, const int k, const Real *dx,
                        Array<Vector<Real>,AMREX_SPACEDIM> &F) {}
+
+    virtual Vector<Vector<Real>> get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre,
+                                                const Array<Array<Real,3>,3> &wall_coord,
+                                                const Real t) const {return {{}};}
 };
 
 #endif // EULERIANEB_H

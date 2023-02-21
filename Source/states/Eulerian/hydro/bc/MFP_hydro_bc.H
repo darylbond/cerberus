@@ -127,7 +127,10 @@ class MultiStateWall : public HydroBoundaryEB
 {
 public:
     MultiStateWall();
-    MultiStateWall(const int idx, const int em_idx, RiemannSolver* flux, const sol::table &bc_def);
+    MultiStateWall(const State& this_state,
+                   const State& em_state,
+                   RiemannSolver* flux,
+                   const sol::table &bc_def);
     ~MultiStateWall();
 
     virtual bool get_slope() const override { return true;}

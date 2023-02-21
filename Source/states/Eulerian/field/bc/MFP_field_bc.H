@@ -27,9 +27,7 @@ public:
     virtual const bool has_charge() const {return false;}
     virtual const bool time_varying() const {return false;}
 
-    virtual Vector<Vector<Real>> get_wall_state(const Array<Real,AMREX_SPACEDIM> wall_centre, const Array<Array<Real,3>,3> &wall_coord, const Real t) const { return {};}
-
-    FieldRiemannSolver* flux_solver = nullptr;
+    RiemannSolver* flux_solver = nullptr;
 
     EBType type;
 };
@@ -40,7 +38,7 @@ class DefinedWall : public FieldBoundaryEB
 {
 public:
     DefinedWall();
-    DefinedWall(int idx, FieldRiemannSolver* flux, const sol::table &bc_def);
+    DefinedWall(int idx, RiemannSolver* flux, const sol::table &bc_def);
     ~DefinedWall();
 
 
@@ -69,7 +67,7 @@ class ConductingWall : public FieldBoundaryEB
 {
 public:
     ConductingWall();
-    ConductingWall(int idx, FieldRiemannSolver* flux, const sol::table &bc_def);
+    ConductingWall(int idx, RiemannSolver* flux, const sol::table &bc_def);
     ~ConductingWall();
 
 

@@ -38,7 +38,7 @@ std::string DefinedWall::tag = "defined";
 DefinedWall::DefinedWall(){}
 DefinedWall::~DefinedWall(){}
 
-DefinedWall::DefinedWall(int idx, FieldRiemannSolver *flux, const sol::table &bc_def)
+DefinedWall::DefinedWall(int idx, RiemannSolver *flux, const sol::table &bc_def)
 {
     state_idx = idx;
     flux_solver = flux;
@@ -109,7 +109,7 @@ std::string ConductingWall::tag = "conductor";
 ConductingWall::ConductingWall(){}
 ConductingWall::~ConductingWall(){}
 
-ConductingWall::ConductingWall(int idx, FieldRiemannSolver* flux, const sol::table &bc_def)
+ConductingWall::ConductingWall(int idx, RiemannSolver* flux, const sol::table &bc_def)
 {
     state_idx = idx;
     flux_solver = flux;

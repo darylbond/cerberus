@@ -388,7 +388,7 @@ void MFP::update_config_post_data_instantiation()
 
     // iterate over states and update the data index of all embedded boundaries
 
-    Vector<size_t> glob2dat(eulerian_states.size());
+    Vector<size_t> glob2dat(states.size(),-1);
     for (size_t i=0; i<eulerian_states.size(); ++i) {
         glob2dat[eulerian_states[i]] = i;
     }
